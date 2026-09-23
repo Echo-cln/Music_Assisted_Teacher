@@ -1,0 +1,16 @@
+import { api } from "../api/client.js";
+import { esc, pageHeader } from "../utils/dom.js";
+
+export async function renderHome(container) {
+  const [stats, classes, lessons] = await Promise.all([api.stats(), api.classes(), api.lessons()]);
+  container.innerHTML = pageHeader("今天，从一堂真正适合学生的音乐课开始", "数据库负责给出依据，AI 负责组织成教师能直接使用的完整课堂。") + `
+    <div class="grid two">
+      <div class="grid">
+        <section class="card hero"><span class="eyebrow">数据库驱动备课</span><h2>让地方音乐资源，成为乡村老师拿来就能上的课堂</h2><p>班级画像、歌曲资源、教学游戏、乐理话术和课后反馈形成完整闭环。</p><button class="btn primary" data-route="assistant">开始备课</button></section>
+        <div class="metrics"><div><small>地区歌曲</small><b>${stats.songs}</b></div><div><small>课前游戏</small><b>${stats.games}</b></div><div><small>乐理讲解</small><b>${stats.theory}</b></div><div><small>易错纠正</small><b>${stats.mistakes}</b></div></div>
+        <section class="card"><div class="card-head"><h3>最近教案</h3><button class="link" data-route="lessons">查看全部</button></div><div class="list">${lessons.length ? lessons.slice(0, 4).map(plan => `<div class="list-row"><span class="iconbox">谱</span><div><b>${esc(plan.title)}</b><small>${esc(plan.class_name)} · ${esc(plan.created_at)}</small></div><span class="status ok">${plan.generation_mode === "ai" ? "AI" : "规则"}</span></div>`).join("") : '<div class="empty">还没有教案，可以先生成第一份。</div>'}</div></section>
+      </div>
+      <section class="card"><div class="card-head"><h3>班级画像</h3><button class="link" data-route="classes">管理班级</button></div><div class="list">${classes.map(item => `<div class="list-row"><span class="iconbox">${item.grade}</span><div><b>${esc(item.name)}</b><small>${item.student_count} 人 · ${esc(item.province)} · ${esc(item.activity_level)}</small></div><span class="pill">${esc(item.preferred_method)}</span></div>`).join("")}</div></section>
+    </div>`;
+}
+

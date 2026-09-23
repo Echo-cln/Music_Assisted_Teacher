@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#9f4b35">
+  <meta name="description" content="乡音智谱——面向乡村音乐教师的 AI 美育教学助手">
+  <title>乡音智谱 · 乡村音乐教室 AI 教学助手</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <button class="brand" data-route="home"><span class="brand-mark">乡</span><span><b>乡音智谱</b><small>乡村音乐教室</small></span></button>
+      <div class="teacher-card"><span class="avatar" id="teacherAvatar">师</span><span class="teacher-copy"><b id="teacherName">教师</b><small id="teacherMeta">个人教学空间</small></span><button class="teacher-logout" id="logoutButton" title="退出登录">退出</button></div>
+      <nav>
+        <button class="nav-item active" data-route="home"><span>⌂</span><b>首页</b></button>
+        <button class="nav-item" data-route="assistant"><span>✦</span><b>AI 教案助手</b></button>
+        <button class="nav-item" data-route="classes"><span>▦</span><b>班级画像</b></button>
+        <button class="nav-item" data-route="resources"><span>♫</span><b>教学资源库</b></button>
+        <button class="nav-item" data-route="lessons"><span>▤</span><b>教案与课堂记录</b></button>
+        <button class="nav-item" data-route="feedback"><span>⌁</span><b>音频对比与反馈</b></button>
+        <button class="nav-item" data-route="ai_engine"><span>⚙</span><b>AI教学引擎</b></button>
+      </nav>
+      <div class="sidebar-note"><b>Python 服务已连接</b><small id="serviceStatus">正在检查后端和数据库…</small></div>
+    </aside>
+    <main class="main" id="app"></main>
+  </div>
+  <aside class="generation-center hidden" id="generationCenter"></aside>
+  <div class="toast" id="toast"></div>
+  <div id="modalRoot"></div>
+  <script type="module" src="assets/js/main.js"></script>
+</body>
+</html>

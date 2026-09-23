@@ -1,0 +1,84 @@
+const API_ROOT = "/api";
+
+async function request(path, options = {}) {
+  const response = await fetch(`${API_ROOT}${path}`, {
+    credentials: "same-origin",
+    ...options,
+    headers: options.body instanceof FormData
+      ? options.headers
+      : { "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: "请求失败" }));
+    const err = new Error(error.detail || "请求失败");
+    err.status = response.status;
+    throw err;
+  }
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+async function streamRequest(path, payload, onEvent) {
+  const response = await fetch(`${API_ROOT}${path}`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: "请求失败" }));
+    const err = new Error(error.detail || "请求失败");
+    err.status = response.status;
+    throw err;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let completed = false;
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    const messages = buffer.split("\n\n");
+    buffer = messages.pop();
+    for (const message of messages) {
+      const dataLine = message.split("\n").find(line => line.startsWith("data: "));
+      if (!dataLine) continue;
+      const event = JSON.parse(dataLine.slice(6));
+      if (event.type === "error") throw new Error(event.message);
+      if (event.type === "complete") completed = true;
+      onEvent(event);
+    }
+    if (done) break;
+  }
+  if (!completed) throw new Error("请求中断，未生成完整预览");
+}
+
+export const api = {
+  health: () => request("/health"),
+  me: () => request("/auth/me"),
+  login: payload => request("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
+  register: payload => request("/auth/register", { method: "POST", body: JSON.stringify(payload) }),
+  logout: () => request("/auth/logout", { method: "POST" }),
+  stats: () => request("/stats"),
+  classes: () => request("/classes"),
+  createClass: payload => request("/classes", { method: "POST", body: JSON.stringify(payload) }),
+  updateClass: (id, payload) => request(`/classes/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteClass: id => request(`/classes/${id}`, { method: "DELETE" }),
+  songs: params => request(`/songs?${new URLSearchParams(params)}`),
+  resources: (kind, q = "") => request(`/resources/${kind}?${new URLSearchParams({ q })}`),
+  createResource: (kind, payload) => request(`/resources/${kind}`, { method: "POST", body: JSON.stringify(payload) }),
+  updateResource: (kind, id, payload) => request(`/resources/${kind}/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteResource: (kind, id) => request(`/resources/${kind}/${id}`, { method: "DELETE" }),
+  recommend: payload => request("/songs/recommend", { method: "POST", body: JSON.stringify(payload) }),
+  lessons: () => request("/lessons"),
+  generateLesson: payload => request("/lessons/generate", { method: "POST", body: JSON.stringify(payload) }),
+  generateLessonStream: (payload, onEvent) => streamRequest("/lessons/generate/stream", payload, onEvent),
+  createGenerationJob: payload => request("/generation-jobs", { method: "POST", body: JSON.stringify(payload) }),
+  generationJobs: (limit = 10) => request(`/generation-jobs?${new URLSearchParams({ limit })}`),
+  generationJob: id => request(`/generation-jobs/${id}`),
+  adjustPreviewStream: (payload, onEvent) => streamRequest("/lessons/preview/adjust/stream", payload, onEvent),
+  saveLesson: payload => request("/lessons/save", { method: "POST", body: JSON.stringify(payload) }),
+  adjustLesson: (id, instruction) => request(`/lessons/${id}/adjust`, { method: "POST", body: JSON.stringify({ instruction }) }),
+  analyzeAudio: form => request("/audio/analyze", { method: "POST", body: form }),
+  feedback: payload => request("/feedback", { method: "POST", body: JSON.stringify(payload) }),
+};

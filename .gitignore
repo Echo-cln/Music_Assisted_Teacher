@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+backend/data/zhiban.db
+backend/data/uploads/*
+!backend/data/uploads/.gitkeep
+.idea/
+.vscode/
+
