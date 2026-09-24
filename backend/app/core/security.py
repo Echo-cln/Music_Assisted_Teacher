@@ -73,3 +73,9 @@ def get_current_teacher(request: Request, db: Session = Depends(get_db)) -> Teac
     if not teacher:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="账号不存在")
     return teacher
+
+
+def require_admin(teacher: Teacher = Depends(get_current_teacher)) -> Teacher:
+    if teacher.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅系统管理员可访问")
+    return teacher

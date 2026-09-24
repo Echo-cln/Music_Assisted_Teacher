@@ -9,6 +9,7 @@ class LessonGenerateRequest(BaseModel):
     duration_minutes: int = Field(default=40, ge=20, le=90)
     activity_preference: str = "互动与分组合作"
     teacher_requirements: str = ""
+    generation_strategy: str = Field(default="deep", pattern="^(fast|deep)$")
 
 
 class LessonPlanRead(BaseModel):

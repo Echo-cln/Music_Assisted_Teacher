@@ -3,11 +3,14 @@ import { renderAssistant } from "./pages/assistant.js";
 import { renderAuth } from "./pages/auth.js";
 import { renderClasses } from "./pages/classes.js";
 import { renderFeedback } from "./pages/feedback.js";
+import { renderAudio } from "./pages/audio.js";
+import { renderAdmin } from "./pages/admin.js";
 import { renderHome } from "./pages/home.js";
 import { renderLessons } from "./pages/lessons.js";
-import { renderAIEngine } from "./pages/ai_engine.js";
 import { renderResources } from "./pages/resources.js";
-import { initGenerationCenter } from "./state/generation.js";
+import { renderWorkbench } from "./pages/workbench.js";
+import { initGenerationCenter, setGenerationCenterVisible } from "./state/generation.js";
+import { initAudioJobCenter } from "./state/audio_jobs.js";
 import { esc, loading, notify } from "./utils/dom.js";
 
 const app = document.getElementById("app");
@@ -16,15 +19,20 @@ const routes = {
   assistant: renderAssistant,
   classes: renderClasses,
   resources: renderResources,
+  workbench: renderWorkbench,
   lessons: renderLessons,
   feedback: renderFeedback,
-  ai_engine: renderAIEngine,
+  audio: renderAudio,
+  admin: renderAdmin,
 };
 let currentTeacher = null;
 
 function bindRoutes() {
   document.querySelectorAll("[data-route]").forEach(button => {
-    button.onclick = () => navigate(button.dataset.route);
+    button.onclick = () => {
+      if (button.dataset.resourceKind) sessionStorage.setItem("resourceKindToOpen", button.dataset.resourceKind);
+      navigate(button.dataset.route);
+    };
   });
 }
 
@@ -36,16 +44,19 @@ function applyTeacher(teacher) {
   if (name) name.textContent = teacher.display_name;
   if (meta) meta.textContent = teacher.school || `@${teacher.username}`;
   if (avatar) avatar.textContent = (teacher.display_name || teacher.username || "师").slice(0, 1);
+  document.getElementById("adminNav")?.classList.toggle("hidden", teacher.role !== "admin");
 }
 
 async function showLogin() {
   currentTeacher = null;
   document.body.classList.add("auth-mode");
   document.getElementById("generationCenter").classList.add("hidden");
+  document.getElementById("audioJobCenter").classList.add("hidden");
   renderAuth(app, async teacher => {
     applyTeacher(teacher);
     document.body.classList.remove("auth-mode");
     await initGenerationCenter();
+    await initAudioJobCenter();
     await refreshStats();
     await navigate("home");
   });
@@ -64,6 +75,7 @@ async function navigate(route = "home") {
   if (!currentTeacher) return showLogin();
   app.innerHTML = loading();
   document.querySelectorAll(".nav-item").forEach(item => item.classList.toggle("active", item.dataset.route === route));
+  setGenerationCenterVisible(route === "assistant");
   try {
     await routes[route](app);
     bindRoutes();
@@ -76,6 +88,7 @@ async function navigate(route = "home") {
 async function boot() {
   bindRoutes();
   window.addEventListener("app:navigate", event => navigate(event.detail));
+  window.addEventListener("generation:expired", () => notify("上一条生成任务已不在当前数据中，已清除旧进度记录。"));
   document.getElementById("logoutButton").onclick = async () => {
     try {
       await api.logout();
@@ -90,6 +103,7 @@ async function boot() {
     applyTeacher(teacher);
     document.body.classList.remove("auth-mode");
     await initGenerationCenter();
+    await initAudioJobCenter();
     await refreshStats();
     await navigate("home");
   } catch (error) {

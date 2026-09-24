@@ -24,13 +24,31 @@ function selectable(name, label, value, required = true) {
 }
 
 export async function renderClasses(container) {
-  const classes = await api.classes();
   container.innerHTML = pageHeader("班级画像", "记录可观察、与教学直接相关的班级特点，反馈会持续回流。", '<button class="btn primary" id="newClass">新建班级</button>') + `
-    <div class="class-grid">${classes.map(item => `<article class="card"><div class="card-head"><span class="iconbox">${item.grade}</span><span class="pill">${esc(item.province)}</span></div><h3>${esc(item.name)}</h3><p class="muted">${item.student_count} 人 · ${esc(item.learning_level)}</p><div class="profile-grid"><div><small>课堂活跃度</small><b>${esc(item.activity_level)}</b></div><div><small>合作情况</small><b>${esc(item.cooperation)}</b></div><div><small>音准</small><b>${esc(item.pitch_level)}</b></div><div><small>节奏</small><b>${esc(item.rhythm_level)}</b></div></div><p class="insight">${esc(item.teacher_notes || "尚未填写教学感受")}</p><button class="btn block" data-edit-class="${item.id}">查看 / 编辑</button></article>`).join("")}</div>`;
+    <section class="list-search"><label class="search-field"><span>⌕</span><input id="classSearch" type="search" placeholder="搜索班级、省份、教学感受或常见问题"></label><div class="list-filters"><select id="classGradeFilter"><option value="">全部年级</option><option value="lower">1–3 年级</option><option value="upper">4–6 年级</option></select><select id="classActivityFilter"><option value="">全部活跃度</option>${choices.activity_level.map(item => `<option>${esc(item)}</option>`).join("")}</select><select id="classSort"><option value="grade">按年级排序</option><option value="name">按班级名称排序</option></select></div><small id="classSearchCount"></small></section>
+    <div id="classGrid" class="class-grid"></div>`;
   document.getElementById("newClass").onclick = () => openClassForm(null, container);
-  container.querySelectorAll("[data-edit-class]").forEach(button => {
-    button.onclick = () => openClassForm(classes.find(item => item.id === Number(button.dataset.editClass)), container);
-  });
+  let searchTimer;
+  document.getElementById("classSearch").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadClasses, 220); };
+  ["classGradeFilter", "classActivityFilter", "classSort"].forEach(id => document.getElementById(id).onchange = loadClasses);
+  await loadClasses();
+
+  async function loadClasses() {
+    const q = document.getElementById("classSearch").value.trim();
+    let classes = await api.classes(q);
+    const grade = document.getElementById("classGradeFilter").value;
+    const activity = document.getElementById("classActivityFilter").value;
+    if (grade === "lower") classes = classes.filter(item => Number(item.grade) <= 3);
+    if (grade === "upper") classes = classes.filter(item => Number(item.grade) >= 4);
+    if (activity) classes = classes.filter(item => item.activity_level === activity);
+    if (document.getElementById("classSort").value === "name") classes.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+    document.getElementById("classSearchCount").textContent = `共 ${classes.length} 个${q ? "匹配班级" : "班级"}`;
+    const grid = document.getElementById("classGrid");
+    grid.innerHTML = classes.map(item => `<article class="card"><div class="card-head"><span class="iconbox">${item.grade}</span><span class="pill">${esc(item.province)}</span></div><h3>${esc(item.name)}</h3><p class="muted">${item.student_count} 人 · ${esc(item.learning_level)}</p><div class="profile-grid"><div><small>课堂活跃度</small><b>${esc(item.activity_level)}</b></div><div><small>合作情况</small><b>${esc(item.cooperation)}</b></div><div><small>音准</small><b>${esc(item.pitch_level)}</b></div><div><small>节奏</small><b>${esc(item.rhythm_level)}</b></div></div><p class="insight">${esc(item.teacher_notes || "尚未填写教学感受")}</p><button class="btn block" data-edit-class="${item.id}">查看 / 编辑</button></article>`).join("") || '<div class="empty">没有找到匹配的班级画像</div>';
+    grid.querySelectorAll("[data-edit-class]").forEach(button => {
+      button.onclick = () => openClassForm(classes.find(item => item.id === Number(button.dataset.editClass)), container);
+    });
+  }
 }
 
 function openClassForm(existing, container) {

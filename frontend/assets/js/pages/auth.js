@@ -20,9 +20,11 @@ export function renderAuth(container, onSuccess) {
       <form id="registerForm" class="form-grid auth-form hidden">
         <label>用户名<input name="username" minlength="3" pattern="[A-Za-z0-9_.-]+" autocomplete="username" required></label>
         <label>教师姓名<input name="display_name" required></label>
-        <label>邮箱（可选）<input name="email" type="email" autocomplete="email"></label>
+        <label>邮箱（用于验证码）<input name="email" type="email" autocomplete="email" required></label>
         <label>学校（可选）<input name="school"></label>
-        <label class="full">密码<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
+        <label>密码<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
+        <label>确认密码<input name="password_confirm" type="password" minlength="8" autocomplete="new-password" required></label>
+        <label class="full">邮箱验证码<div class="input-action"><input name="verification_code" inputmode="numeric" maxlength="6" required><button type="button" class="btn" id="sendCode">发送验证码</button></div><small>真实邮件发送需由部署者配置 SMTP；手机号短信服务可在后续接入服务商。</small></label>
         <button class="btn primary full" type="submit">创建教师账号</button>
       </form>
     </section>
@@ -56,7 +58,6 @@ export function renderAuth(container, onSuccess) {
     button.disabled = true;
     try {
       const payload = Object.fromEntries(new FormData(event.target).entries());
-      payload.email = payload.email.trim() || null;
       const teacher = await api.register(payload);
       document.body.classList.remove("auth-mode");
       notify(`账号已创建，欢迎 ${teacher.display_name}`);
@@ -65,5 +66,16 @@ export function renderAuth(container, onSuccess) {
       notify(error.message);
       button.disabled = false;
     }
+  };
+
+  document.getElementById("sendCode").onclick = async () => {
+    const form = document.getElementById("registerForm");
+    const email = form.email.value.trim();
+    if (!email) return notify("请先填写邮箱");
+    const button = document.getElementById("sendCode");
+    button.disabled = true;
+    try { const result = await api.requestEmailVerification({ email }); notify(result.message); }
+    catch (error) { notify(error.message); }
+    finally { button.disabled = false; }
   };
 }

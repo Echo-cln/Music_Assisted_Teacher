@@ -1,4 +1,6 @@
 from app.models.entities import (
+    AudioAnalysis,
+    AudioAnalysisJob,
     AudioAsset,
     ClassProfile,
     ClassroomRecord,
@@ -8,6 +10,7 @@ from app.models.entities import (
     Song,
     TeachingGame,
     TeachingMistake,
+    VerificationCode,
 )
 
 __all__ = [
@@ -20,4 +23,7 @@ __all__ = [
     "ClassroomRecord",
     "Feedback",
     "AudioAsset",
+    "AudioAnalysis",
+    "AudioAnalysisJob",
+    "VerificationCode",
 ]

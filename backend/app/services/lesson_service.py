@@ -1,5 +1,6 @@
 import json
 import re
+from copy import deepcopy
 from collections.abc import Iterator
 
 from sqlalchemy import or_, select
@@ -199,9 +200,11 @@ def build_base_preview(
     return _local_content(song, profile, duration, activity, requirements, _knowledge(db, song, profile, teacher_id))
 
 
-def _chunks(base: dict) -> tuple[str, Iterator[str]]:
-    if get_settings().ai_api_key:
-        return "ai", stream_lesson_json(base)
+def _chunks(base: dict, generation_strategy: str = "deep") -> tuple[str, Iterator[str]]:
+    settings = get_settings()
+    configured = bool(settings.ai_fast_api_key or settings.ai_api_key) if generation_strategy == "fast" else bool(settings.ai_api_key)
+    if configured:
+        return "ai", stream_lesson_json(base, generation_strategy=generation_strategy)
     content = json.dumps(base, ensure_ascii=False)
     return "rules", (content[i : i + 120] for i in range(0, len(content), 120))
 
@@ -216,9 +219,24 @@ def _adjustment_chunks(content: dict, instruction: str) -> tuple[str, Iterator[s
 
 
 def _validated_content(raw: str, base: dict) -> dict:
-    content = json.loads(raw)
+    # 兼容少数模型仍包裹 Markdown 代码围栏或附带一句前言，提取完整对象后再校验。
+    normalized = raw.strip()
+    if normalized.startswith("```"):
+        normalized = normalized.split("\n", 1)[1] if "\n" in normalized else ""
+        normalized = normalized.rsplit("```", 1)[0].strip()
+    start, end = normalized.find("{"), normalized.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("模型没有返回完整 JSON 教案，请稍后重试或检查模型服务")
+    try:
+        content = json.loads(normalized[start : end + 1])
+    except json.JSONDecodeError as exc:
+        raise ValueError("模型返回内容格式不完整，未保存本次深度结果；可重试或先使用当前骨架") from exc
     if not isinstance(content, dict):
         raise ValueError("模型没有返回教案对象")
+    # 两个供应商都可能只回传已增强字段。规则骨架仍是完整结构的权威来源，
+    # 所以只接受类型正确、非空的增强结果，不能因为 summary 等字段缺失而失败。
+    generated = content
+    content = deepcopy(base)
     for field in (
         "title",
         "summary",
@@ -232,8 +250,27 @@ def _validated_content(raw: str, base: dict) -> dict:
         "differentiation",
         "assessment",
     ):
-        if field not in content:
-            raise ValueError(f"模型返回的教案缺少字段：{field}")
+        value = generated.get(field)
+        if isinstance(value, type(content.get(field))) and value:
+            content[field] = value
+
+    # 课堂流程的阶段、时长由规则层根据课时生成，不能被模型删减或改写。
+    # 模型只可增强同一位置的教师、学生活动；若个别项生成不完整，则保留骨架内容。
+    base_timeline = base.get("timeline")
+    if base_timeline:
+        enhanced_timeline = []
+        for index, base_item in enumerate(base_timeline):
+            raw_timeline = generated.get("timeline", [])
+            generated_item = raw_timeline[index] if isinstance(raw_timeline, list) and index < len(raw_timeline) else {}
+            if not isinstance(generated_item, dict):
+                generated_item = {}
+            item = dict(base_item)
+            for field in ("teacher", "students"):
+                value = generated_item.get(field)
+                if isinstance(value, str) and value.strip():
+                    item[field] = value.strip()
+            enhanced_timeline.append(item)
+        content["timeline"] = enhanced_timeline
     content["summary"] = base["summary"]
     if base.get("generation_context"):
         content["generation_context"] = base["generation_context"]
@@ -252,15 +289,19 @@ def stream_preview(
     activity: str,
     requirements: str,
     teacher_id: int,
+    generation_strategy: str = "deep",
 ) -> Iterator[tuple[str, object]]:
     base = build_base_preview(db, song, profile, duration, activity, requirements, teacher_id)
-    mode, pieces = _chunks(base)
+    mode, pieces = _chunks(base, generation_strategy)
     yield "start", mode
     collected = []
     for piece in pieces:
         collected.append(piece)
         yield "delta", piece
-    content = _validated_content("".join(collected), base)
+    raw = "".join(collected).strip()
+    if not raw:
+        raise ValueError("模型未返回可解析的教案正文，请检查模型服务配置后重试")
+    content = _validated_content(raw, base)
     yield "complete", {"content": content, "generation_mode": mode}
 
 
@@ -271,12 +312,8 @@ def stream_preview_adjustment(content: dict, instruction: str) -> Iterator[tuple
     for piece in pieces:
         collected.append(piece)
         yield "delta", piece
-    base = {
-        "summary": content.get("summary", {}),
-        "generation_context": content.get("generation_context"),
-        "activity_preference": content.get("activity_preference"),
-        "teacher_requirements": instruction,
-    }
+    base = deepcopy(content)
+    base["teacher_requirements"] = instruction
     adjusted = _validated_content("".join(collected), base)
     adjusted["teacher_requirements"] = instruction
     adjusted.setdefault("adjustment_history", []).append(instruction)

@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -12,12 +12,23 @@ router = APIRouter(prefix="/classes", tags=["班级画像"])
 
 
 @router.get("", response_model=list[ClassProfileRead])
-def list_classes(db: Session = Depends(get_db), teacher: Teacher = Depends(get_current_teacher)):
+def list_classes(
+    q: str | None = Query(default=None, max_length=80),
+    db: Session = Depends(get_db),
+    teacher: Teacher = Depends(get_current_teacher),
+):
+    statement = select(ClassProfile).where(ClassProfile.teacher_id == teacher.id)
+    if q:
+        keyword = f"%{q.strip()}%"
+        statement = statement.where(or_(
+            ClassProfile.name.ilike(keyword),
+            ClassProfile.province.ilike(keyword),
+            ClassProfile.teacher_notes.ilike(keyword),
+            ClassProfile.common_problems.ilike(keyword),
+        ))
     return list(
         db.scalars(
-            select(ClassProfile)
-            .where(ClassProfile.teacher_id == teacher.id)
-            .order_by(ClassProfile.grade, ClassProfile.name)
+            statement.order_by(ClassProfile.grade, ClassProfile.name)
         ).all()
     )
 

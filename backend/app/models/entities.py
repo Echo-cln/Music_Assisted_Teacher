@@ -12,10 +12,13 @@ class Teacher(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     email: Mapped[str | None] = mapped_column(String(160), unique=True, nullable=True, index=True)
+    phone: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True, index=True)
     display_name: Mapped[str] = mapped_column(String(80))
     school: Mapped[str] = mapped_column(String(160), default="")
     password_hash: Mapped[str] = mapped_column(String(128))
     password_salt: Mapped[str] = mapped_column(String(64))
+    role: Mapped[str] = mapped_column(String(20), default="teacher", index=True)
+    verification_status: Mapped[str] = mapped_column(String(30), default="unverified")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -147,6 +150,8 @@ class Feedback(Base):
     highlights: Mapped[str] = mapped_column(Text, default="")
     problems: Mapped[str] = mapped_column(Text, default="")
     improvement: Mapped[str] = mapped_column(Text, default="")
+    audio_summary: Mapped[str] = mapped_column(Text, default="")
+    audio_analysis_id: Mapped[int | None] = mapped_column(ForeignKey("audio_analyses.id"), nullable=True, index=True)
     analysis_json: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -163,6 +168,47 @@ class AudioAsset(Base):
     mime_type: Mapped[str] = mapped_column(String(120))
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_reference: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AudioAnalysis(Base):
+    """一次可追溯的课堂录音分析；音频文件由 AudioAsset 管理。"""
+
+    __tablename__ = "audio_analyses"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teachers.id"), index=True)
+    song_id: Mapped[int] = mapped_column(ForeignKey("songs.id"), index=True)
+    lesson_plan_id: Mapped[int | None] = mapped_column(ForeignKey("lesson_plans.id"), nullable=True, index=True)
+    classroom_record_id: Mapped[int | None] = mapped_column(ForeignKey("classroom_records.id"), nullable=True, index=True)
+    recording_asset_id: Mapped[int] = mapped_column(ForeignKey("audio_assets.id"), index=True)
+    reference_asset_id: Mapped[int | None] = mapped_column(ForeignKey("audio_assets.id"), nullable=True)
+    result_json: Mapped[str] = mapped_column(Text, default="{}")
+    method_version: Mapped[str] = mapped_column(String(40), default="pitch-track-v2")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AudioAnalysisJob(Base):
+    __tablename__ = "audio_analysis_jobs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teachers.id"), index=True)
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    stage: Mapped[str] = mapped_column(String(160), default="等待开始")
+    progress: Mapped[int] = mapped_column(Integer, default=0)
+    request_json: Mapped[str] = mapped_column(Text)
+    analysis_id: Mapped[int | None] = mapped_column(ForeignKey("audio_analyses.id"), nullable=True)
+    error_message: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class VerificationCode(Base):
+    __tablename__ = "verification_codes"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    target: Mapped[str] = mapped_column(String(160), index=True)
+    channel: Mapped[str] = mapped_column(String(20))
+    code_hash: Mapped[str] = mapped_column(String(128))
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -196,3 +242,19 @@ class AIModelConfig(Base):
     strategy: Mapped[str] = mapped_column(String(50), default="standard")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ArrangementProject(Base):
+    """教师自己的可编辑数字乐器/编曲工程。"""
+
+    __tablename__ = "arrangement_projects"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teachers.id"), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    source_kind: Mapped[str] = mapped_column(String(30), default="manual")
+    tempo: Mapped[int] = mapped_column(Integer, default=96)
+    style: Mapped[str] = mapped_column(String(50), default="乡土抒情")
+    melody_json: Mapped[str] = mapped_column(Text, default="[]")
+    arrangement_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

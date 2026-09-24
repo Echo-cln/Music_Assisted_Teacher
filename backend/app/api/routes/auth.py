@@ -1,11 +1,18 @@
+import hashlib
+import secrets
+import smtplib
+from datetime import datetime, timedelta
+from email.message import EmailMessage
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.security import clear_login_session, create_login_session, get_current_teacher, hash_password, verify_password
+from app.core.config import get_settings
 from app.db.session import get_db
-from app.models.entities import Teacher
-from app.schemas.auth import LoginRequest, RegisterRequest, TeacherRead
+from app.models.entities import Teacher, VerificationCode
+from app.schemas.auth import LoginRequest, RegisterRequest, TeacherRead, VerificationRequest
 
 router = APIRouter(prefix="/auth", tags=["账号"])
 
@@ -17,12 +24,45 @@ def _teacher_read(teacher: Teacher) -> TeacherRead:
         display_name=teacher.display_name,
         email=teacher.email,
         school=teacher.school,
+        role=teacher.role,
+        verification_status=teacher.verification_status,
     )
+
+
+def _code_hash(code: str) -> str:
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+
+@router.post("/verification/email")
+def request_email_verification(payload: VerificationRequest, db: Session = Depends(get_db)):
+    settings = get_settings()
+    if not all([settings.smtp_host, settings.smtp_username, settings.smtp_password, settings.smtp_from]):
+        raise HTTPException(status_code=503, detail="邮件验证码服务尚未配置；请在 backend/.env 配置 SMTP_HOST、SMTP_USERNAME、SMTP_PASSWORD、SMTP_FROM")
+    email = payload.email.strip().lower()
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    db.add(VerificationCode(target=email, channel="email", code_hash=_code_hash(code), expires_at=datetime.utcnow() + timedelta(minutes=10)))
+    db.commit()
+    message = EmailMessage()
+    message["Subject"] = "乡音智谱注册验证码"
+    message["From"], message["To"] = settings.smtp_from, email
+    message.set_content(f"您的乡音智谱注册验证码为：{code}\n有效期 10 分钟。请勿向他人泄露。")
+    try:
+        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
+            smtp.login(settings.smtp_username, settings.smtp_password)
+            smtp.send_message(message)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"邮件发送失败：{str(exc)[:120]}")
+    return {"message": "验证码已发送，请在 10 分钟内填写"}
 
 
 @router.post("/register", response_model=TeacherRead, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, response: Response, db: Session = Depends(get_db)):
-    normalized_email = payload.email.strip().lower() if payload.email else None
+    normalized_email = payload.email.strip().lower()
+    if payload.password != payload.password_confirm:
+        raise HTTPException(status_code=422, detail="两次输入的密码不一致")
+    verification = db.scalar(select(VerificationCode).where(VerificationCode.target == normalized_email, VerificationCode.channel == "email", VerificationCode.consumed_at.is_(None), VerificationCode.expires_at > datetime.utcnow()).order_by(VerificationCode.created_at.desc()))
+    if not verification or verification.code_hash != _code_hash(payload.verification_code):
+        raise HTTPException(status_code=422, detail="邮箱验证码无效或已过期")
     existing = db.scalar(
         select(Teacher).where(
             or_(
@@ -41,8 +81,10 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
         school=payload.school.strip(),
         password_hash=password_hash,
         password_salt=password_salt,
+        verification_status="email_verified",
     )
     db.add(teacher)
+    verification.consumed_at = datetime.utcnow()
     db.commit()
     db.refresh(teacher)
     create_login_session(db, teacher, response)

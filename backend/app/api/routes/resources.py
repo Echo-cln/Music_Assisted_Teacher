@@ -76,13 +76,12 @@ def as_dict(kind: ResourceKind, row: Song | TeachingGame | MusicTheory | Teachin
 def list_resources(
     kind: ResourceKind,
     q: str = Query(default="", max_length=80),
+    sort: str = Query(default="default", pattern="^(default|name|category|grade|difficulty)$"),
     db: Session = Depends(get_db),
     teacher: Teacher = Depends(get_current_teacher),
 ):
     model = TABLES[kind]
-    statement = select(model).where(or_(model.owner_teacher_id.is_(None), model.owner_teacher_id == teacher.id)).order_by(
-        model.owner_teacher_id.desc().nullslast(), model.id
-    )
+    statement = select(model).where(or_(model.owner_teacher_id.is_(None), model.owner_teacher_id == teacher.id))
     if q:
         search_field = {
             "songs": Song.name,
@@ -91,6 +90,13 @@ def list_resources(
             "mistakes": TeachingMistake.problem,
         }[kind]
         statement = statement.where(search_field.contains(q))
+    sort_field = {
+        "songs": {"name": Song.name, "category": Song.region, "grade": Song.grade, "difficulty": Song.difficulty},
+        "games": {"name": TeachingGame.name, "category": TeachingGame.category, "grade": TeachingGame.grade},
+        "theory": {"name": MusicTheory.term, "category": MusicTheory.category},
+        "mistakes": {"name": TeachingMistake.problem, "category": TeachingMistake.category},
+    }[kind].get(sort)
+    statement = statement.order_by(model.owner_teacher_id.desc().nullslast(), sort_field if sort_field is not None else model.id)
     return [as_dict(kind, row, teacher.id) for row in db.scalars(statement.limit(600)).all()]
 
 

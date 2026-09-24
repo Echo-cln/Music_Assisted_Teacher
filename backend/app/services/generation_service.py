@@ -76,12 +76,13 @@ def create_generation_job(teacher_id: int, payload: LessonGenerateRequest) -> di
             id=str(uuid.uuid4()),
             teacher_id=teacher_id,
             status="pending",
-            stage="已准备生成任务",
+            stage="已准备模型生成任务",
             progress=35,
             request_json=payload.model_dump_json(),
             preview_json=json.dumps(preview, ensure_ascii=False),
             result_json="{}",
             steps_json=json.dumps(_steps(2), ensure_ascii=False),
+            strategy_used=payload.generation_strategy,
         )
         db.add(job)
         db.commit()
@@ -129,6 +130,7 @@ def _run_generation_job(job_id: str) -> None:
                 payload.activity_preference,
                 payload.teacher_requirements,
                 job.teacher_id,
+                payload.generation_strategy,
             ):
                 if kind == "complete":
                     completed = value
@@ -172,6 +174,8 @@ def _run_generation_job(job_id: str) -> None:
 def serialize_job(job: GenerationJob) -> dict:
     preview = json.loads(job.preview_json or "{}")
     result = json.loads(job.result_json or "{}")
+    ended_at = job.updated_at if job.status in {"completed", "failed"} else datetime.utcnow()
+    elapsed_seconds = max(0, int((ended_at - job.created_at).total_seconds()))
     return {
         "id": job.id,
         "status": job.status,
@@ -183,6 +187,7 @@ def serialize_job(job: GenerationJob) -> dict:
         "error_message": job.error_message,
         "model_used": getattr(job, "model_used", "default"),
         "strategy_used": getattr(job, "strategy_used", "standard"),
+        "elapsed_seconds": elapsed_seconds,
         "created_at": job.created_at.isoformat(timespec="seconds"),
         "updated_at": job.updated_at.isoformat(timespec="seconds"),
     }

@@ -19,13 +19,16 @@ const defaults = {
 let selectedType = "songs";
 
 export async function renderResources(container) {
+  const requestedType = sessionStorage.getItem("resourceKindToOpen");
+  if (requestedType && types[requestedType]) selectedType = requestedType;
+  sessionStorage.removeItem("resourceKindToOpen");
   container.innerHTML = pageHeader(
     "教学资源库",
     "系统内置资源全体教师共享且只读；你可以直接在页面新增、编辑和删除自己的歌曲、游戏、乐理与易错纠正资源。",
     '<button class="btn primary" id="newResource">＋ 新增资源</button>'
   ) + `
     <section class="card"><div class="tabs resource-tabs">${Object.entries(types).map(([key, type]) => `<button class="tab ${selectedType === key ? "active" : ""}" data-resource-tab="${key}">${type.title}</button>`).join("")}</div>
-    <label>搜索当前分类<input id="resourceSearch" placeholder="输入名称或问题关键词"></label>
+    <div class="list-search"><label class="search-field"><span>⌕</span><input id="resourceSearch" placeholder="输入名称或问题关键词"></label><label>排序<select id="resourceSort"><option value="default">默认（我的资源优先）</option><option value="name">名称</option><option value="category">类别 / 地区</option><option value="grade">适用年级</option><option value="difficulty">难度</option></select></label></div>
     <div id="resourceList"></div></section>`;
 
   document.getElementById("newResource").onclick = () => openResourceForm(selectedType, { ...defaults[selectedType] }, "create");
@@ -40,6 +43,7 @@ export async function renderResources(container) {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(loadRows, 240);
   };
+  document.getElementById("resourceSort").onchange = loadRows;
   await loadRows();
 }
 
@@ -48,7 +52,7 @@ async function loadRows() {
   const target = document.getElementById("resourceList");
   const q = document.getElementById("resourceSearch").value.trim();
   try {
-    const rows = await api.resources(kind, q);
+    const rows = await api.resources(kind, q, document.getElementById("resourceSort").value);
     if (selectedType !== kind) return;
     const mine = rows.filter(row => row.scope === "mine").length;
     const system = rows.length - mine;

@@ -17,7 +17,7 @@
 - 后端：Python 3.11+、FastAPI、SQLAlchemy、SQLite
 - 前端：HTML、CSS、原生 ES Modules
 - AI：智谱 BigModel（默认 `glm-5.3-flash`）；未配置密钥时自动使用规则版生成，完整流程仍可演示
-- 音频：librosa、NumPy
+- 音频：librosa、NumPy、Basic Pitch（单人练唱的参考音频逐音评测）
 - 数据导入：openpyxl
 
 ## 快速运行（Windows）
@@ -55,6 +55,8 @@ http://127.0.0.1:8000/api/docs
 
 也可以在登录页直接注册新教师账号。新账号会拥有独立的班级、教案与个人资源空间。
 
+演示账号首次启动会自动升级为系统管理员。请在交付演示之外及时修改其默认密码。
+
 ## 配置智谱 GLM
 
 出于安全原因，交付压缩包中的 `backend/.env` 不包含任何 API Key。请在本地编辑：
@@ -72,6 +74,22 @@ AI_MODEL=glm-5.3-flash
 ```
 
 密钥只由后端读取，不会发送到前端代码。
+
+## 邮箱验证码与系统管理
+
+注册必须填写确认密码和邮箱验证码。验证码会使用真实 SMTP 邮件发送；未配置 SMTP 时，注册页会明确提示“服务未配置”，不会生成假验证码。将以下字段加入 `backend/.env`：
+
+```text
+SMTP_HOST=smtp.example.com
+SMTP_PORT=465
+SMTP_USERNAME=your-account@example.com
+SMTP_PASSWORD=你的SMTP授权码
+SMTP_FROM=your-account@example.com
+```
+
+若使用 QQ 邮箱，本包已预填 `SMTP_HOST=smtp.qq.com` 和 `SMTP_PORT=465`；只需将 `SMTP_USERNAME`、`SMTP_FROM` 填为你的 QQ 邮箱，将 `SMTP_PASSWORD` 填为 QQ 邮箱“账户 → 开启服务”生成的 SMTP 授权码。不要填写 QQ 登录密码。
+
+系统管理入口仅向 `role=admin` 用户显示，可管理教师/管理员角色和验证状态。邮箱验证码只证明联系方式可用；如需法定意义上的实名核验或手机短信，需要另行接入合规短信/实名服务商及其凭据。
 
 ## 数据隔离设计
 
@@ -97,6 +115,12 @@ pending → running → completed / failed
 ```
 
 页面会立即显示本地规则骨架，同时后台继续调用 GLM。任务状态持久化到数据库，因此切换页面不会中断。
+
+## 音频分析任务与关联
+
+上传音频后会创建持久化的 `AudioAnalysisJob`。右下角进度来自后端真实阶段（保存文件、提取音高/节拍、计算指标、保存结果），切换页面或刷新页面后任务仍可查询。
+
+音频分析可选择关联某一教案，也可保留为“私人练唱”。课堂反馈仅能选择同一教案下已归档的音频分析；导入的音频摘要仍可编辑。
 
 ## 测试
 

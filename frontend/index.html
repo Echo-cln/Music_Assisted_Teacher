@@ -19,15 +19,18 @@
         <button class="nav-item" data-route="assistant"><span>✦</span><b>AI 教案助手</b></button>
         <button class="nav-item" data-route="classes"><span>▦</span><b>班级画像</b></button>
         <button class="nav-item" data-route="resources"><span>♫</span><b>教学资源库</b></button>
-        <button class="nav-item" data-route="lessons"><span>▤</span><b>教案与课堂记录</b></button>
-        <button class="nav-item" data-route="feedback"><span>⌁</span><b>音频对比与反馈</b></button>
-        <button class="nav-item" data-route="ai_engine"><span>⚙</span><b>AI教学引擎</b></button>
+        <button class="nav-item" data-route="workbench"><span>♬</span><b>数字乐器与编曲</b></button>
+        <button class="nav-item" data-route="lessons"><span>▤</span><b>教学档案</b></button>
+        <button class="nav-item" data-route="audio"><span>⌁</span><b>音频分析</b></button>
+        <button class="nav-item" data-route="feedback"><span>▣</span><b>课堂反馈</b></button>
+        <button class="nav-item hidden" id="adminNav" data-route="admin"><span>⚙</span><b>系统管理</b></button>
       </nav>
       <div class="sidebar-note"><b>Python 服务已连接</b><small id="serviceStatus">正在检查后端和数据库…</small></div>
     </aside>
     <main class="main" id="app"></main>
   </div>
   <aside class="generation-center hidden" id="generationCenter"></aside>
+  <aside class="audio-job-center hidden" id="audioJobCenter"></aside>
   <div class="toast" id="toast"></div>
   <div id="modalRoot"></div>
   <script type="module" src="assets/js/main.js"></script>

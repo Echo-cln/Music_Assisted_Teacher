@@ -1,4 +1,5 @@
 export function drawWaveform(element, samples, color = "#9f4b35") {
+  if (!element) return;
   const width = 800;
   const height = 105;
   const middle = height / 2;
@@ -9,4 +10,3 @@ export function drawWaveform(element, samples, color = "#9f4b35") {
   }).join("");
   element.innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none"><line x1="0" y1="${middle}" x2="${width}" y2="${middle}" stroke="#eadfd6"/>${lines}</svg>`;
 }
-

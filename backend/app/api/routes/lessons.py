@@ -1,13 +1,13 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.security import get_current_teacher
 from app.db.session import get_db
-from app.models.entities import ClassProfile, LessonPlan, Teacher
+from app.models.entities import ClassProfile, LessonPlan, Song, Teacher
 from app.repositories.song_repository import SongRepository
 from app.schemas.lesson import (
     LessonAdjustRequest,
@@ -35,13 +35,24 @@ def _profile_for_teacher(db: Session, teacher_id: int, class_id: int | None):
 
 
 @router.get("", response_model=list[LessonPlanRead])
-def list_lessons(db: Session = Depends(get_db), teacher: Teacher = Depends(get_current_teacher)):
+def list_lessons(
+    q: str | None = Query(default=None, max_length=80),
+    db: Session = Depends(get_db),
+    teacher: Teacher = Depends(get_current_teacher),
+):
     statement = (
         select(LessonPlan)
         .options(joinedload(LessonPlan.song), joinedload(LessonPlan.class_profile))
         .where(LessonPlan.teacher_id == teacher.id)
-        .order_by(LessonPlan.created_at.desc())
     )
+    if q:
+        keyword = f"%{q.strip()}%"
+        statement = statement.outerjoin(LessonPlan.song).outerjoin(LessonPlan.class_profile).where(or_(
+            LessonPlan.title.ilike(keyword),
+            Song.name.ilike(keyword),
+            ClassProfile.name.ilike(keyword),
+        ))
+    statement = statement.order_by(LessonPlan.created_at.desc())
     return [serialize_plan(item) for item in db.scalars(statement).unique().all()]
 
 
@@ -195,6 +206,30 @@ def adjust(
     content.setdefault("adjustment_history", []).append(payload.instruction)
     plan.teacher_requirements = payload.instruction
     plan.content_json = json.dumps(content, ensure_ascii=False)
+    db.commit()
+    db.refresh(plan)
+    return serialize_plan(plan)
+
+
+@router.put("/{lesson_id}", response_model=LessonPlanRead)
+def update_lesson(
+    lesson_id: int,
+    payload: LessonSaveRequest,
+    db: Session = Depends(get_db),
+    teacher: Teacher = Depends(get_current_teacher),
+):
+    plan = db.scalar(
+        select(LessonPlan)
+        .options(joinedload(LessonPlan.song), joinedload(LessonPlan.class_profile))
+        .where(LessonPlan.id == lesson_id, LessonPlan.teacher_id == teacher.id)
+    )
+    if not plan:
+        raise HTTPException(status_code=404, detail="教案不存在")
+    # 编辑时保持归属信息不变，只更新教师确认后的正文与元信息。
+    plan.title = str(payload.content.get("title") or plan.title)
+    plan.teacher_requirements = payload.teacher_requirements
+    plan.content_json = json.dumps(payload.content, ensure_ascii=False)
+    plan.generation_mode = payload.generation_mode
     db.commit()
     db.refresh(plan)
     return serialize_plan(plan)

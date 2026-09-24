@@ -15,6 +15,14 @@ class Settings(BaseSettings):
     ai_api_key: str = ""
     ai_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
     ai_model: str = "glm-5.3-flash"
+    ai_fast_model: str = "doubao-seed-2-0-mini-260428"
+    ai_fast_base_url: str = ""
+    ai_fast_api_key: str = ""
+    smtp_host: str = ""
+    smtp_port: int = 465
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
 
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",
