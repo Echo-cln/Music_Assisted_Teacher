@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     def model_post_init(self, __context) -> None:
         # Vercel 的部署目录是只读的；未接入生产数据库前，允许它以临时
         # SQLite 演示模式启动，而不是在建表时直接失败。数据不会跨实例保存。
-        if os.getenv("VERCEL") and self.database_url == f"sqlite:///{BACKEND_DIR / 'data' / 'zhiban.db'}":
+        if os.getenv("VERCEL") and self.database_url.startswith("sqlite"):
             runtime_dir = Path(tempfile.gettempdir()) / "xiangyin"
             runtime_dir.mkdir(parents=True, exist_ok=True)
             self.database_url = f"sqlite:///{runtime_dir / 'zhiban.db'}"
