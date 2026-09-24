@@ -1,5 +1,7 @@
 from functools import lru_cache
+import os
 from pathlib import Path
+import tempfile
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -31,6 +33,13 @@ class Settings(BaseSettings):
     )
 
     def model_post_init(self, __context) -> None:
+        # Vercel 的部署目录是只读的；未接入生产数据库前，允许它以临时
+        # SQLite 演示模式启动，而不是在建表时直接失败。数据不会跨实例保存。
+        if os.getenv("VERCEL") and self.database_url == f"sqlite:///{BACKEND_DIR / 'data' / 'zhiban.db'}":
+            runtime_dir = Path(tempfile.gettempdir()) / "xiangyin"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            self.database_url = f"sqlite:///{runtime_dir / 'zhiban.db'}"
+            self.upload_dir = str(runtime_dir / "uploads")
         # .env 中的相对路径统一相对 backend/ 解析，避免从不同工作目录启动时路径漂移。
         prefix = "sqlite:///./"
         if self.database_url.startswith(prefix):
