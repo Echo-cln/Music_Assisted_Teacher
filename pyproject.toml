@@ -1,3 +1,21 @@
+[project]
+name = "music-assisted-teacher"
+version = "0.1.0"
+description = "乡音智谱 AI 音乐美育工作台"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi==0.115.6",
+  "uvicorn[standard]==0.34.0",
+  "sqlalchemy==2.0.36",
+  "pydantic-settings==2.7.1",
+  "python-multipart==0.0.20",
+  "openpyxl==3.1.5",
+  "httpx==0.28.1",
+  "numpy==2.2.1",
+  "librosa==0.10.2.post1",
+  "basic-pitch==0.4.0",
+]
+
 [tool.pytest.ini_options]
 pythonpath = ["backend"]
 testpaths = ["backend/tests"]
@@ -8,4 +26,3 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
-
