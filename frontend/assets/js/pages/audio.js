@@ -87,7 +87,7 @@ export async function renderAudio(container) {
     if (!area || !task || task.status === "completed") return;
     const failed = task.status === "failed";
     const cancelled = task.status === "cancelled";
-    area.innerHTML = `<section class="card analysis-progress ${failed ? "failed" : ""}" aria-live="polite"><div><span class="eyebrow">${failed ? "ANALYSIS ERROR" : "BACKGROUND ANALYSIS"}</span><h3>${failed ? "本次音频分析失败" : cancelled ? "本次音频分析已取消" : "正在分析这份录音"}</h3><p>${esc(task.stage || "正在准备")}</p>${failed ? `<p class="generation-error"><b>具体错误：</b>${esc(task.error_message || "后端未返回错误详情")}</p>` : ""}</div><div class="generation-progress"><i style="width:${Math.min(100, Math.max(0, Number(task.progress || 0)))}%"></i></div>${!failed && !cancelled ? `<div class="actions"><small>真实阶段：${esc(task.stage || "读取音频")}。你可留在本页等待，也可切换页面。</small><button class="btn soft" id="cancelAudioInPage">取消本次分析</button></div>` : ""}</section>`;
+    area.innerHTML = `<section class="card analysis-progress ${failed ? "failed" : ""}" aria-live="polite"><div><span class="eyebrow">${failed ? "ANALYSIS ERROR" : "BACKGROUND ANALYSIS"}</span><h3>${failed ? "本次音频分析失败" : cancelled ? "本次音频分析已取消" : "正在分析这份录音"}</h3><p>${esc(task.stage || "正在准备")}</p>${failed ? `<p class="generation-error"><b>具体错误：</b>${esc(task.error_message || "后端未返回错误详情")}</p>` : ""}</div><div class="generation-progress"><i style="width:${Math.min(100, Math.max(0, Number(task.progress || 0)))}%"></i></div>${audioStepView(task)}${!failed && !cancelled ? `<div class="actions"><small>真实阶段：${esc(task.stage || "读取音频")}。你可留在本页等待，也可切换页面。</small><button class="btn soft" id="cancelAudioInPage">取消本次分析</button></div>` : ""}</section>`;
     area.querySelector("#cancelAudioInPage")?.addEventListener("click", async () => {
       try { await cancelActiveAudioJob(); } catch (error) { notify(error.message); }
     });
@@ -105,6 +105,16 @@ export async function renderAudio(container) {
       window.dispatchEvent(new CustomEvent("app:navigate", { detail: "feedback" }));
     };
   }
+}
+
+function audioStepView(task) {
+  const progress = Number(task.progress || 0);
+  const labels = ["保存并校验录音", "读取音频与格式", "提取音高、起音与节拍", "计算分段声学指标", "生成建议 / 逐音结果", "保存分析结果"];
+  const points = [5, 20, 42, 68, 82, 100];
+  return `<ol class="job-step-list">${labels.map((label, index) => {
+    const state = task.status === "failed" && progress < points[index] ? "pending" : progress >= points[index] ? "done" : "running";
+    return `<li class="${state}"><i>${state === "done" ? "✓" : state === "running" ? "•" : "○"}</i>${label}</li>`;
+  }).join("")}</ol>`;
 }
 
 function analysisProgress(message, progress) {

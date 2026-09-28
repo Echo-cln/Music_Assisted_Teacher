@@ -54,9 +54,18 @@ function render() {
     <div class="task-dock-icon">✦</div><div class="task-dock-copy"><b>${statusText}</b><small>${esc(currentJob.stage || "处理中")} · ${Number(currentJob.progress || 0)}%</small></div>
     <button class="task-dock-action" id="openGeneratedLesson">查看</button><button class="icon-close" id="dismissGeneration" aria-label="关闭">×</button>
   </div>`;
-  root.querySelector("#openGeneratedLesson").onclick = () => window.dispatchEvent(new CustomEvent("app:navigate", { detail: "assistant" }));
+  root.querySelector("#openGeneratedLesson").onclick = () => {
+    // 明确把“当前这一个教案任务”交给详情页，不能回退到历史任务。
+    localStorage.setItem("activeGenerationJobId", currentJob.id);
+    window.dispatchEvent(new CustomEvent("app:navigate", { detail: "assistant" }));
+  };
   const dismiss = root.querySelector("#dismissGeneration");
-  if (dismiss) dismiss.onclick = () => { dismissed = true; render(); };
+  if (dismiss) dismiss.onclick = () => {
+    dismissed = true;
+    // 完成、失败或取消的卡片不应在下次刷新时重新冒出来。
+    if (["completed", "failed", "cancelled"].includes(currentJob.status)) clearGenerationJob();
+    else render();
+  };
   const toggle = root.querySelector("#toggleGeneration");
   if (toggle) toggle.addEventListener("click", () => { detailsOpen = !detailsOpen; render(); });
 }

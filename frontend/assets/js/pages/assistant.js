@@ -201,12 +201,18 @@ function disableActions(generating) {
 function renderPreview(area, generating = false, job = null) {
   if (!currentPlan) return;
   const status = generating
-    ? `<div class="ai-preview-banner"><div><b>AI 正在后台优化</b><span>${esc(job?.stage || "你可以切换到其他页面，生成不会中断")}</span></div><button class="btn soft" id="cancelGenerationInPage">取消本次生成</button></div>`
+    ? `<div class="ai-preview-banner"><div><b>AI 正在后台优化</b><span>${esc(job?.stage || "你可以切换到其他页面，生成不会中断")}</span></div><button class="btn soft" id="cancelGenerationInPage">取消本次生成</button></div><div class="generation-progress"><i style="width:${Math.min(100, Math.max(0, Number(job?.progress || 0)))}%"></i></div>${generationStepView(job)}`
     : "";
   area.innerHTML = `${status}<section class="card lesson-preview-card"><div class="card-head"><div><h3>教案预览</h3><p class="muted">${currentPlan.is_saved ? "已保存到教案与课堂记录" : generating ? "已先展示规则骨架，AI完成后会自动替换为增强版" : "未保存：可继续调整，满意后点击右侧“保存教案”"}</p></div></div><div class="lesson-preview-scroll">${lessonView(currentPlan)}</div></section>`;
   area.querySelector("#cancelGenerationInPage")?.addEventListener("click", async () => {
     try { await cancelActiveGeneration(); } catch (error) { notify(error.message); }
   });
+}
+
+function generationStepView(job) {
+  const steps = job?.steps || [];
+  if (!steps.length) return "";
+  return `<ol class="job-step-list">${steps.map(item => `<li class="${esc(item.state || "pending")}"><i>${item.state === "done" ? "✓" : item.state === "error" ? "!" : item.state === "running" ? "•" : "○"}</i>${esc(item.label)}</li>`).join("")}</ol>`;
 }
 
 async function streamPreviewAdjustment(area, instruction) {

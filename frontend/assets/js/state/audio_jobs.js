@@ -18,8 +18,15 @@ function render() {
     <div class="task-dock-icon">♫</div><div class="task-dock-copy"><b>${done ? "音频分析完成" : failed ? "音频分析失败" : cancelled ? "音频分析已取消" : "正在分析音频"}</b><small>${esc(job.stage || "正在准备")} · ${Number(job.progress || 0)}%</small></div>
     <button class="task-dock-action" id="openAudioJob">查看</button><button class="icon-close" aria-label="关闭">×</button>
   </div>`;
-  root.querySelector(".icon-close").onclick = () => { dismissed = true; render(); };
+  root.querySelector(".icon-close").onclick = () => {
+    dismissed = true;
+    // 终态任务关闭后清除持久化指针，避免把上一次失败带到下一次打开。
+    if (["completed", "failed", "cancelled"].includes(job.status)) clearAudioJob();
+    else render();
+  };
   root.querySelector("#openAudioJob").onclick = () => {
+    // 音频卡只能定位音频任务；不要依赖上一次分析结果的 ID。
+    localStorage.setItem("activeAudioJobId", job.id);
     if (job.analysis_id) localStorage.setItem("lastAudioAnalysisId", String(job.analysis_id));
     window.dispatchEvent(new CustomEvent("app:navigate", { detail: "audio" }));
   };
@@ -61,6 +68,15 @@ export async function cancelActiveAudioJob() {
   if (!job || ["completed", "failed", "cancelled"].includes(job.status)) return;
   await api.cancelAudioJob(job.id);
   await refresh();
+}
+
+export function clearAudioJob() {
+  localStorage.removeItem("activeAudioJobId");
+  localStorage.removeItem("lastAudioAnalysisId");
+  job = null;
+  clearInterval(timer);
+  timer = null;
+  render();
 }
 
 export function setAudioJobCenterVisible(visible) {
