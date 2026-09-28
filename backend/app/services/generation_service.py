@@ -80,7 +80,7 @@ def create_generation_job(teacher_id: int, payload: LessonGenerateRequest) -> di
             id=str(uuid.uuid4()),
             teacher_id=teacher_id,
             status="pending",
-            stage="已准备模型生成任务",
+            stage="已完成教案骨架，准备连接模型服务",
             progress=35,
             request_json=payload.model_dump_json(),
             preview_json=json.dumps(preview, ensure_ascii=False),
@@ -118,16 +118,12 @@ def _run_generation_job(job_id: str) -> None:
             if not song or (payload.class_id and not profile):
                 raise ValueError("生成所需歌曲或班级已不存在")
 
-            _set_job(
-                job,
-                status="running",
-                stage="正在调用 AI 优化教师话术与课堂活动",
-                progress=55,
-                step_index=3,
-            )
+            _set_job(job, status="running", stage="正在连接模型服务", progress=38, step_index=3)
             db.commit()
 
             completed = None
+            received_chunks = 0
+            received_chars = 0
             for kind, value in stream_preview(
                 db,
                 song,
@@ -141,12 +137,30 @@ def _run_generation_job(job_id: str) -> None:
                 db.refresh(job)
                 if job.status == "cancelled":
                     return
+                if kind == "start":
+                    _set_job(job, status="running", stage="模型已接受请求，等待首段正文", progress=42, step_index=3)
+                    db.commit()
+                elif kind == "delta":
+                    # 每个真正收到的 SSE 正文分片都推进 1%，最多到 88%。
+                    # 这不是按时间猜测；无正文时不会假装进度已经完成。
+                    received_chunks += 1
+                    received_chars += len(str(value))
+                    next_progress = min(88, 42 + received_chunks)
+                    if next_progress > int(job.progress or 0):
+                        _set_job(
+                            job,
+                            status="running",
+                            stage=f"正在接收模型正文（已收到 {received_chars} 字符）",
+                            progress=next_progress,
+                            step_index=3,
+                        )
+                        db.commit()
                 if kind == "complete":
                     completed = value
             if completed is None:
                 raise RuntimeError("AI 未返回完整教案")
 
-            _set_job(job, status="running", stage="正在校验教案结构与课时", progress=90, step_index=4)
+            _set_job(job, status="running", stage="模型正文接收完成，正在校验教案结构与课时", progress=92, step_index=4)
             db.commit()
             preview = serialize_preview(
                 song,

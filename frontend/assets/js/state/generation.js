@@ -101,7 +101,8 @@ async function refresh() {
 
 function ensurePolling() {
   if (timer) return;
-  timer = setInterval(refresh, 2500);
+  // 流式正文可能在很短时间内连续到达，缩短轮询间隔才能把后端真实增量呈现出来。
+  timer = setInterval(refresh, 700);
 }
 
 export async function initGenerationCenter() {

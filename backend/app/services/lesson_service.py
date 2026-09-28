@@ -243,9 +243,30 @@ def _validated_content(raw: str, base: dict) -> dict:
             ) from repair_exc
     if not isinstance(content, dict):
         raise ValueError("模型没有返回教案对象")
-    # 两个供应商都可能只回传已增强字段。规则骨架仍是完整结构的权威来源，
-    # 所以只接受类型正确、非空的增强结果，不能因为 summary 等字段缺失而失败。
+    # 成功必须是模型实际给出的完整教案，不能把缺失字段静默拼回规则骨架，
+    # 否则“模型返回不完整”会被伪装成成功，教师无法发现真实问题。
     generated = content
+    required_fields = (
+        "title", "summary", "objectives", "key_points", "difficulties", "preparation",
+        "timeline", "theory_explanation", "mistake_practice", "differentiation", "assessment",
+    )
+    missing = [field for field in required_fields if not generated.get(field)]
+    if missing:
+        raise ValueError(f"模型返回的教案缺少必要字段：{', '.join(missing)}；本次深度结果未保存，请重试")
+    wrong_types = [field for field in required_fields if not isinstance(generated.get(field), type(base.get(field)))]
+    if wrong_types:
+        raise ValueError(f"模型返回的教案字段类型不正确：{', '.join(wrong_types)}；本次深度结果未保存，请重试")
+    base_timeline_for_check = base.get("timeline") or []
+    timeline = generated.get("timeline") or []
+    if len(timeline) != len(base_timeline_for_check):
+        raise ValueError(f"模型返回的 timeline 项数为 {len(timeline)}，应为 {len(base_timeline_for_check)}；本次深度结果未保存，请重试")
+    incomplete_timeline = [
+        str(index + 1) for index, item in enumerate(timeline)
+        if not isinstance(item, dict) or not isinstance(item.get("teacher"), str) or not item.get("teacher").strip()
+        or not isinstance(item.get("students"), str) or not item.get("students").strip()
+    ]
+    if incomplete_timeline:
+        raise ValueError(f"模型返回的第 {', '.join(incomplete_timeline)} 个课堂环节缺少教师或学生任务；本次深度结果未保存，请重试")
     content = deepcopy(base)
     for field in (
         "title",

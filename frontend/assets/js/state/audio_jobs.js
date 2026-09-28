@@ -50,7 +50,7 @@ async function refresh() {
   }
 }
 
-function poll() { if (!timer) timer = setInterval(refresh, 1500); }
+function poll() { if (!timer) timer = setInterval(refresh, 800); }
 
 export async function initAudioJobCenter() { await refresh(); if (job && !["completed", "failed", "cancelled"].includes(job.status)) poll(); }
 
