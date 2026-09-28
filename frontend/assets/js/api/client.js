@@ -2,7 +2,10 @@
 const API_ROOT = (window.__APP_CONFIG__?.apiBaseUrl || "/api").replace(/\/$/, "");
 
 export function apiUrl(path) {
-  return `${API_ROOT}${path.startsWith("/") ? path : `/${path}`}`;
+  // 后端历史记录中可能已有 /api/audio/...；新接口内部使用 /audio/...。
+  // 无论哪一种都只保留一个 /api 前缀，避免产生 /api/api/... 资源 404。
+  const relative = String(path || "").startsWith("/api/") ? String(path).slice(4) : path;
+  return `${API_ROOT}${String(relative).startsWith("/") ? relative : `/${relative}`}`;
 }
 
 async function request(path, options = {}) {

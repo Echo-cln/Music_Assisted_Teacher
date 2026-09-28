@@ -10,7 +10,7 @@ import { renderLessons } from "./pages/lessons.js";
 import { renderResources } from "./pages/resources.js";
 import { renderWorkbench } from "./pages/workbench.js";
 import { initGenerationCenter, setGenerationCenterVisible } from "./state/generation.js";
-import { initAudioJobCenter } from "./state/audio_jobs.js";
+import { initAudioJobCenter, setAudioJobCenterVisible } from "./state/audio_jobs.js";
 import { esc, loading, notify } from "./utils/dom.js";
 
 const app = document.getElementById("app");
@@ -76,6 +76,8 @@ async function navigate(route = "home") {
   app.innerHTML = loading();
   document.querySelectorAll(".nav-item").forEach(item => item.classList.toggle("active", item.dataset.route === route));
   setGenerationCenterVisible(route === "assistant");
+  // 进入音频页时，进行中的任务在页面主体展示，避免右下角浮层遮挡内容。
+  setAudioJobCenterVisible(route !== "audio");
   try {
     await routes[route](app);
     bindRoutes();

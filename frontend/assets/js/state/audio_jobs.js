@@ -4,11 +4,12 @@ import { esc } from "../utils/dom.js";
 let job = null;
 let timer = null;
 let dismissed = false;
+let centerVisible = true;
 
 function render() {
   const root = document.getElementById("audioJobCenter");
   if (!root) return;
-  if (!job || dismissed) { root.classList.add("hidden"); root.innerHTML = ""; return; }
+  if (!job || dismissed || !centerVisible) { root.classList.add("hidden"); root.innerHTML = ""; return; }
   root.classList.remove("hidden");
   const done = job.status === "completed";
   const failed = job.status === "failed";
@@ -43,6 +44,7 @@ async function refresh() {
       localStorage.setItem("lastAudioAnalysisId", String(job.analysis_id));
       window.dispatchEvent(new CustomEvent("audio-job:complete", { detail: job }));
     }
+    window.dispatchEvent(new CustomEvent("audio-job:update", { detail: job }));
     render();
     if (["completed", "failed", "cancelled"].includes(job.status)) { clearInterval(timer); timer = null; }
   } catch (error) {
@@ -64,3 +66,9 @@ export async function startAudioJob(form) {
 }
 
 export async function refreshAudioJob() { await refresh(); return job; }
+
+export function setAudioJobCenterVisible(visible) {
+  centerVisible = visible;
+  if (visible) dismissed = false;
+  render();
+}

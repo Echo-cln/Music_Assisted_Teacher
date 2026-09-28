@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import json
+import logging
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
@@ -16,6 +17,7 @@ from app.repositories.song_repository import SongRepository
 from app.services.audio_service import analyze_singing, assess_note_accuracy, compare_intonation, compare_waveforms, load_waveform, save_upload
 
 router = APIRouter(prefix="/audio", tags=["音频"])
+logger = logging.getLogger(__name__)
 # 音频解码和音高估计是 CPU 密集型任务。限制为两个工作线程，避免多次上传拖慢全部 API。
 audio_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="audio-analysis")
 
@@ -112,6 +114,7 @@ def _run_job(job_id: str):
         job = db.get(AudioAnalysisJob, job_id)
         if not job:
             return
+        logger.info("audio_job_started job_id=%s teacher_id=%s", job.id, job.teacher_id)
         payload = json.loads(job.request_json)
         song = db.get(Song, payload["song_id"])
         if not song:
@@ -133,7 +136,9 @@ def _run_job(job_id: str):
             return
         job.analysis_id, job.status, job.progress, job.stage = analysis.id, "completed", 100, "分析完成，结果已保存"
         db.commit()
+        logger.info("audio_job_completed job_id=%s analysis_id=%s", job.id, analysis.id)
     except Exception as exc:
+        logger.exception("audio_job_failed job_id=%s error=%s", job_id, exc)
         db.rollback()
         job = db.get(AudioAnalysisJob, job_id)
         if job and job.status != "cancelled":

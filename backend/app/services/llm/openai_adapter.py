@@ -6,10 +6,13 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import httpx
 
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAICompatibleAdapter:
@@ -61,6 +64,7 @@ class OpenAICompatibleAdapter:
         try:
             with httpx.Client(timeout=httpx.Timeout(180, connect=20)) as client:
                 with client.stream("POST", f"{self.base_url}/chat/completions", headers=headers, json=payload) as response:
+                    logger.info("llm_response model=%s strategy=%s status=%s content_type=%s request_id=%s", self.model, generation_strategy, response.status_code, response.headers.get("content-type", ""), response.headers.get("x-request-id") or response.headers.get("request-id") or "-")
                     if response.status_code >= 400:
                         detail = response.read().decode("utf-8", "replace")[:1200].replace("\n", " ")
                         raise RuntimeError(f"模型 HTTP {response.status_code}（model={self.model}，base_url={self.base_url}）：{detail}")

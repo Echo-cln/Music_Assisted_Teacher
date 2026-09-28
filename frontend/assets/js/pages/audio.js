@@ -1,7 +1,7 @@
 import { api, apiUrl } from "../api/client.js";
 import { esc, loading, notify, pageHeader } from "../utils/dom.js";
 import { drawWaveform } from "../utils/waveform.js";
-import { startAudioJob } from "../state/audio_jobs.js";
+import { refreshAudioJob, startAudioJob } from "../state/audio_jobs.js";
 
 const scoreNames = { pitch_stability: "音高稳定", rhythm_regularness: "节拍稳定", dynamics: "力度层次", clarity: "清晰度" };
 
@@ -25,6 +25,8 @@ export async function renderAudio(container) {
   if (savedAnalysisId) {
     api.audioAnalysis(savedAnalysisId).then(showResult).catch(() => localStorage.removeItem("lastAudioAnalysisId"));
   }
+  const activeJob = await refreshAudioJob();
+  if (activeJob) showJobState(activeJob);
   document.getElementById("recording").onchange = event => { document.getElementById("recordingName").textContent = event.target.files[0]?.name || "尚未选择文件"; };
   document.getElementById("original").onchange = event => { document.getElementById("originalName").textContent = event.target.files[0]?.name || "不上传也可分析"; };
   document.getElementById("analysisMode").onchange = event => {
@@ -78,6 +80,15 @@ export async function renderAudio(container) {
     const result = event.detail?.analysis;
     if (result) showResult(result);
   });
+  window.addEventListener("audio-job:update", event => showJobState(event.detail));
+
+  function showJobState(task) {
+    const area = document.getElementById("analysis");
+    if (!area || !task || task.status === "completed") return;
+    const failed = task.status === "failed";
+    const cancelled = task.status === "cancelled";
+    area.innerHTML = `<section class="card analysis-progress ${failed ? "failed" : ""}" aria-live="polite"><div><span class="eyebrow">${failed ? "ANALYSIS ERROR" : "BACKGROUND ANALYSIS"}</span><h3>${failed ? "本次音频分析失败" : cancelled ? "本次音频分析已取消" : "正在分析这份录音"}</h3><p>${esc(task.stage || "正在准备")}</p>${failed ? `<p class="generation-error"><b>具体错误：</b>${esc(task.error_message || "后端未返回错误详情")}</p>` : ""}</div><div class="generation-progress"><i style="width:${Math.min(100, Math.max(0, Number(task.progress || 0)))}%"></i></div>${!failed && !cancelled ? `<small>真实阶段：${esc(task.stage || "读取音频")}。你可留在本页等待，也可切换页面。</small>` : ""}</section>`;
+  }
 
   function showResult(result) {
     const area = document.getElementById("analysis");

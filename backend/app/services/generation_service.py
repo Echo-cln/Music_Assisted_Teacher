@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import uuid
 from datetime import datetime
@@ -14,6 +15,8 @@ from app.models.entities import ClassProfile, GenerationJob, Song
 from app.repositories.song_repository import SongRepository
 from app.schemas.lesson import LessonGenerateRequest
 from app.services.lesson_service import build_base_preview, serialize_preview, stream_preview
+
+logger = logging.getLogger(__name__)
 
 
 def _steps(active_index: int, failed: bool = False) -> list[dict]:
@@ -100,6 +103,7 @@ def _run_generation_job(job_id: str) -> None:
         job = db.get(GenerationJob, job_id)
         if not job:
             return
+        logger.info("generation_job_started job_id=%s strategy=%s model=%s", job.id, job.strategy_used, job.model_used)
         try:
             payload = LessonGenerateRequest.model_validate_json(job.request_json)
             song = SongRepository(db, job.teacher_id).get(payload.song_id)
@@ -160,7 +164,9 @@ def _run_generation_job(job_id: str) -> None:
             )
             job.updated_at = datetime.utcnow()
             db.commit()
+            logger.info("generation_job_completed job_id=%s", job.id)
         except Exception as exc:  # noqa: BLE001 - 后台任务必须持久化错误而不是让线程静默退出
+            logger.exception("generation_job_failed job_id=%s error=%s", job_id, exc)
             db.rollback()
             job = db.get(GenerationJob, job_id)
             if not job:
