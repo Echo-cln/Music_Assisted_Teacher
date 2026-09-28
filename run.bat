@@ -8,7 +8,7 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 set "PYTHON_EXE=%CD%\.venv\Scripts\python.exe"
-"%PYTHON_EXE%" -c "import fastapi, librosa, json_repair" >nul 2>&1
+"%PYTHON_EXE%" -c "import fastapi, librosa, json_repair, imageio_ffmpeg" >nul 2>&1
 if errorlevel 1 (
   echo [setup] Installing project dependencies into .venv only...
   "%PYTHON_EXE%" -m pip install --upgrade pip || goto :error

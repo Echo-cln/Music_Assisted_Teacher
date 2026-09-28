@@ -1,5 +1,6 @@
 import math
 import shutil
+import subprocess
 import uuid
 from pathlib import Path
 
@@ -19,11 +20,27 @@ def save_upload(file: UploadFile, folder: str) -> Path:
     return target
 
 
+def _load_mono_audio(path: Path, sample_rate: int = 22050) -> tuple[np.ndarray, int]:
+    """通过项目自带的 FFmpeg 解码，统一处理 WAV、MP3、M4A，避开 audioread 的弃用回退。"""
+    import imageio_ffmpeg
+
+    command = [
+        imageio_ffmpeg.get_ffmpeg_exe(), "-nostdin", "-v", "error", "-i", str(path),
+        "-f", "f32le", "-ac", "1", "-ar", str(sample_rate), "-",
+    ]
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", "replace").strip()[:220]
+        raise ValueError(f"无法解码音频：{detail or 'FFmpeg 未返回可读音频流'}")
+    signal = np.frombuffer(result.stdout, dtype=np.float32)
+    if not len(signal):
+        raise ValueError("音频不含可读取的声音数据")
+    return signal, sample_rate
+
+
 def load_waveform(path: Path, points: int = 180) -> tuple[list[float], float]:
     try:
-        import librosa
-
-        signal, sample_rate = librosa.load(path, sr=22050, mono=True)
+        signal, sample_rate = _load_mono_audio(path)
         duration = float(len(signal) / sample_rate)
         if len(signal) == 0:
             return [0.0] * points, 0.0
@@ -64,7 +81,7 @@ def analyze_singing(path: Path) -> dict:
     try:
         import librosa
 
-        signal, sample_rate = librosa.load(path, sr=22050, mono=True)
+        signal, sample_rate = _load_mono_audio(path)
         duration = len(signal) / sample_rate
         if duration < 1:
             raise ValueError("录音时长不足 1 秒")
@@ -154,7 +171,7 @@ def compare_intonation(recording_path: Path, reference_path: Path | None) -> dic
         import librosa
 
         def track(path: Path) -> np.ndarray:
-            signal, sr = librosa.load(path, sr=22050, mono=True)
+            signal, sr = _load_mono_audio(path)
             values, _, _ = librosa.pyin(signal, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7"), sr=sr, hop_length=512)
             return values
 
@@ -195,8 +212,8 @@ def assess_note_accuracy(recording_path: Path, reference_path: Path | None) -> d
         from basic_pitch.inference import predict
 
         _, _, note_events = predict(str(reference_path))
-        reference_signal, reference_sr = librosa.load(reference_path, sr=22050, mono=True)
-        signal, sr = librosa.load(recording_path, sr=22050, mono=True)
+        reference_signal, reference_sr = _load_mono_audio(reference_path)
+        signal, sr = _load_mono_audio(recording_path)
         reference_duration, duration = len(reference_signal) / reference_sr, len(signal) / sr
         f0, _, _ = librosa.pyin(signal, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7"), sr=sr, hop_length=512)
         times = librosa.frames_to_time(np.arange(len(f0)), sr=sr, hop_length=512)
