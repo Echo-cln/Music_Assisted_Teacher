@@ -7,12 +7,12 @@ if not exist ".venv\Scripts\python.exe" (
   py -3.11 -m venv .venv || goto :error
 )
 
-call ".venv\Scripts\activate.bat"
-python -c "import fastapi, librosa" >nul 2>&1
+set "PYTHON_EXE=%CD%\.venv\Scripts\python.exe"
+"%PYTHON_EXE%" -c "import fastapi, librosa, json_repair" >nul 2>&1
 if errorlevel 1 (
-  echo [setup] Installing backend dependencies. This only runs when dependencies are missing...
-  python -m pip install --upgrade pip || goto :error
-  pip install -r backend\requirements.txt || goto :error
+  echo [setup] Installing project dependencies into .venv only...
+  "%PYTHON_EXE%" -m pip install --upgrade pip || goto :error
+  "%PYTHON_EXE%" -m pip install -r backend\requirements.txt || goto :error
 )
 
 if not exist "backend\.env" (
@@ -22,7 +22,7 @@ if not exist "backend\.env" (
 echo [start] Open http://127.0.0.1:8000 after the server is ready.
 start "" http://127.0.0.1:8000
 cd backend
-python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+"%PYTHON_EXE%" -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 goto :eof
 
 :error

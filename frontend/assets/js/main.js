@@ -75,8 +75,9 @@ async function navigate(route = "home") {
   if (!currentTeacher) return showLogin();
   app.innerHTML = loading();
   document.querySelectorAll(".nav-item").forEach(item => item.classList.toggle("active", item.dataset.route === route));
-  setGenerationCenterVisible(route === "assistant");
-  // 进入音频页时，进行中的任务在页面主体展示，避免右下角浮层遮挡内容。
+  // 对应功能页已有完整任务面板；全局仅在离开页面后显示紧凑入口。
+  setGenerationCenterVisible(route !== "assistant");
+  // 进入音频页时，进行中的任务在页面主体展示，避免全局入口遮挡内容。
   setAudioJobCenterVisible(route !== "audio");
   try {
     await routes[route](app);

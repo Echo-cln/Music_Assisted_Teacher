@@ -3,6 +3,8 @@ import re
 from copy import deepcopy
 from collections.abc import Iterator
 
+from json_repair import repair_json
+
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -227,10 +229,18 @@ def _validated_content(raw: str, base: dict) -> dict:
     start, end = normalized.find("{"), normalized.rfind("}")
     if start < 0 or end <= start:
         raise ValueError("模型没有返回完整 JSON 教案，请稍后重试或检查模型服务")
+    candidate = normalized[start : end + 1]
     try:
-        content = json.loads(normalized[start : end + 1])
+        content = json.loads(candidate)
     except json.JSONDecodeError as exc:
-        raise ValueError("模型返回内容格式不完整，未保存本次深度结果；可重试或先使用当前骨架") from exc
+        # 只修复已经完整返回的对象中漏逗号、转义或尾逗号等格式瑕疵；
+        # 截断内容仍会被拒绝，不会伪造或补写教学内容。
+        try:
+            content = repair_json(candidate, return_objects=True)
+        except Exception as repair_exc:
+            raise ValueError(
+                f"模型返回的 JSON 无法解析（第 {exc.lineno} 行、第 {exc.colno} 列）：{exc.msg}。本次结果未保存，请重试。"
+            ) from repair_exc
     if not isinstance(content, dict):
         raise ValueError("模型没有返回教案对象")
     # 两个供应商都可能只回传已增强字段。规则骨架仍是完整结构的权威来源，

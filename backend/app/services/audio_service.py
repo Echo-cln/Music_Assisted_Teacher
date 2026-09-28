@@ -36,7 +36,14 @@ def load_waveform(path: Path, points: int = 180) -> tuple[list[float], float]:
 
 
 def _score(value: float) -> int:
-    return int(max(0, min(100, round(value))))
+    """将声学指标限制在 0—100，且绝不把 NaN/无穷传给 round。"""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0
+    if not math.isfinite(numeric):
+        return 0
+    return int(max(0, min(100, round(numeric))))
 
 
 def _suggestions(scores: dict[str, int]) -> list[str]:
@@ -117,9 +124,13 @@ def analyze_singing(path: Path) -> dict:
                 "focus": "音高稳定" if index in (0, section_count - 1) else "音高、节拍与气息",
                 "pitch_stability": local_score, "voiced_ratio": round(local_voiced, 2), "note": note,
             })
+        # librosa 在无稳定拍点的录音上会返回 NaN；这代表“无法估计速度”，
+        # 不能让一份仍可计算音高/响度的录音整体失败。
+        raw_tempo = float(np.asarray(tempo).item())
+        tempo_bpm = int(round(raw_tempo)) if np.isfinite(raw_tempo) and raw_tempo > 0 else None
         return {
             "analysis_available": True, "duration_seconds": round(duration, 1),
-            "tempo_bpm": int(round(float(np.asarray(tempo).item()))), "scores": scores,
+            "tempo_bpm": tempo_bpm, "scores": scores,
             "pitch_track": _compact_pitch_track(f0, frame_times), "segment_feedback": sections,
             "suggestions": _suggestions(scores),
         }
@@ -176,58 +187,26 @@ def compare_intonation(recording_path: Path, reference_path: Path | None) -> dic
 
 
 def assess_note_accuracy(recording_path: Path, reference_path: Path | None) -> dict:
-    """专业单人练唱模式：从参考与演唱音频提取音高轨迹并计算逐音偏差。
-
-    这里刻意不依赖 Basic Pitch/TensorFlow。它们会让轻量 Web 服务带上数百 MB
-    的模型运行时，而且 TensorFlow 2.14 没有 Python 3.12 wheel。课堂教学所需的
-    单旋律逐音对齐用 pYIN 已足够，也与整体音高分析使用同一套可解释算法。
-    """
+    """专业单人练唱模式：参考旋律转为音符事件，再以录音连续音高计算逐音偏差。"""
     if not reference_path:
         return {"available": False, "message": "单人练唱逐音评测必须上传参考音频。"}
     try:
         import librosa
+        from basic_pitch.inference import predict
 
+        _, _, note_events = predict(str(reference_path))
         reference_signal, reference_sr = librosa.load(reference_path, sr=22050, mono=True)
         signal, sr = librosa.load(recording_path, sr=22050, mono=True)
         reference_duration, duration = len(reference_signal) / reference_sr, len(signal) / sr
-        reference_f0, _, _ = librosa.pyin(
-            reference_signal,
-            fmin=librosa.note_to_hz("C2"),
-            fmax=librosa.note_to_hz("C7"),
-            sr=reference_sr,
-            hop_length=512,
-        )
         f0, _, _ = librosa.pyin(signal, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7"), sr=sr, hop_length=512)
-        reference_times = librosa.frames_to_time(np.arange(len(reference_f0)), sr=reference_sr, hop_length=512)
         times = librosa.frames_to_time(np.arange(len(f0)), sr=sr, hop_length=512)
-
-        # 把参考音频的连续基频压缩为稳定音符段。相邻帧落在同一 MIDI 音高时
-        # 合并，极短的过渡/噪声段不参与评分。
-        reference_midi = np.full(len(reference_f0), np.nan)
-        voiced = ~np.isnan(reference_f0)
-        reference_midi[voiced] = np.rint(librosa.hz_to_midi(reference_f0[voiced]))
-        note_events: list[tuple[float, float, int]] = []
-        start_index: int | None = None
-        current_midi: int | None = None
-        for index, raw_midi in enumerate(reference_midi):
-            midi = int(raw_midi) if not np.isnan(raw_midi) else None
-            changed = midi != current_midi
-            if changed and start_index is not None and current_midi is not None:
-                start = float(reference_times[start_index])
-                end = float(reference_times[index - 1] + 512 / reference_sr)
-                if end - start >= 0.12:
-                    note_events.append((start, end, current_midi))
-            if changed:
-                start_index = index if midi is not None else None
-                current_midi = midi
-        if start_index is not None and current_midi is not None:
-            start = float(reference_times[start_index])
-            end = float(reference_duration)
-            if end - start >= 0.12:
-                note_events.append((start, end, current_midi))
-
         events = []
-        for start, end, midi in note_events:
+        for raw in note_events:
+            if not isinstance(raw, (tuple, list)) or len(raw) < 3:
+                continue
+            start, end, midi = float(raw[0]), float(raw[1]), int(raw[2])
+            if end - start < .12:
+                continue
             # 以相对时间对齐，避免两次录音时长不同导致逐音窗口偏移。
             target_start, target_end = start / max(reference_duration, .01) * duration, end / max(reference_duration, .01) * duration
             window = f0[(times >= target_start) & (times <= target_end)]
@@ -248,12 +227,14 @@ def assess_note_accuracy(recording_path: Path, reference_path: Path | None) -> d
         accurate = float(np.mean(np.abs(deviations) <= 50))
         score = _score(100 - np.median(np.abs(deviations)) * .65 - (1 - accurate) * 20)
         return {
-            "available": True, "method": "pyin_reference_notes_plus_pyin_cents", "score": score,
+            "available": True, "method": "basic_pitch_note_events_plus_pyin_cents", "score": score,
             "matched_notes": len(events), "accurate_note_ratio": round(accurate * 100),
             "median_deviation_cents": round(float(np.median(np.abs(deviations))), 1),
             "events": events[:48],
             "message": "逐音评测以参考旋律转写出的音符为目标，并按相对时间定位课堂录音的实际音高；适合单人清唱或主声部清晰的录音。",
         }
+    except ModuleNotFoundError:
+        return {"available": False, "message": "专业逐音组件未安装。请在 backend 目录执行 pip install -r requirements.txt 后重启服务。"}
     except Exception as exc:
         return {"available": False, "message": f"逐音评测未完成：{str(exc)[:140]}。可改用课堂整体分析，或使用清晰的单人练唱录音。"}
 
@@ -261,7 +242,22 @@ def assess_note_accuracy(recording_path: Path, reference_path: Path | None) -> d
 def compare_waveforms(reference: list[float] | None, recording: list[float]) -> dict:
     if not reference:
         return {"has_reference_comparison": False, "reference_waveform": None, "recording_waveform": recording, "reference_similarity": None}
-    a, b = np.asarray(reference), np.asarray(recording)
+    a, b = np.asarray(reference, dtype=float), np.asarray(recording, dtype=float)
     length = min(len(a), len(b))
-    correlation = float(np.corrcoef(a[:length], b[:length])[0, 1]) if length > 3 else 0.0
-    return {"has_reference_comparison": True, "reference_waveform": reference, "recording_waveform": recording, "reference_similarity": _score(50 + correlation * 45)}
+    if length <= 3 or np.std(a[:length]) < 1e-8 or np.std(b[:length]) < 1e-8:
+        return {
+            "has_reference_comparison": True, "reference_waveform": reference, "recording_waveform": recording,
+            "reference_similarity": None,
+            "comparison_note": "其中一段音频的能量变化过小，无法计算可靠的波形相似度；不影响音高、节拍和分段分析。",
+        }
+    correlation = float(np.corrcoef(a[:length], b[:length])[0, 1])
+    if not np.isfinite(correlation):
+        return {
+            "has_reference_comparison": True, "reference_waveform": reference, "recording_waveform": recording,
+            "reference_similarity": None,
+            "comparison_note": "参考音频与课堂录音无法形成有效相关性，已跳过波形相似度，不影响其余分析。",
+        }
+    return {
+        "has_reference_comparison": True, "reference_waveform": reference, "recording_waveform": recording,
+        "reference_similarity": _score(50 + correlation * 45),
+    }

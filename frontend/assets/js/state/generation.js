@@ -50,25 +50,11 @@ function render() {
   }
   root.classList.remove("hidden");
   const statusText = currentJob.status === "completed" ? "教案已生成" : currentJob.status === "failed" ? "生成失败" : currentJob.status === "cancelled" ? "生成已取消" : "正在生成详细教案";
-  const steps = (currentJob.steps || []).map(step => `<li class="${step.state}"><span>${step.state === "done" ? "✓" : step.state === "running" ? "●" : step.state === "error" ? "!" : "○"}</span>${esc(step.label)}</li>`).join("");
-  root.innerHTML = `<div class="generation-card">
-    <div class="generation-head">
-      <div><b>✦ ${statusText}</b><small>${esc(currentJob.stage || "处理中")} · 已耗时 ${elapsedText(currentJob.elapsed_seconds || 0)}</small></div>
-      <div class="generation-tools"><span>${Number(currentJob.progress || 0)}%</span><button class="icon-close" id="dismissGeneration" aria-label="关闭">×</button></div>
-    </div>
-    <div class="generation-progress"><i style="width:${Math.min(100, Math.max(0, Number(currentJob.progress || 0)))}%"></i></div>
-    <button type="button" class="generation-toggle" id="toggleGeneration" aria-expanded="${detailsOpen}">${detailsOpen ? "收起生成步骤" : "查看生成步骤与依据"}</button>
-    ${detailsOpen || currentJob.status === "failed" ? `<ul class="generation-steps">${steps}</ul>${currentJob.error_message ? `<p class="generation-error">${esc(currentJob.error_message)}</p>` : ""}` : ""}
-    ${currentJob.status === "completed" ? '<button class="btn soft block" id="openGeneratedLesson">查看已生成教案</button>' : ""}
-    ${!["completed", "failed", "cancelled"].includes(currentJob.status) ? '<button class="btn soft block" id="cancelGeneration">取消本次生成</button>' : ""}
+  root.innerHTML = `<div class="task-dock generation-dock ${currentJob.status}">
+    <div class="task-dock-icon">✦</div><div class="task-dock-copy"><b>${statusText}</b><small>${esc(currentJob.stage || "处理中")} · ${Number(currentJob.progress || 0)}%</small></div>
+    <button class="task-dock-action" id="openGeneratedLesson">查看</button><button class="icon-close" id="dismissGeneration" aria-label="关闭">×</button>
   </div>`;
-  const open = root.querySelector("#openGeneratedLesson");
-  if (open) open.onclick = () => window.dispatchEvent(new CustomEvent("app:navigate", { detail: "assistant" }));
-  const cancel = root.querySelector("#cancelGeneration");
-  if (cancel) cancel.onclick = async () => {
-    await api.cancelGenerationJob(currentJob.id);
-    clearGenerationJob();
-  };
+  root.querySelector("#openGeneratedLesson").onclick = () => window.dispatchEvent(new CustomEvent("app:navigate", { detail: "assistant" }));
   const dismiss = root.querySelector("#dismissGeneration");
   if (dismiss) dismiss.onclick = () => { dismissed = true; render(); };
   const toggle = root.querySelector("#toggleGeneration");
@@ -148,6 +134,12 @@ export function clearGenerationJob() {
   timer = null;
   render();
   emit();
+}
+
+export async function cancelActiveGeneration() {
+  if (!currentJob || ["completed", "failed", "cancelled"].includes(currentJob.status)) return;
+  await api.cancelGenerationJob(currentJob.id);
+  await refresh();
 }
 
 export function setGenerationCenterVisible(visible) {

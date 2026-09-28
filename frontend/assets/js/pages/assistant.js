@@ -1,6 +1,6 @@
 import { api } from "../api/client.js";
 import { lessonView } from "../components/lesson.js";
-import { getGenerationJob, refreshGeneration, startGeneration } from "../state/generation.js";
+import { cancelActiveGeneration, getGenerationJob, refreshGeneration, startGeneration } from "../state/generation.js";
 import { esc, notify, pageHeader } from "../utils/dom.js";
 
 const regions = ["华南地区", "西南地区", "西北地区", "华中地区", "华东地区", "华北地区", "东北地区"];
@@ -201,9 +201,12 @@ function disableActions(generating) {
 function renderPreview(area, generating = false, job = null) {
   if (!currentPlan) return;
   const status = generating
-    ? `<div class="ai-preview-banner"><b>AI 正在后台优化</b><span>${esc(job?.stage || "你可以切换到其他页面，生成不会中断")}</span></div>`
+    ? `<div class="ai-preview-banner"><div><b>AI 正在后台优化</b><span>${esc(job?.stage || "你可以切换到其他页面，生成不会中断")}</span></div><button class="btn soft" id="cancelGenerationInPage">取消本次生成</button></div>`
     : "";
   area.innerHTML = `${status}<section class="card lesson-preview-card"><div class="card-head"><div><h3>教案预览</h3><p class="muted">${currentPlan.is_saved ? "已保存到教案与课堂记录" : generating ? "已先展示规则骨架，AI完成后会自动替换为增强版" : "未保存：可继续调整，满意后点击右侧“保存教案”"}</p></div></div><div class="lesson-preview-scroll">${lessonView(currentPlan)}</div></section>`;
+  area.querySelector("#cancelGenerationInPage")?.addEventListener("click", async () => {
+    try { await cancelActiveGeneration(); } catch (error) { notify(error.message); }
+  });
 }
 
 async function streamPreviewAdjustment(area, instruction) {

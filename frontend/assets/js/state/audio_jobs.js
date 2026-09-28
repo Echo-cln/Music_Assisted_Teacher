@@ -14,25 +14,15 @@ function render() {
   const done = job.status === "completed";
   const failed = job.status === "failed";
   const cancelled = job.status === "cancelled";
-  root.innerHTML = `<div class="generation-card audio-job-card">
-    <div class="generation-head"><div><b>♫ ${done ? "音频分析已完成" : failed ? "音频分析失败" : cancelled ? "音频分析已取消" : "音频分析进行中"}</b><small>${esc(job.stage || "正在准备")}</small></div><div class="generation-tools"><span>${Number(job.progress || 0)}%</span><button class="icon-close" aria-label="关闭">×</button></div></div>
-    <div class="generation-progress"><i style="width:${Math.min(100, Math.max(0, Number(job.progress || 0)))}%"></i></div>
-    <button class="generation-toggle" id="openAudioJob">${done ? "查看已保存分析" : failed ? "查看错误详情" : cancelled ? "已取消" : "前往音频分析页查看"}</button>
-    ${!done && !failed && !cancelled ? '<button class="btn soft block" id="cancelAudioJob">取消本次分析</button>' : ""}
-    ${failed && job.error_message ? `<p class="generation-error">${esc(job.error_message)}</p>` : ""}
+  root.innerHTML = `<div class="task-dock audio-dock ${job.status}">
+    <div class="task-dock-icon">♫</div><div class="task-dock-copy"><b>${done ? "音频分析完成" : failed ? "音频分析失败" : cancelled ? "音频分析已取消" : "正在分析音频"}</b><small>${esc(job.stage || "正在准备")} · ${Number(job.progress || 0)}%</small></div>
+    <button class="task-dock-action" id="openAudioJob">查看</button><button class="icon-close" aria-label="关闭">×</button>
   </div>`;
   root.querySelector(".icon-close").onclick = () => { dismissed = true; render(); };
   root.querySelector("#openAudioJob").onclick = () => {
     if (job.analysis_id) localStorage.setItem("lastAudioAnalysisId", String(job.analysis_id));
     window.dispatchEvent(new CustomEvent("app:navigate", { detail: "audio" }));
   };
-  root.querySelector("#cancelAudioJob")?.addEventListener("click", async () => {
-    await api.cancelAudioJob(job.id);
-    localStorage.removeItem("activeAudioJobId");
-    job = null;
-    clearInterval(timer); timer = null;
-    render();
-  });
 }
 
 async function refresh() {
@@ -66,6 +56,12 @@ export async function startAudioJob(form) {
 }
 
 export async function refreshAudioJob() { await refresh(); return job; }
+
+export async function cancelActiveAudioJob() {
+  if (!job || ["completed", "failed", "cancelled"].includes(job.status)) return;
+  await api.cancelAudioJob(job.id);
+  await refresh();
+}
 
 export function setAudioJobCenterVisible(visible) {
   centerVisible = visible;

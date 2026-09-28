@@ -280,9 +280,19 @@ td small { color: var(--muted); }
 .song-picker small { grid-column: 1 / -1; }
 
 /* 后台 AI 生成中心：展示可解释步骤，不暴露模型内部思维链 */
-.generation-center { position: fixed; right: 414px; bottom: 24px; z-index: 80; width: min(370px, calc(100vw - 30px)); }
-.audio-job-center { position: fixed; right: 24px; bottom: 24px; z-index: 81; width: min(370px, calc(100vw - 30px)); }
-.audio-job-card { border-color: #bad0dd; }
+.generation-center { position: fixed; right: 24px; bottom: 92px; z-index: 80; width: min(300px, calc(100vw - 30px)); }
+.audio-job-center { position: fixed; right: 24px; bottom: 24px; z-index: 81; width: min(300px, calc(100vw - 30px)); }
+.task-dock { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid #d8c8b8; border-radius: 14px; background: rgba(255,253,248,.98); box-shadow: 0 10px 28px rgba(58,42,34,.14); backdrop-filter: blur(10px); }
+.audio-dock { border-color: #bad0dd; }
+.task-dock-icon { display: grid; flex: 0 0 30px; width: 30px; height: 30px; place-items: center; border-radius: 10px; background: #f7e9e1; color: var(--brand); font-size: 1rem; }
+.audio-dock .task-dock-icon { background: #e8f1f4; color: #3f7184; }
+.task-dock-copy { min-width: 0; flex: 1; }
+.task-dock-copy b, .task-dock-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-dock-copy b { font-size: .82rem; }
+.task-dock-copy small { margin-top: 2px; color: var(--muted); font-size: .72rem; }
+.task-dock.failed { border-color: #dfb5ad; }
+.task-dock.failed .task-dock-icon { background: #fff0ec; color: #a63d30; }
+.task-dock-action { border: 0; background: transparent; color: var(--brand); font-size: .76rem; font-weight: 800; }
 .generation-card { padding: 15px; border: 1px solid #d8c8b8; border-radius: 16px; background: rgba(255,253,248,.98); box-shadow: 0 18px 50px rgba(58,42,34,.18); backdrop-filter: blur(10px); }
 .generation-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .generation-head b, .generation-head small { display: block; }
@@ -383,8 +393,8 @@ td small { color: var(--muted); }
   .auth-shell { grid-template-columns: 1fr; padding: 26px 0; }
   .auth-brand-panel { padding: 32px 24px 12px; }
   .auth-card { margin-bottom: 24px; }
-  .audio-job-center { right: 14px; bottom: 86px; }
-  .generation-center { right: 14px; bottom: 388px; }
+  .audio-job-center { right: 14px; bottom: 72px; }
+  .generation-center { right: 14px; bottom: 130px; }
   .resource-actions { flex-direction: column; align-items: flex-end; }
   .ai-preview-banner { align-items: flex-start; flex-direction: column; }
   .ai-preview-banner span { text-align: left; }

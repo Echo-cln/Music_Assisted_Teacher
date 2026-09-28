@@ -1,7 +1,7 @@
 import { api, apiUrl } from "../api/client.js";
 import { esc, loading, notify, pageHeader } from "../utils/dom.js";
 import { drawWaveform } from "../utils/waveform.js";
-import { refreshAudioJob, startAudioJob } from "../state/audio_jobs.js";
+import { cancelActiveAudioJob, refreshAudioJob, startAudioJob } from "../state/audio_jobs.js";
 
 const scoreNames = { pitch_stability: "音高稳定", rhythm_regularness: "节拍稳定", dynamics: "力度层次", clarity: "清晰度" };
 
@@ -87,7 +87,10 @@ export async function renderAudio(container) {
     if (!area || !task || task.status === "completed") return;
     const failed = task.status === "failed";
     const cancelled = task.status === "cancelled";
-    area.innerHTML = `<section class="card analysis-progress ${failed ? "failed" : ""}" aria-live="polite"><div><span class="eyebrow">${failed ? "ANALYSIS ERROR" : "BACKGROUND ANALYSIS"}</span><h3>${failed ? "本次音频分析失败" : cancelled ? "本次音频分析已取消" : "正在分析这份录音"}</h3><p>${esc(task.stage || "正在准备")}</p>${failed ? `<p class="generation-error"><b>具体错误：</b>${esc(task.error_message || "后端未返回错误详情")}</p>` : ""}</div><div class="generation-progress"><i style="width:${Math.min(100, Math.max(0, Number(task.progress || 0)))}%"></i></div>${!failed && !cancelled ? `<small>真实阶段：${esc(task.stage || "读取音频")}。你可留在本页等待，也可切换页面。</small>` : ""}</section>`;
+    area.innerHTML = `<section class="card analysis-progress ${failed ? "failed" : ""}" aria-live="polite"><div><span class="eyebrow">${failed ? "ANALYSIS ERROR" : "BACKGROUND ANALYSIS"}</span><h3>${failed ? "本次音频分析失败" : cancelled ? "本次音频分析已取消" : "正在分析这份录音"}</h3><p>${esc(task.stage || "正在准备")}</p>${failed ? `<p class="generation-error"><b>具体错误：</b>${esc(task.error_message || "后端未返回错误详情")}</p>` : ""}</div><div class="generation-progress"><i style="width:${Math.min(100, Math.max(0, Number(task.progress || 0)))}%"></i></div>${!failed && !cancelled ? `<div class="actions"><small>真实阶段：${esc(task.stage || "读取音频")}。你可留在本页等待，也可切换页面。</small><button class="btn soft" id="cancelAudioInPage">取消本次分析</button></div>` : ""}</section>`;
+    area.querySelector("#cancelAudioInPage")?.addEventListener("click", async () => {
+      try { await cancelActiveAudioJob(); } catch (error) { notify(error.message); }
+    });
   }
 
   function showResult(result) {
