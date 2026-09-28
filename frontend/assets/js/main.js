@@ -1,29 +1,22 @@
 import { api } from "./api/client.js";
-import { renderAssistant } from "./pages/assistant.js";
 import { renderAuth } from "./pages/auth.js";
-import { renderClasses } from "./pages/classes.js";
-import { renderFeedback } from "./pages/feedback.js";
-import { renderAudio } from "./pages/audio.js";
-import { renderAdmin } from "./pages/admin.js";
-import { renderHome } from "./pages/home.js";
-import { renderLessons } from "./pages/lessons.js";
-import { renderResources } from "./pages/resources.js";
-import { renderWorkbench } from "./pages/workbench.js";
 import { initGenerationCenter, setGenerationCenterVisible } from "./state/generation.js";
 import { initAudioJobCenter, setAudioJobCenterVisible } from "./state/audio_jobs.js";
 import { esc, loading, notify } from "./utils/dom.js";
 
 const app = document.getElementById("app");
-const routes = {
-  home: renderHome,
-  assistant: renderAssistant,
-  classes: renderClasses,
-  resources: renderResources,
-  workbench: renderWorkbench,
-  lessons: renderLessons,
-  feedback: renderFeedback,
-  audio: renderAudio,
-  admin: renderAdmin,
+// 页面按需载入：一个实验性功能页即使有语法/浏览器兼容问题，也不能让登录页、
+// 首页和其余功能在模块图阶段一起白屏。
+const routeLoaders = {
+  home: () => import("./pages/home.js").then(m => m.renderHome),
+  assistant: () => import("./pages/assistant.js").then(m => m.renderAssistant),
+  classes: () => import("./pages/classes.js").then(m => m.renderClasses),
+  resources: () => import("./pages/resources.js").then(m => m.renderResources),
+  workbench: () => import("./pages/workbench.js").then(m => m.renderWorkbench),
+  lessons: () => import("./pages/lessons.js").then(m => m.renderLessons),
+  feedback: () => import("./pages/feedback.js").then(m => m.renderFeedback),
+  audio: () => import("./pages/audio.js").then(m => m.renderAudio),
+  admin: () => import("./pages/admin.js").then(m => m.renderAdmin),
 };
 let currentTeacher = null;
 
@@ -80,7 +73,8 @@ async function navigate(route = "home") {
   // 进入音频页时，进行中的任务在页面主体展示，避免全局入口遮挡内容。
   setAudioJobCenterVisible(route !== "audio");
   try {
-    await routes[route](app);
+    const render = await (routeLoaders[route] || routeLoaders.home)();
+    await render(app);
     bindRoutes();
   } catch (error) {
     if (error.status === 401) return showLogin();
