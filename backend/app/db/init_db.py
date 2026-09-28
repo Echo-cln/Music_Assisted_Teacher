@@ -1,3 +1,5 @@
+import secrets
+
 from sqlalchemy import inspect, text
 
 from app.db.session import Base, SessionLocal, engine
@@ -21,6 +23,7 @@ ADDITIVE_COLUMNS = {
     "feedback": {"audio_summary": "TEXT DEFAULT ''", "audio_analysis_id": "INTEGER"},
     "audio_analyses": {"lesson_plan_id": "INTEGER"},
     "teachers": {"role": "TEXT DEFAULT 'teacher'", "verification_status": "TEXT DEFAULT 'unverified'", "phone": "TEXT"},
+    "generation_jobs": {"model_used": "TEXT DEFAULT 'default'", "strategy_used": "TEXT DEFAULT 'standard'"},
 }
 
 
@@ -35,7 +38,9 @@ def _ensure_demo_teacher() -> int:
             teacher.verification_status = "verified"
             db.commit()
             return teacher.id
-        password_hash, salt = hash_password("demo123456")
+        # 旧数据必须归属到一个教师空间，但线上不能再创建固定口令的管理员账号。
+        # 新账号始终走注册流程；这个迁移账号只承接历史无归属记录。
+        password_hash, salt = hash_password(secrets.token_urlsafe(32))
         teacher = Teacher(
             username="demo",
             display_name="演示老师",

@@ -1,4 +1,4 @@
-import { api } from "../api/client.js";
+import { api, apiUrl } from "../api/client.js";
 import { esc, notify, pageHeader } from "../utils/dom.js";
 
 const scoreLabels = { pitch_stability: "音高稳定", rhythm_regularness: "节拍稳定", dynamics: "力度层次", clarity: "清晰度" };
@@ -67,5 +67,5 @@ function buildSummary(result) {
 function summaryView(result) {
   const scores = Object.entries(result.scores || {}).map(([key, value]) => `<span>${scoreLabels[key] || key} <b>${value}</b></span>`).join("");
   const comparison = result.intonation_comparison;
-  return `<p><b>《${esc(result.song_name)}》</b></p><div class="analysis-summary">${scores}</div><p class="muted">${esc(comparison?.available ? `${comparison.status} · 偏差 ${comparison.median_deviation_cents} cents` : comparison?.message || "已带入录音分析")}</p><audio controls preload="metadata" src="${esc(result.recording_url)}"></audio>`;
+  return `<p><b>《${esc(result.song_name)}》</b></p><div class="analysis-summary">${scores}</div><p class="muted">${esc(comparison?.available ? `${comparison.status} · 偏差 ${comparison.median_deviation_cents} cents` : comparison?.message || "已带入录音分析")}</p><audio controls preload="metadata" src="${esc(apiUrl(result.recording_url))}"></audio>`;
 }

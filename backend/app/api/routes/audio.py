@@ -1,8 +1,8 @@
 from pathlib import Path
 
 import json
-import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -16,6 +16,8 @@ from app.repositories.song_repository import SongRepository
 from app.services.audio_service import analyze_singing, assess_note_accuracy, compare_intonation, compare_waveforms, load_waveform, save_upload
 
 router = APIRouter(prefix="/audio", tags=["音频"])
+# 音频解码和音高估计是 CPU 密集型任务。限制为两个工作线程，避免多次上传拖慢全部 API。
+audio_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="audio-analysis")
 
 
 def _check_request(db: Session, teacher: Teacher, song_id: int, lesson_plan_id: int | None, classroom_record_id: int | None, analysis_mode: str, has_original: bool):
@@ -194,8 +196,20 @@ def create_audio_job(song_id: int = Form(...), lesson_plan_id: int | None = Form
           "reference_name": (original.filename if original else reference_path.name) if reference_path else None,
           "reference_type": (original.content_type if original else "audio/mpeg") if reference_path else None}, ensure_ascii=False))
     db.add(job); db.commit()
-    threading.Thread(target=_run_job, args=(job.id,), daemon=True).start()
+    audio_executor.submit(_run_job, job.id)
     return _serialize_job(job, db)
+
+
+@router.delete("/jobs/{job_id}", status_code=204)
+def cancel_audio_job(job_id: str, db: Session = Depends(get_db), teacher: Teacher = Depends(get_current_teacher)):
+    job = db.scalar(select(AudioAnalysisJob).where(AudioAnalysisJob.id == job_id, AudioAnalysisJob.teacher_id == teacher.id))
+    if not job:
+        raise HTTPException(status_code=404, detail="音频分析任务不存在")
+    if job.status not in {"pending", "running"}:
+        raise HTTPException(status_code=409, detail="该音频任务已经结束，无法取消")
+    job.status, job.stage, job.error_message = "cancelled", "已取消，不会保存分析结果", ""
+    db.commit()
+    return None
 
 
 @router.get("/jobs/{job_id}")

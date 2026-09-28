@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{BACKEND_DIR / 'data' / 'zhiban.db'}"
     upload_dir: str = str(BACKEND_DIR / "data" / "uploads")
     frontend_dir: str = str(BACKEND_DIR.parent / "frontend")
+    allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    session_cookie_secure: bool = False
     ai_api_key: str = ""
     ai_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
     ai_model: str = "glm-5.3-flash"
@@ -51,6 +53,10 @@ class Settings(BaseSettings):
         frontend = Path(self.frontend_dir)
         if not frontend.is_absolute():
             self.frontend_dir = str((BACKEND_DIR / frontend).resolve())
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [item.strip().rstrip("/") for item in self.allowed_origins.split(",") if item.strip()]
 
 
 @lru_cache

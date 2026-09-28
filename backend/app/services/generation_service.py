@@ -8,6 +8,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
+from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.models.entities import ClassProfile, GenerationJob, Song
 from app.repositories.song_repository import SongRepository
@@ -83,6 +84,7 @@ def create_generation_job(teacher_id: int, payload: LessonGenerateRequest) -> di
             result_json="{}",
             steps_json=json.dumps(_steps(2), ensure_ascii=False),
             strategy_used=payload.generation_strategy,
+            model_used=get_settings().ai_fast_model if payload.generation_strategy == "fast" else get_settings().ai_model,
         )
         db.add(job)
         db.commit()
@@ -132,6 +134,9 @@ def _run_generation_job(job_id: str) -> None:
                 job.teacher_id,
                 payload.generation_strategy,
             ):
+                db.refresh(job)
+                if job.status == "cancelled":
+                    return
                 if kind == "complete":
                     completed = value
             if completed is None:
@@ -210,3 +215,15 @@ def list_generation_jobs(teacher_id: int, limit: int = 10) -> list[dict]:
             .limit(limit)
         ).all()
         return [serialize_job(job) for job in jobs]
+
+
+def cancel_generation_job(teacher_id: int, job_id: str) -> None:
+    with SessionLocal() as db:
+        job = db.scalar(select(GenerationJob).where(GenerationJob.id == job_id, GenerationJob.teacher_id == teacher_id))
+        if not job:
+            raise LookupError("生成任务不存在")
+        if job.status not in {"pending", "running"}:
+            raise ValueError("该生成任务已经结束，无法取消")
+        _set_job(job, status="cancelled", stage="已取消，不会保存生成结果", progress=job.progress or 0, step_index=3)
+        job.result_json = "{}"
+        db.commit()

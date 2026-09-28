@@ -10,6 +10,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.core.config import get_settings
 from app.models.entities import AuthSession, Teacher
 
 SESSION_COOKIE = "zhiban_session"
@@ -33,6 +34,7 @@ def _token_hash(raw_token: str) -> str:
 
 
 def create_login_session(db: Session, teacher: Teacher, response: Response) -> None:
+    settings = get_settings()
     raw_token = secrets.token_urlsafe(40)
     expires_at = datetime.utcnow() + timedelta(days=SESSION_DAYS)
     db.add(AuthSession(teacher_id=teacher.id, token_hash=_token_hash(raw_token), expires_at=expires_at))
@@ -42,8 +44,9 @@ def create_login_session(db: Session, teacher: Teacher, response: Response) -> N
         raw_token,
         max_age=SESSION_DAYS * 24 * 60 * 60,
         httponly=True,
-        samesite="lax",
-        secure=False,
+        # EdgeOne 前端与独立 API 域名部署时，浏览器只会接受 SameSite=None + Secure 的会话 Cookie。
+        samesite="none" if settings.session_cookie_secure else "lax",
+        secure=settings.session_cookie_secure,
         path="/",
     )
 

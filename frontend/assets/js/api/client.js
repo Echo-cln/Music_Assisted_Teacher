@@ -1,8 +1,13 @@
-const API_ROOT = "/api";
+// EdgeOne 静态前端可在部署时通过 config.js 指向独立的 Python API；本地仍使用同源 /api。
+const API_ROOT = (window.__APP_CONFIG__?.apiBaseUrl || "/api").replace(/\/$/, "");
+
+export function apiUrl(path) {
+  return `${API_ROOT}${path.startsWith("/") ? path : `/${path}`}`;
+}
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_ROOT}${path}`, {
-    credentials: "same-origin",
+  const response = await fetch(apiUrl(path), {
+    credentials: "include",
     ...options,
     headers: options.body instanceof FormData
       ? options.headers
@@ -19,9 +24,9 @@ async function request(path, options = {}) {
 }
 
 async function streamRequest(path, payload, onEvent) {
-  const response = await fetch(`${API_ROOT}${path}`, {
+  const response = await fetch(apiUrl(path), {
     method: "POST",
-    credentials: "same-origin",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
@@ -77,6 +82,7 @@ export const api = {
   createGenerationJob: payload => request("/generation-jobs", { method: "POST", body: JSON.stringify(payload) }),
   generationJobs: (limit = 10) => request(`/generation-jobs?${new URLSearchParams({ limit })}`),
   generationJob: id => request(`/generation-jobs/${id}`),
+  cancelGenerationJob: id => request(`/generation-jobs/${id}`, { method: "DELETE" }),
   adjustPreviewStream: (payload, onEvent) => streamRequest("/lessons/preview/adjust/stream", payload, onEvent),
   saveLesson: payload => request("/lessons/save", { method: "POST", body: JSON.stringify(payload) }),
   updateLesson: (id, payload) => request(`/lessons/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
@@ -84,6 +90,7 @@ export const api = {
   analyzeAudio: form => request("/audio/analyze", { method: "POST", body: form }),
   createAudioJob: form => request("/audio/jobs", { method: "POST", body: form }),
   audioJob: id => request(`/audio/jobs/${id}`),
+  cancelAudioJob: id => request(`/audio/jobs/${id}`, { method: "DELETE" }),
   audioAnalyses: () => request("/audio/analyses"),
   audioAnalysis: id => request(`/audio/analyses/${id}`),
   feedback: payload => request("/feedback", { method: "POST", body: JSON.stringify(payload) }),

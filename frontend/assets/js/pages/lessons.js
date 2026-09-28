@@ -1,4 +1,4 @@
-import { api } from "../api/client.js";
+import { api, apiUrl } from "../api/client.js";
 import { lessonView } from "../components/lesson.js";
 import { showModal } from "../components/modal.js";
 import { esc, notify, pageHeader } from "../utils/dom.js";
@@ -6,7 +6,7 @@ import { exportLessonPdf, exportLessonWord } from "../utils/lesson-export.js";
 
 export async function renderLessons(container) {
   container.innerHTML = pageHeader("教学档案与课堂记录", "统一保存、检索和回看教案、课堂音频分析与课后反馈。", '<button class="btn primary" data-route="assistant">新建教案</button>') + `
-    <nav class="archive-tabs"><button class="active" data-archive="lessons">教案档案</button><button data-archive="audio">音频分析记录</button><button data-archive="feedback">课堂反馈记录</button></nav>
+    <nav class="archive-tabs"><button class="active" data-archive="lessons">教学档案</button><button data-archive="audio">音频分析记录</button><button data-archive="feedback">课堂反馈记录</button></nav>
     <div id="archiveContent"></div>`;
   container.querySelectorAll("[data-archive]").forEach(button => button.onclick = () => openArchive(button.dataset.archive));
   await openArchive("lessons");
@@ -44,16 +44,16 @@ async function renderArchive(container, kind) {
   container.innerHTML = '<section class="card"><p class="muted">正在读取归档记录…</p></section>';
   if (kind === "audio") {
     const rows = await api.audioAnalyses();
-    container.innerHTML = `<section class="list-search"><label>排序<select id="archiveSort"><option value="newest">最新分析</option><option value="oldest">最早分析</option><option value="song">歌曲名称</option><option value="score">音高稳定分</option></select></label></section><section class="archive-list" id="archiveRows"></section>`;
+    container.innerHTML = `<section class="list-search"><div class="list-filters"><select id="archiveSort" aria-label="音频分析排序"><option value="newest">最新分析</option><option value="oldest">最早分析</option><option value="song">歌曲名称</option><option value="score">音高稳定分</option></select></div></section><section class="archive-list" id="archiveRows"></section>`;
     const paint = () => { const sorted = [...rows]; const sort = document.getElementById("archiveSort").value; if (sort === "oldest") sorted.reverse(); if (sort === "song") sorted.sort((a,b) => a.song_name.localeCompare(b.song_name, "zh-CN")); if (sort === "score") sorted.sort((a,b) => (b.scores?.pitch_stability || 0) - (a.scores?.pitch_stability || 0)); document.getElementById("archiveRows").innerHTML = `${sorted.length ? sorted.map(item => {
       const compare = item.intonation_comparison;
-      return `<article class="card archive-item"><div><span class="eyebrow">AUDIO ANALYSIS</span><h3>《${esc(item.song_name)}》</h3><p>${esc(item.created_at)} · ${item.duration_seconds || "—"} 秒</p><div class="analysis-summary">${Object.entries(item.scores || {}).map(([key, value]) => `<span>${({ pitch_stability: "音高", rhythm_regularness: "节拍", dynamics: "力度", clarity: "清晰" })[key]} <b>${value}</b></span>`).join("")}</div><p class="muted">${esc(compare?.available ? `${compare.status} · 中位偏差 ${compare.median_deviation_cents} cents` : "无参考音频：仅保存稳定性分析")}</p></div><div class="archive-actions"><audio controls preload="metadata" src="${esc(item.recording_url)}"></audio><button class="link" data-import-analysis="${item.id}">带入课堂反馈</button></div></article>`;
+      return `<article class="card archive-item"><div><span class="eyebrow">AUDIO ANALYSIS</span><h3>《${esc(item.song_name)}》</h3><p>${esc(item.created_at)} · ${item.duration_seconds || "—"} 秒</p><div class="analysis-summary">${Object.entries(item.scores || {}).map(([key, value]) => `<span>${({ pitch_stability: "音高", rhythm_regularness: "节拍", dynamics: "力度", clarity: "清晰" })[key]} <b>${value}</b></span>`).join("")}</div><p class="muted">${esc(compare?.available ? `${compare.status} · 中位偏差 ${compare.median_deviation_cents} cents` : "无参考音频：仅保存稳定性分析")}</p></div><div class="archive-actions"><audio controls preload="metadata" src="${esc(apiUrl(item.recording_url))}"></audio><button class="link" data-import-analysis="${item.id}">带入课堂反馈</button></div></article>`;
     }).join("") : '<section class="card empty">暂无音频分析记录。完成一次分析后，录音和结果会自动保存在这里。</section>'}`; container.querySelectorAll("[data-import-analysis]").forEach(button => button.onclick = () => { localStorage.setItem("audioAnalysisForFeedback", JSON.stringify({ id: Number(button.dataset.importAnalysis) })); window.dispatchEvent(new CustomEvent("app:navigate", { detail: "feedback" })); }); };
     document.getElementById("archiveSort").onchange = paint; paint();
     return;
   }
   const rows = await api.feedbackRecords();
-  container.innerHTML = `<section class="list-search"><label>排序<select id="feedbackSort"><option value="newest">最新反馈</option><option value="oldest">最早反馈</option><option value="lesson">教案名称</option></select></label></section><section class="archive-list" id="feedbackRows"></section>`;
+  container.innerHTML = `<section class="list-search"><div class="list-filters"><select id="feedbackSort" aria-label="课堂反馈排序"><option value="newest">最新反馈</option><option value="oldest">最早反馈</option><option value="lesson">教案名称</option></select></div></section><section class="archive-list" id="feedbackRows"></section>`;
   const paintFeedback = () => { const sorted = [...rows]; const sort = document.getElementById("feedbackSort").value; if (sort === "oldest") sorted.reverse(); if (sort === "lesson") sorted.sort((a,b) => a.lesson_title.localeCompare(b.lesson_title, "zh-CN")); document.getElementById("feedbackRows").innerHTML = sorted.length ? sorted.map(item => `<article class="card archive-item"><div><span class="eyebrow">CLASSROOM FEEDBACK</span><h3>${esc(item.lesson_title)}</h3><p>${esc(item.song_name)} · ${esc(item.created_at)} · 整体效果：${esc(item.overall_effect)}</p><dl><dt>音频分析总结</dt><dd>${esc(item.audio_summary || "未带入音频分析")}</dd><dt>课堂亮点</dt><dd>${esc(item.highlights || "—")}</dd><dt>存在问题</dt><dd>${esc(item.problems || "—")}</dd><dt>下次改进</dt><dd>${esc(item.improvement || "—")}</dd></dl></div></article>`).join("") : '<section class="card empty">暂无课堂反馈记录。保存反馈后会完整归档在这里。</section>'; };
   document.getElementById("feedbackSort").onchange = paintFeedback; paintFeedback();
 }

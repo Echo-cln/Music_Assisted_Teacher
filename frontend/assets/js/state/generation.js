@@ -49,7 +49,7 @@ function render() {
     return;
   }
   root.classList.remove("hidden");
-  const statusText = currentJob.status === "completed" ? "教案已生成" : currentJob.status === "failed" ? "生成失败" : "正在生成详细教案";
+  const statusText = currentJob.status === "completed" ? "教案已生成" : currentJob.status === "failed" ? "生成失败" : currentJob.status === "cancelled" ? "生成已取消" : "正在生成详细教案";
   const steps = (currentJob.steps || []).map(step => `<li class="${step.state}"><span>${step.state === "done" ? "✓" : step.state === "running" ? "●" : step.state === "error" ? "!" : "○"}</span>${esc(step.label)}</li>`).join("");
   root.innerHTML = `<div class="generation-card">
     <div class="generation-head">
@@ -60,9 +60,15 @@ function render() {
     <button type="button" class="generation-toggle" id="toggleGeneration" aria-expanded="${detailsOpen}">${detailsOpen ? "收起生成步骤" : "查看生成步骤与依据"}</button>
     ${detailsOpen || currentJob.status === "failed" ? `<ul class="generation-steps">${steps}</ul>${currentJob.error_message ? `<p class="generation-error">${esc(currentJob.error_message)}</p>` : ""}` : ""}
     ${currentJob.status === "completed" ? '<button class="btn soft block" id="openGeneratedLesson">查看已生成教案</button>' : ""}
+    ${!["completed", "failed", "cancelled"].includes(currentJob.status) ? '<button class="btn soft block" id="cancelGeneration">取消本次生成</button>' : ""}
   </div>`;
   const open = root.querySelector("#openGeneratedLesson");
   if (open) open.onclick = () => window.dispatchEvent(new CustomEvent("app:navigate", { detail: "assistant" }));
+  const cancel = root.querySelector("#cancelGeneration");
+  if (cancel) cancel.onclick = async () => {
+    await api.cancelGenerationJob(currentJob.id);
+    clearGenerationJob();
+  };
   const dismiss = root.querySelector("#dismissGeneration");
   if (dismiss) dismiss.onclick = () => { dismissed = true; render(); };
   const toggle = root.querySelector("#toggleGeneration");
@@ -83,7 +89,7 @@ async function refresh() {
     previousStatus = currentJob.status;
     render();
     emit();
-    if (["completed", "failed"].includes(currentJob.status)) {
+    if (["completed", "failed", "cancelled"].includes(currentJob.status)) {
       clearInterval(timer);
       timer = null;
     }
@@ -107,7 +113,7 @@ export async function initGenerationCenter() {
   if (started) return;
   started = true;
   await refresh();
-  if (currentJob && !["completed", "failed"].includes(currentJob.status)) ensurePolling();
+  if (currentJob && !["completed", "failed", "cancelled"].includes(currentJob.status)) ensurePolling();
 }
 
 export async function startGeneration(payload) {

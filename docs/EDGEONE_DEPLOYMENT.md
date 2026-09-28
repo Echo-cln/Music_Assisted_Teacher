@@ -1,0 +1,34 @@
+# EdgeOne 部署
+
+本项目不是纯静态网站：浏览器前端可以部署到 EdgeOne Pages，而 FastAPI、音频解码、逐音评测、上传文件和数据库必须运行在一个长期存活的 Python/Docker 服务中。
+
+## 1. 部署 Python 后端
+
+在一台可运行 Docker 的云主机或容器服务中克隆本仓库，在仓库根目录创建 `.env`，填入已有的 AI 与邮件环境变量，然后执行：
+
+```bash
+docker compose -f docker-compose.edgeone.yml up -d --build
+```
+
+将 HTTPS 域名（例如 `https://api.example.com`）反向代理到服务器的 `8000` 端口。`runtime/` 是数据库和上传音频的持久化目录，不能删除。
+
+在 `docker-compose.edgeone.yml` 中把 `ALLOWED_ORIGINS` 改为 EdgeOne Pages 的真实 HTTPS 域名；跨域 Cookie 登录还必须保持 `SESSION_COOKIE_SECURE=true`。
+
+## 2. 导入 EdgeOne Pages
+
+在 EdgeOne Pages 连接 GitHub 仓库 `Echo-cln/Music_Assisted_Teacher`，把静态发布目录设为 `frontend`，不需要 Node 构建命令。
+
+部署前将 `frontend/config.js` 中的 `apiBaseUrl` 改为后端地址加 `/api`，例如：
+
+```js
+window.__APP_CONFIG__ = { apiBaseUrl: "https://api.example.com/api" };
+```
+
+提交到 `main` 后，EdgeOne Pages 会从 GitHub 拉取并更新前端；后端则按上述 Docker 服务独立升级。
+
+## 3. 上线检查
+
+1. 打开 `https://api.example.com/api/health`，应返回数据库正常状态。
+2. 打开 EdgeOne 站点，注册/登录后刷新页面，登录状态应仍存在。
+3. 上传一段课堂录音；任务进度应从“读取音频”依次走到“保存结果”，取消后不应新增分析记录。
+4. 分别选择快速与深度教案生成。若模型服务本身拒绝请求，页面会显示模型名、接口地址、HTTP 状态或返回字段，而不会伪造一份 AI 成功结果。
