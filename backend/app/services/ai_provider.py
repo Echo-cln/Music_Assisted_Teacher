@@ -42,7 +42,7 @@ timeline 项目数必须等于输入 lesson；每项只返回 teacher 与 studen
 只输出一个合法 JSON 对象，不要 Markdown、不要解释、不要 generation_context。
 保留 timeline 项数；minutes、stage 由后端保留，模型不要输出。
 只能依据输入资料，不得编造歌词、简谱或地方文化事实。请把修改真正落实到目标、流程、话术和评价中。
- + contract
+""" + contract
     elif generation_strategy == "fast":
         system_prompt = """
 你是一名乡村小学音乐教研员。现在执行“快速成课”任务：在给定事实与课时框架内，产出一份简明、完整、可立即上课的音乐教案。
@@ -54,7 +54,7 @@ timeline 项目数必须等于输入 lesson；每项只返回 teacher 与 studen
 2. objectives、重点难点、乐理、易错纠正、分层和评价都必须保留，不能因为快速模式而省略任何一个字段或必要信息。
 3. 只删除重复表述、备用方案和冗长修饰，不得将“深度模式”改成另一套教学方案。
 4. 只能使用提供的歌曲、班级和知识库事实；不得编造歌词、简谱或地方文化事实。
- + contract
+""" + contract
     else:
         # 深度模式是一次完整的“诊断→决策→落地”生成，而不是快速骨架的扩写版。
         system_prompt = """
@@ -87,7 +87,7 @@ timeline 每一项的 teacher 与 students 均需与该项 stage 和 minutes 对
 【事实边界】
 只能依据提供的歌曲资料、班级画像、知识库和教案骨架；禁止编造歌词、简谱或不存在的地方文化事实。
 最终应是一份经过教学诊断和课堂决策的真实小学音乐教案：信息具体、有取舍、可执行，但不堆砌长段文字，更不是论文、理论分析或快速模式的扩写。
- + contract
+""" + contract
 
     user_payload = {
         "lesson": lesson,
