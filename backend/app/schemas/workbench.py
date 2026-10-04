@@ -15,11 +15,12 @@ class ProjectCreate(BaseModel):
     tempo: int = Field(default=96, ge=40, le=220)
     style: str = Field(default="乡土抒情", min_length=1, max_length=50)
     melody: list[NoteInput] = Field(default_factory=list)
+    instruments: list[Literal["piano", "violin", "guzheng", "erhu", "guitar", "drum"]] = Field(default_factory=lambda: ["piano", "guzheng", "drum"])
 
 
 class ArrangeRequest(BaseModel):
     tempo: int = Field(default=96, ge=40, le=220)
     style: str = Field(default="乡土抒情", min_length=1, max_length=50)
-    instruments: list[Literal["piano", "violin", "guzheng", "erhu", "drum"]] = Field(default_factory=lambda: ["piano", "guzheng", "drum"])
+    instruments: list[Literal["piano", "violin", "guzheng", "erhu", "guitar", "drum"]] = Field(default_factory=lambda: ["piano", "guzheng", "drum"])
     melody: list[NoteInput] = Field(default_factory=list)
 
