@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: str = ""
     smtp_from: str = ""
+    # 官方 Audiveris 可执行文件路径；留空时图片/PDF 导入会给出可操作的配置提示，
+    # 不会把图片误报为已经识别的乐谱。
+    audiveris_command: str = ""
+    omr_timeout_seconds: int = 180
 
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",
