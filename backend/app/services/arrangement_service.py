@@ -8,6 +8,8 @@ from __future__ import annotations
 import math
 import struct
 import xml.etree.ElementTree as ET
+import zipfile
+from io import BytesIO
 
 PITCH = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 
@@ -39,6 +41,14 @@ def parse_note_text(value: str, tempo: int) -> list[dict]:
 
 
 def parse_musicxml(raw: bytes, tempo: int = 96) -> list[dict]:
+    # .mxl 是压缩版 MusicXML。很多记谱软件和 Audiveris 都会导出它，
+    # 因此不能把它当成普通 XML 直接喂给 ElementTree。
+    if raw[:2] == b"PK":
+        with zipfile.ZipFile(BytesIO(raw)) as archive:
+            names = [name for name in archive.namelist() if name.lower().endswith((".musicxml", ".xml")) and not name.startswith("META-INF/")]
+            if not names:
+                raise ValueError("压缩 MusicXML 中没有可读取的乐谱 XML")
+            raw = archive.read(names[0])
     root = ET.fromstring(raw)
     divisions, cursor, last_start, notes = 1, 0.0, 0.0, []
     beat = 60 / tempo
