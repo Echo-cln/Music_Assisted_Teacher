@@ -249,5 +249,5 @@ def arrange(melody: list[dict], tempo: int, style: str, instruments: list[str]) 
             start, kind = bar * bar_seconds, recipe["kind"]
             pattern = ((0, 36, 88), (1, 42, 45), (2, 38, 68), (3, 42, 45)) if kind == "lyric" else ((0, 36, 90), (.5, 42, 45), (1, 38, 72), (1.5, 42, 45), (2, 36, 84), (2.5, 42, 45), (3, 38, 75), (3.5, 42, 50)) if kind == "rhythm" else ((0, 36, 70), (2, 38, 58)) if kind == "nursery" else ((0, 36, 76), (1.5, 42, 42), (2, 38, 70), (3, 42, 42))
             for pulse, pitch, velocity in pattern: put(drum, pitch, start + pulse * beat, .11, velocity)
-        tracks.append({"id": "drum", "name": "非洲鼓节奏", "instrument": "drum", "notes": drum})
+        tracks.append({"id": "drum", "name": "课堂打击乐节奏", "instrument": "drum", "notes": drum})
     return {"style": style, "key": f"{names[tonic]}{'大调' if mode == 'major' else '小调'}", "chord_roots": roots, "chord_labels": chord_labels, "instruments": instruments, "tracks": tracks, "tips": f"已根据主旋律推断 {names[tonic]}{'大调' if mode == 'major' else '小调'}；和弦走向为 {' – '.join(chord_labels)}；{style}使用{recipe['texture']}。"}
