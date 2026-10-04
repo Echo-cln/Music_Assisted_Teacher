@@ -1,6 +1,9 @@
 // 真实采样播放层。只在点击播放后再加载，避免音源网络请求拖慢其它页面。
 // smplr 为 MIT 许可；钢琴样本、GM 小提琴/吉他和节奏机样本均由其公开样本库提供。
-const SMPLR_URL = "https://unpkg.com/smplr/dist/index.mjs";
+// Pin the player/parser versions together: unversioned CDN imports can silently
+// change their ESM export shape and break every local SF2 import at once.
+const SMPLR_URL = "https://unpkg.com/smplr@1.0.0/dist/index.mjs";
+const SOUNDFONT2_PARSER_URL = "https://esm.sh/soundfont2@0.5.0?bundle";
 
 let audioContext;
 let smplrPromise;
@@ -65,12 +68,32 @@ async function standardPlayer(instrument, notes, onProgress) {
 export async function loadLocalSoundfont(instrument, file, onProgress) {
   if (!file || !instrument) throw new Error("请选择要绑定的乐器和 .sf2 音源包");
   if (!/\.sf2$/i.test(file.name)) throw new Error("目前仅接受 .sf2 音源包；请确认其授权允许课堂使用");
+  if (file.size < 16) throw new Error("SF2 文件太小或为空；请重新下载完整音源包");
+  // Catch the common case where an SF3/ZIP/HTML download was renamed to .sf2.
+  const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const signature = String.fromCharCode(...header.slice(0, 4));
+  const form = String.fromCharCode(...header.slice(8, 12));
+  if (signature !== "RIFF" || form !== "sfbk") {
+    throw new Error("文件扩展名是 .sf2，但内容不是标准 SoundFont2（缺少 RIFF/sfbk 文件头）；请确认下载到的是 .sf2 而不是 .sf3/.zip/网页错误页");
+  }
   const api = await smplr();
-  const parser = await import("https://esm.sh/soundfont2");
+  let parser;
+  try {
+    parser = await import(SOUNDFONT2_PARSER_URL);
+  } catch (error) {
+    throw new Error(`SoundFont2 解析器加载失败（检查网络/CDN）：${error?.message || error}`);
+  }
+  // esm.sh may expose the package's named export in different namespace shapes
+  // depending on its CJS/ESM wrapper. Resolve only actual constructors.
+  const SoundFont2 = [parser.SoundFont2, parser.default?.SoundFont2, parser.default]
+    .find(candidate => typeof candidate === "function" && candidate.prototype);
+  if (!SoundFont2) {
+    throw new Error("SoundFont2 解析器模块未提供可用构造器；请刷新页面重试，或检查 CDN 是否被代理/安全软件替换");
+  }
   const url = URL.createObjectURL(file);
   const player = api.Soundfont2(context(), {
     url,
-    createSoundfont: data => new parser.SoundFont2(data),
+    createSoundfont: data => new SoundFont2(data instanceof Uint8Array ? data : new Uint8Array(data)),
     onLoadProgress: ({ loaded, total }) => onProgress?.({ instrument, loaded, total }),
   });
   try {
