@@ -100,7 +100,7 @@ class OpenAICompatibleAdapter:
                         for part_name in ("delta", "message"):
                             part = choice.get(part_name)
                             if isinstance(part, dict):
-                                observed.update(f"{part_name}.${key}" for key in part.keys())
+                                observed.update(f"{part_name}.{key}" for key in part.keys())
                         text = self._read_text(choice)
                         if text:
                             text_count += 1
