@@ -28,7 +28,7 @@
 2. 在 `backend/.env` 填入实际可执行文件。例如 Windows：
 
    ```env
-   AUDIVERIS_COMMAND=C:\Program Files\Audiveris\Audiveris.exe
+   AUDIVERIS_COMMAND=C:\Program Files\Audiveris\bin\Audiveris.bat
    OMR_TIMEOUT_SECONDS=180
    ```
 
