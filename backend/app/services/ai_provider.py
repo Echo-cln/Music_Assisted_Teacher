@@ -32,26 +32,29 @@ def _build_messages(base: dict, instruction: str, *, adjustment: bool = False, g
     """按生成策略构造不同的教学任务，而非只改一句模式说明。"""
     lesson = {key: value for key, value in base.items() if key != "generation_context"}
     evidence = base.get("generation_context", {})
+    contract = """
+【严格输出协议】只输出一个 JSON 对象（可包在 enhancement 中），必须包含 title、objectives、key_points、difficulties、preparation、timeline、theory_explanation、mistake_practice、differentiation、assessment。
+timeline 项目数必须等于输入 lesson；每项只返回 teacher 与 students。不要返回 summary、minutes、stage、generation_context：它们是后端已经确定的事实与课时骨架。JSON 结束后立即停止。
+"""
     if adjustment:
         system_prompt = """
 你是一名具有多年乡村小学音乐教学经验的优秀音乐教研员。根据教师的调整要求修改现有教案。
 只输出一个合法 JSON 对象，不要 Markdown、不要解释、不要 generation_context。
-保留所有顶层字段和 timeline 项数；每项的 minutes、stage 必须保持不变。
+保留 timeline 项数；minutes、stage 由后端保留，模型不要输出。
 只能依据输入资料，不得编造歌词、简谱或地方文化事实。请把修改真正落实到目标、流程、话术和评价中。
-"""
+ + contract
     elif generation_strategy == "fast":
         system_prompt = """
 你是一名乡村小学音乐教研员。现在执行“快速成课”任务：在给定事实与课时框架内，产出一份简明、完整、可立即上课的音乐教案。
 
-只输出一个合法 JSON 对象：不要 Markdown、不要解释、不要 generation_context。必须保留输入 lesson 的全部顶层字段和字段类型。
-timeline 的项数、minutes、stage 必须逐项保持不变。
+只输出一个合法 JSON 对象：不要 Markdown、不要解释、不要 generation_context。
 
 快速模式只压缩篇幅，不改变教案的教学判断、事实边界、阶段顺序、目标、活动和评价含义：
 1. 每个 timeline.teacher 和 timeline.students 各写 1—2 句，直接交代动作、任务和一句可用课堂话语；避免长段落。
 2. objectives、重点难点、乐理、易错纠正、分层和评价都必须保留，不能因为快速模式而省略任何一个字段或必要信息。
 3. 只删除重复表述、备用方案和冗长修饰，不得将“深度模式”改成另一套教学方案。
 4. 只能使用提供的歌曲、班级和知识库事实；不得编造歌词、简谱或地方文化事实。
-"""
+ + contract
     else:
         # 深度模式是一次完整的“诊断→决策→落地”生成，而不是快速骨架的扩写版。
         system_prompt = """
@@ -64,7 +67,7 @@ timeline 的项数、minutes、stage 必须逐项保持不变。
 3. 检查目标、活动、评价是否前后一致，且总时长不被改变；
 4. 删除空话、重复建议和未经资料支持的内容。
 
-只输出一个合法 JSON 对象；不允许 Markdown、解释或 generation_context。必须保留原始 JSON 的全部字段和字段类型；不得删除、合并、减少、调换 timeline 数组中的课堂环节。timeline 中既有的 minutes 和 stage 必须保持不变。
+只输出一个合法 JSON 对象；不允许 Markdown、解释或 generation_context。不得删除、合并、减少、调换 timeline 数组中的课堂环节；minutes 和 stage 由后端保留。
 
 【每个课堂环节必须可执行】
 timeline 每一项的 teacher 与 students 均需与该项 stage 和 minutes 对应：
@@ -84,7 +87,7 @@ timeline 每一项的 teacher 与 students 均需与该项 stage 和 minutes 对
 【事实边界】
 只能依据提供的歌曲资料、班级画像、知识库和教案骨架；禁止编造歌词、简谱或不存在的地方文化事实。
 最终应是一份经过教学诊断和课堂决策的真实小学音乐教案：信息具体、有取舍、可执行，但不堆砌长段文字，更不是论文、理论分析或快速模式的扩写。
-"""
+ + contract
 
     user_payload = {
         "lesson": lesson,
