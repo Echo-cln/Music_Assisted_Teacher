@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.models.entities import ArrangementProject, Teacher
 from app.schemas.workbench import ArrangeRequest, ProjectCreate
 from app.services.arrangement_service import arrange, parse_midi, parse_musicxml, parse_note_text
+from app.services.omr_service import OMRUnavailableError, SUPPORTED_OMR_SUFFIXES, recognize_staff_image
 
 router = APIRouter(prefix="/workbench", tags=["数字乐器与智能编曲"])
 
@@ -71,12 +72,19 @@ async def import_score(file: UploadFile = File(...), db: Session = Depends(get_d
     if len(raw) > 8 * 1024 * 1024:
         raise HTTPException(413, "乐谱文件不能超过 8MB")
     try:
-        if suffix in {"musicxml", "xml"}:
+        import_notice = None
+        if suffix in {"musicxml", "xml", "mxl"}:
             melody, tempo, source = parse_musicxml(raw), 96, "musicxml"
         elif suffix in {"mid", "midi"}:
             melody, tempo, source = (*parse_midi(raw), "midi")
+        elif suffix in SUPPORTED_OMR_SUFFIXES:
+            musicxml, recognition = recognize_staff_image(raw, name, suffix)
+            melody, tempo, source = parse_musicxml(musicxml), 96, "omr"
+            import_notice = recognition["warning"]
         else:
-            raise HTTPException(422, "目前可直接导入 MusicXML（.musicxml/.xml）或 MIDI（.mid/.midi）")
+            raise HTTPException(422, "支持 MusicXML（.musicxml/.xml/.mxl）、MIDI（.mid/.midi），或已配置 Audiveris 后的 PNG/JPG/WEBP/TIFF/PDF 五线谱")
+    except OMRUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
     except HTTPException:
         raise
     except Exception as exc:
@@ -86,7 +94,10 @@ async def import_score(file: UploadFile = File(...), db: Session = Depends(get_d
     row = ArrangementProject(teacher_id=teacher.id, title=name.rsplit('.', 1)[0], source_kind=source, tempo=tempo,
                              melody_json=json.dumps(melody, ensure_ascii=False), arrangement_json=json.dumps(arrange(melody, tempo, "乡土抒情", ["piano", "guzheng", "drum"]), ensure_ascii=False))
     db.add(row); db.commit(); db.refresh(row)
-    return present(row)
+    data = present(row)
+    if import_notice:
+        data["import_notice"] = import_notice
+    return data
 
 
 @router.post("/parse-notes")
@@ -98,4 +109,3 @@ def parse_notes(payload: dict):
 @router.delete("/projects/{project_id}", status_code=204)
 def delete(project_id: int, db: Session = Depends(get_db), teacher: Teacher = Depends(get_current_teacher)):
     db.delete(own(project_id, db, teacher)); db.commit()
-
