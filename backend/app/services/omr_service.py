@@ -25,7 +25,7 @@ def _command_parts(command: str) -> list[str]:
         raise OMRUnavailableError(
             "尚未配置 AUDIVERIS_COMMAND，无法识别图片/PDF 五线谱。"
             "请安装官方 Audiveris 后，在 backend/.env 填写其可执行文件完整路径，"
-            "例如 AUDIVERIS_COMMAND=C:\\Program Files\\Audiveris\\Audiveris.exe。"
+            "例如 AUDIVERIS_COMMAND=C:\\Program Files\\Audiveris\\bin\\Audiveris.bat。"
         )
     return parts
 
