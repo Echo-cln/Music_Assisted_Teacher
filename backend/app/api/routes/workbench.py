@@ -44,7 +44,7 @@ def project(project_id: int, db: Session = Depends(get_db), teacher: Teacher = D
 def create(payload: ProjectCreate, db: Session = Depends(get_db), teacher: Teacher = Depends(get_current_teacher)):
     melody = [n.model_dump() for n in payload.melody]
     row = ArrangementProject(teacher_id=teacher.id, title=payload.title, tempo=payload.tempo, style=payload.style,
-                             melody_json=json.dumps(melody, ensure_ascii=False), arrangement_json=json.dumps(arrange(melody, payload.tempo, payload.style, ["piano", "guzheng", "drum"]), ensure_ascii=False))
+                             melody_json=json.dumps(melody, ensure_ascii=False), arrangement_json=json.dumps(arrange(melody, payload.tempo, payload.style, payload.instruments), ensure_ascii=False))
     db.add(row); db.commit(); db.refresh(row)
     return present(row)
 
