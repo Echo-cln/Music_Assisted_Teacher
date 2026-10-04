@@ -243,11 +243,15 @@ def _validated_content(raw: str, base: dict) -> dict:
             ) from repair_exc
     if not isinstance(content, dict):
         raise ValueError("模型没有返回教案对象")
-    # 成功必须是模型实际给出的完整教案，不能把缺失字段静默拼回规则骨架，
-    # 否则“模型返回不完整”会被伪装成成功，教师无法发现真实问题。
+    # 模型只负责教学决策；课程摘要、时长和阶段是服务端事实骨架。
+    # 兼容 OpenAI 兼容接口常见的包装，不能把包装误判为“全字段缺失”。
     generated = content
+    for wrapper in ("enhancement", "lesson", "data", "content", "教案"):
+        if isinstance(content.get(wrapper), dict):
+            generated = content[wrapper]
+            break
     required_fields = (
-        "title", "summary", "objectives", "key_points", "difficulties", "preparation",
+        "title", "objectives", "key_points", "difficulties", "preparation",
         "timeline", "theory_explanation", "mistake_practice", "differentiation", "assessment",
     )
     missing = [field for field in required_fields if not generated.get(field)]
@@ -270,7 +274,6 @@ def _validated_content(raw: str, base: dict) -> dict:
     content = deepcopy(base)
     for field in (
         "title",
-        "summary",
         "objectives",
         "key_points",
         "difficulties",
