@@ -1,4 +1,6 @@
 import json
+import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -26,6 +28,7 @@ from app.services.lesson_service import (
 )
 
 router = APIRouter(prefix="/lessons", tags=["教案"])
+logger = logging.getLogger(__name__)
 
 
 def _profile_for_teacher(db: Session, teacher_id: int, class_id: int | None):
@@ -175,16 +178,30 @@ def save(
     profile = _profile_for_teacher(db, teacher.id, payload.class_id)
     if payload.class_id and not profile:
         raise HTTPException(status_code=404, detail="班级不存在")
-    plan = save_preview(
-        db,
-        song,
-        profile,
-        payload.duration_minutes,
-        payload.teacher_requirements,
-        payload.content,
-        payload.generation_mode,
-        teacher.id,
-    )
+    try:
+        plan = save_preview(
+            db,
+            song,
+            profile,
+            payload.duration_minutes,
+            payload.teacher_requirements,
+            payload.content,
+            payload.generation_mode,
+            teacher.id,
+        )
+    except ValueError as exc:
+        # 预览在浏览器里停留较久时，内容可能被手工改坏；这属于可修复的
+        # 请求问题，应直接告诉前端而不是以“请求失败”掩盖。
+        db.rollback()
+        raise HTTPException(status_code=422, detail=f"教案内容无法保存：{exc}") from exc
+    except Exception as exc:
+        db.rollback()
+        error_id = uuid.uuid4().hex[:10]
+        logger.exception("lesson_save_failed error_id=%s teacher_id=%s song_id=%s", error_id, teacher.id, payload.song_id)
+        raise HTTPException(
+            status_code=500,
+            detail=f"保存教案时数据库写入失败（错误编号 {error_id}）。请保留当前预览后重试；若持续失败，请复制该编号给技术支持。",
+        ) from exc
     db.refresh(plan, attribute_names=["song", "class_profile"])
     return serialize_plan(plan)
 

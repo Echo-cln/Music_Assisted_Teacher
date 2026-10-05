@@ -125,7 +125,8 @@ export async function renderAssistant(container) {
     } catch (error) {
       button.disabled = false;
       button.textContent = "保存教案";
-      notify(error.message);
+      const prefix = error?.status ? `保存失败（HTTP ${error.status}）：` : "保存教案失败：";
+      notify(`${prefix}${error.message || "请检查后端日志后重试"}`, "error");
     }
   };
   document.getElementById("printPlan").onclick = () => window.print();

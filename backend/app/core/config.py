@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     ai_fast_reasoning_effort: str = "low"
     ai_max_tokens: int = 32768
     ai_fast_max_tokens: int = 32768
+    # 课堂模型只解释已提取的声学证据，不直接替代音频测量。默认使用已配置的快速模型，
+    # 失败不会影响音频分析保存。
+    classroom_insight_enabled: bool = True
+    classroom_insight_max_tokens: int = 1800
     smtp_host: str = ""
     smtp_port: int = 465
     smtp_username: str = ""

@@ -83,6 +83,12 @@ def recognize_staff_image(raw: bytes, filename: str, suffix: str) -> tuple[bytes
                     "请先单独打开 Audiveris，安装英文 eng 语言数据；Windows 常见目录为 "
                     "%APPDATA%\\AudiverisLtd\\audiveris\\config\\tessdata，安装后重启后端再导入。"
                 )
+            if "Could not export since transcription did not complete successfully" in normalized:
+                raise RuntimeError(
+                    "Audiveris 已读取文件，但谱面转录没有完成，因此不能导出 MusicXML。"
+                    "请优先使用单页、正向、无阴影、五线完整且音符清晰的扫描件；PDF 请先裁出单页再试。"
+                    f"关键日志：{detail}"
+                )
             raise RuntimeError(f"Audiveris 识谱失败（退出码 {result.returncode}）。关键日志：{detail}")
         return exported.read_bytes(), {
             "engine": "Audiveris",

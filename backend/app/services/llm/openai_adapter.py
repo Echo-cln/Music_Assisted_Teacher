@@ -44,7 +44,7 @@ class OpenAICompatibleAdapter:
                     return text
         return ""
 
-    def stream(self, messages: list[dict], generation_strategy: str = "deep"):
+    def stream(self, messages: list[dict], generation_strategy: str = "deep", max_tokens: int | None = None):
         if not self.api_key:
             name = "AI_FAST_API_KEY / AI_API_KEY" if generation_strategy == "fast" else "AI_API_KEY"
             raise ValueError(f"未配置{name}，无法请求 model={self.model}")
@@ -52,7 +52,7 @@ class OpenAICompatibleAdapter:
         payload: dict = {
             "model": self.model, "messages": messages, "stream": True,
             "temperature": 0.35 if generation_strategy == "fast" else 0.45,
-            "max_tokens": (
+            "max_tokens": max_tokens or (
                 getattr(self.settings, "ai_fast_max_tokens", 8192)
                 if generation_strategy == "fast"
                 else getattr(self.settings, "ai_max_tokens", 32768)

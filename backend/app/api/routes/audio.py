@@ -15,6 +15,7 @@ from app.db.session import SessionLocal, get_db
 from app.models.entities import AudioAnalysis, AudioAnalysisJob, AudioAsset, ClassroomRecord, LessonPlan, Song, Teacher
 from app.repositories.song_repository import SongRepository
 from app.services.audio_service import _prepare_reference, analyze_singing, assess_note_accuracy, compare_intonation, compare_waveforms, load_waveform, save_upload
+from app.services.classroom_insight_service import build_classroom_model_insight
 
 router = APIRouter(prefix="/audio", tags=["音频"])
 logger = logging.getLogger(__name__)
@@ -68,14 +69,31 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
         db.add(reference_asset); db.flush()
 
     if analysis_mode == "classroom":
-        if report: report(62, "正在生成课堂分段观察与教学动作")
+        if report: report(56, "正在整理课堂分段声学证据")
         reference_waveform = load_waveform(reference_path)[0] if reference_path else None
+        lesson_content = {}
+        if lesson_plan_id:
+            plan = db.get(LessonPlan, lesson_plan_id)
+            if plan and plan.teacher_id == teacher_id:
+                try:
+                    lesson_content = json.loads(plan.content_json or "{}")
+                except json.JSONDecodeError:
+                    lesson_content = {}
+        if report: report(68, "正在依据课堂证据生成教学解读")
+        model_insight = build_classroom_model_insight(
+            song=song,
+            sections=acoustic.get("segment_feedback", []),
+            scores=acoustic.get("scores", {}),
+            classroom_evidence=acoustic.get("classroom_evidence", {}),
+            lesson_content=lesson_content,
+        )
+        if report: report(80, "正在汇总课堂证据与教学动作")
         result = {
             "song_id": song.id, "song_name": song.name, "analysis_mode": "classroom", "analysis_mode_label": "课堂整体分析",
             "has_original": reference_path is not None,
             "analysis_scope": "课堂整体分析呈现整段录音中的人声可用性、起音节拍、力度和音高稳定度证据；没有参考主旋律时不判定学生是否唱准。",
             "analysis_method": ["以可用人声比例、音高离散、起音间隔和能量变化生成课堂证据。", "分段根据录音时长形成观察窗口；建议必须带时间范围与实际指标。", "此模式不对个体逐音打分。"],
-            **acoustic, **compare_waveforms(reference_waveform, recording_waveform), "intonation_comparison": None, "note_assessment": None,
+            **acoustic, "model_insight": model_insight, **compare_waveforms(reference_waveform, recording_waveform), "intonation_comparison": None, "note_assessment": None,
         }
     else:
         if report: report(52, "正在准备参考主旋律")
@@ -95,7 +113,11 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
             "analysis_available": True, "duration_seconds": acoustic.get("duration_seconds", recording_duration), "tempo_bpm": acoustic.get("tempo_bpm"),
             "analysis_scope": "单人练唱只在参考主旋律和练唱人声均有足够可信音高时输出逐音偏差；无法可靠对齐时明确不给分。",
             "analysis_method": ["先检查练唱录音可用人声比例。", "清晰人声直接使用；原唱/伴奏混音先用 Demucs 分离人声。", "以 DTW 对齐主旋律，再按稳定音符片段计算 cents 偏差。"],
-            "solo_diagnostics": {"recording_voiced_ratio": quality.get("voiced_ratio"), "reference": {k: prepared_reference.get(k) for k in ("available", "source", "code", "message")}},
+            "solo_diagnostics": {
+                "recording_voiced_ratio": quality.get("voiced_ratio"),
+                "reference": {k: prepared_reference.get(k) for k in ("available", "source", "code", "message")},
+                "alignment": intonation.get("diagnostics", {}),
+            },
             "scores": {}, "segment_feedback": [], "findings": [], "suggestions": [], "classroom_evidence": {},
             "recording_waveform": recording_waveform, "has_reference_comparison": False, "reference_waveform": None, "reference_similarity": None,
             "intonation_comparison": intonation, "note_assessment": note_assessment,

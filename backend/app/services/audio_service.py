@@ -149,10 +149,16 @@ def _align_tracks(recording_path: Path, reference: dict) -> dict:
 
         recording = _pitch_track(recording_path)
         expected = _pitch_track(Path(reference["path"]))
+        diagnostics = {
+            "recording_voiced_ratio": round(recording.voiced_ratio, 3),
+            "reference_voiced_ratio": round(expected.voiced_ratio, 3),
+            "recording_pitch_backend": recording.backend,
+            "reference_pitch_backend": expected.backend,
+        }
         if recording.voiced_ratio < 0.16:
-            raise ValueError(f"学生录音可用人声仅 {recording.voiced_ratio:.0%}，请降低伴奏并靠近麦克风重录")
+            return {"available": False, "reason": "recording_low_quality", "diagnostics": diagnostics, "message": f"练唱录音可用人声音高仅 {recording.voiced_ratio:.0%}，请降低伴奏并靠近麦克风重录。"}
         if expected.voiced_ratio < 0.18:
-            raise ValueError(f"参考人声可用音高仅 {expected.voiced_ratio:.0%}，不能作为主旋律目标")
+            return {"available": False, "reason": "reference_low_quality", "diagnostics": diagnostics, "message": f"参考人声可用音高仅 {expected.voiced_ratio:.0%}，不能作为主旋律目标。请确认上传的是无明显伴奏、无长静音的单人示范，而非将混音文件误选为“清晰人声”。"}
         actual_midi, expected_midi = _filled(_midi(recording.values)), _filled(_midi(expected.values))
         # 对齐阶段去掉各自中位音高，避免男女声八度差把时间路径拉坏；评分仍用原始音高。
         a_feature, e_feature = actual_midi - np.nanmedian(actual_midi), expected_midi - np.nanmedian(expected_midi)
@@ -171,10 +177,10 @@ def _align_tracks(recording_path: Path, reference: dict) -> dict:
         cents = raw_cents - octave_shift
         median_abs = float(np.median(np.abs(cents)))
         if median_abs > 600:
-            return {"available": False, "reason": "reference_mismatch", "message": "对齐后中位音高差仍超过 600 cents，说明参考人声与练唱旋律不匹配，或分离结果被伴奏污染；本次不输出误导性的 0 分。", "diagnostics": {"median_deviation_cents": round(median_abs, 1), "reference_source": reference.get("source")}}
-        return {"available": True, "recording": recording, "reference_track": expected, "pairs": pairs, "actual_hz": actual_hz, "expected_hz": expected_hz, "cents": cents, "octave_shift": octave_shift, "reference_source": reference.get("source"), "message": reference.get("message")}
+            return {"available": False, "reason": "reference_mismatch", "message": "对齐后中位音高差仍超过 600 cents，说明参考人声与练唱旋律不匹配，或分离结果被伴奏污染；本次不输出误导性的 0 分。", "diagnostics": {**diagnostics, "median_deviation_cents": round(median_abs, 1), "reference_source": reference.get("source")}}
+        return {"available": True, "recording": recording, "reference_track": expected, "pairs": pairs, "actual_hz": actual_hz, "expected_hz": expected_hz, "cents": cents, "octave_shift": octave_shift, "reference_source": reference.get("source"), "diagnostics": diagnostics, "message": reference.get("message")}
     except Exception as exc:
-        return {"available": False, "reason": "alignment_failed", "message": f"主旋律对齐未完成：{str(exc)[:180]}。本次仍保留课堂整体分析，不输出逐音分数。"}
+        return {"available": False, "reason": "alignment_failed", "message": f"主旋律对齐未完成：{str(exc)[:180]}。本次不输出逐音分数。"}
 
 
 def _score_details(cents: np.ndarray) -> tuple[int, float, float]:
