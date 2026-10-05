@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     ai_reasoning_effort: str = "low"
     ai_fast_reasoning_effort: str = "low"
     ai_max_tokens: int = 32768
-    ai_fast_max_tokens: int = 8192
+    ai_fast_max_tokens: int = 32768
     smtp_host: str = ""
     smtp_port: int = 465
     smtp_username: str = ""

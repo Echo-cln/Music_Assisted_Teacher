@@ -33,3 +33,19 @@ def test_string_explanation_and_newline_lists_are_normalized():
     assert result["theory_explanation"]["script"] == "节拍像走路"
     assert result["mistake_practice"]["correction"] == "先拍再唱"
     assert len(result["objectives"]) == 2
+
+
+def test_fast_mode_keeps_full_contract_and_requires_song_specific_evidence():
+    from app.services.ai_provider import _build_messages
+
+    base = _base()
+    base["generation_context"] = {
+        "selected_song_from_database": {
+            "name": "测试歌", "mood": "欢快", "song_type": "童谣", "mode": "五声音阶", "range_note": "c1-c2", "rhythm_score": 4,
+        },
+        "class_profile": {"rhythm_level": "首拍容易不稳"},
+    }
+    prompt = _build_messages(base, "", generation_strategy="fast")[0]["content"]
+    assert "唯一差别是生成速度" in prompt
+    assert "至少两项明确事实" in prompt
+    assert "压缩篇幅" not in prompt

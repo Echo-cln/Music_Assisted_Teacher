@@ -3,6 +3,12 @@ import { esc, notify, pageHeader } from "../utils/dom.js";
 
 const scoreLabels = { pitch_stability: "音高稳定", rhythm_regularness: "节拍稳定", dynamics: "力度层次", clarity: "清晰度" };
 
+function openAudioAnalysis(id) {
+  if (!id) return notify("这条课堂反馈没有可打开的音频分析记录", "error");
+  localStorage.setItem("lastAudioAnalysisId", String(id));
+  window.dispatchEvent(new CustomEvent("app:navigate", { detail: "audio" }));
+}
+
 export async function renderFeedback(container) {
   const lessons = await api.lessons();
   const analyses = await api.audioAnalyses();
@@ -23,10 +29,12 @@ export async function renderFeedback(container) {
         <label>下次改进<textarea id="improvement" placeholder="例如：课前增加两分钟恒拍练习，分层安排领唱任务。"></textarea></label>
         <button class="btn primary" id="saveFeedback">保存课堂反馈</button>
       </section>
-      <aside class="side-stack"><section class="card"><h3>已带入的音频记录</h3>${imported ? summaryView(imported) : '<p class="muted">尚未带入分析记录。可先前往“音频分析”完成录音分析，分析结果会自动保存。</p>'}</section></aside>
+      <aside class="side-stack"><section class="card feedback-record-card"><div class="module-head"><div><span class="eyebrow">LINKED RECORD</span><h3>已带入的音频记录</h3></div>${imported ? '<span class="status ok">已关联</span>' : '<span class="status info">待选择</span>'}</div>${imported ? summaryView(imported) : '<p class="muted">尚未带入分析记录。可先前往“音频分析”完成录音分析，分析结果会自动保存。</p>'}</section></aside>
     </div>`;
   const lessonSelect = document.getElementById("lessonId");
   const audioSelect = document.getElementById("audioAnalysisId");
+  const bindLinkedRecord = () => document.querySelector("[data-open-audio-analysis]")?.addEventListener("click", () => openAudioAnalysis(Number(document.querySelector("[data-open-audio-analysis]").dataset.openAudioAnalysis)));
+  bindLinkedRecord();
   function refreshAudioChoices() {
     const lessonId = Number(lessonSelect.value);
     const allowed = analyses.filter(item => item.lesson_plan_id === lessonId);
@@ -34,11 +42,15 @@ export async function renderFeedback(container) {
     if (imported && !allowed.some(item => item.id === imported.id)) imported = null;
   }
   refreshAudioChoices();
-  lessonSelect.onchange = () => { imported = null; refreshAudioChoices(); document.getElementById("audioSummary").value = ""; };
+  lessonSelect.onchange = () => { imported = null; refreshAudioChoices(); document.getElementById("audioSummary").value = ""; const card = document.querySelector(".feedback-record-card"); if (card) card.innerHTML = '<div class="module-head"><div><span class="eyebrow">LINKED RECORD</span><h3>已带入的音频记录</h3></div><span class="status info">待选择</span></div><p class="muted">请选择一条已绑定本教案的分析记录。保存后，课堂反馈会保留它的完整跳转入口。</p>'; };
   audioSelect.onchange = async () => {
     const id = Number(audioSelect.value);
     imported = id ? analyses.find(item => item.id === id) : null;
-    if (imported) document.getElementById("audioSummary").value = buildSummary(imported);
+    if (imported) {
+      document.getElementById("audioSummary").value = buildSummary(imported);
+      const card = document.querySelector(".feedback-record-card");
+      if (card) { card.innerHTML = `<div class="module-head"><div><span class="eyebrow">LINKED RECORD</span><h3>已带入的音频记录</h3></div><span class="status ok">已关联</span></div>${summaryView(imported)}`; bindLinkedRecord(); }
+    }
   };
   document.getElementById("saveFeedback").onclick = async () => {
     const lessonId = Number(document.getElementById("lessonId").value);
@@ -67,5 +79,6 @@ function buildSummary(result) {
 function summaryView(result) {
   const scores = Object.entries(result.scores || {}).map(([key, value]) => `<span>${scoreLabels[key] || key} <b>${value}</b></span>`).join("");
   const comparison = result.intonation_comparison;
-  return `<p><b>《${esc(result.song_name)}》</b></p><div class="analysis-summary">${scores}</div><p class="muted">${esc(comparison?.available ? `${comparison.status} · 偏差 ${comparison.median_deviation_cents} cents` : comparison?.message || "已带入录音分析")}</p><audio controls preload="metadata" src="${esc(apiUrl(result.recording_url))}"></audio>`;
+  const detail = comparison?.available ? `${comparison.status} · 偏差 ${comparison.median_deviation_cents} cents` : comparison?.message || "已带入录音分析";
+  return `<p class="linked-record-title"><b>《${esc(result.song_name)}》</b><small>${esc(result.analysis_mode_label || "课堂音频分析")} · ${esc(result.created_at || "")}</small></p><div class="analysis-summary">${scores}</div><p class="muted">${esc(detail)}</p><audio controls preload="metadata" src="${esc(apiUrl(result.recording_url))}"></audio><button class="btn soft block linked-record-button" data-open-audio-analysis="${result.id}">查看完整音频分析</button><small class="linked-record-help">将打开这一次录音的完整指标、分段证据、练习建议与音频回听。</small>`;
 }

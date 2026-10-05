@@ -77,6 +77,7 @@ def generate(
             payload.activity_preference,
             payload.teacher_requirements,
             teacher.id,
+            payload.generation_strategy,
         )
     )[-1][1]
     return serialize_preview(song, profile, payload.duration_minutes, complete["content"], complete["generation_mode"])
@@ -105,6 +106,7 @@ def generate_stream(
                 payload.activity_preference,
                 payload.teacher_requirements,
                 teacher.id,
+                payload.generation_strategy,
             ):
                 if kind == "complete":
                     data = {

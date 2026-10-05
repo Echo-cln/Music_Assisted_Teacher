@@ -8,14 +8,21 @@ const scoreNames = { pitch_stability: "音高稳定", rhythm_regularness: "节�
 export async function renderAudio(container) {
   const lessons = await api.lessons();
   container.innerHTML = pageHeader("课堂音频分析", "选择课堂整体分析或单人练唱逐音评测；每次结果和音频都会自动保存。") + `
-    <section class="card audio-intro"><div><span class="eyebrow">RECORDING REVIEW</span><h2>用适合的方式评估一段课堂声音</h2><p>课堂整体分析适合合唱与课堂录音。单人逐音评测只使用清晰人声主旋律；原唱混音会先分离人声，无法可靠分离时会明确停在“不可评分”，不会给出误导性的零分。</p></div><span class="status info">可保存分析</span></section>
-    <section class="card"><div class="form-grid">
-      <label class="full">分析方式<select id="analysisMode"><option value="classroom">课堂整体分析 · 音高稳定、节拍、力度与分段建议</option><option value="solo">单人练唱逐音评测 · 需要参考音频，输出每个音的偏差</option></select><small id="modeHint">适合课堂合唱、带环境声的录音；不输出逐音跑调结论。</small></label>
-      <label class="full">关联教案（选填）<select id="lessonPlanId"><option value="">私人练唱 / 不关联课堂教案</option>${lessons.map(item => `<option value="${item.id}">${esc(item.title)} · ${esc(item.class_name)}</option>`).join("")}</select><small>选择后，本次音频分析会绑定至该教案；后续课堂反馈只能带入本教案的分析记录。</small></label>
-      <label class="full">对应歌曲<div class="song-picker"><label class="search-field"><span>⌕</span><input id="songSearch" type="search" placeholder="搜索歌曲名称、地区或省份"></label><select id="songId"></select><div class="list-filters"><select id="songGradeFilter"><option value="">全部适用年级</option><option value="1">含 1 年级</option><option value="2">含 2 年级</option><option value="3">含 3 年级</option><option value="4">含 4 年级</option><option value="5">含 5 年级</option><option value="6">含 6 年级</option></select><select id="songRegionFilter"><option value="">全部地区</option></select></div><small id="songSearchCount"></small></div></label>
-      <label>课堂录音<input id="recording" class="file-input" type="file" accept="audio/*" required><span class="upload-control"><span class="upload-button">选择课堂录音</span><span class="file-name" id="recordingName">尚未选择文件</span></span><small>支持 WAV、MP3、M4A 等常见格式</small></label>
-      <label class="full optional-audio">参考旋律（可选）<div class="inline-controls"><select id="referenceKind"><option value="mixed">原唱 / 伴奏混音（先分离人声）</option><option value="vocal">清晰单人参考人声（推荐）</option></select></div><input id="original" class="file-input" type="file" accept="audio/*"><span class="upload-control"><span class="upload-button secondary">选择参考旋律</span><span class="file-name" id="originalName">不上传也可分析</span></span><small id="referenceHint">原唱/伴奏会先分离人声；请只有在文件确实是单人示范人声时再切换为“清晰人声”。</small></label>
-    </div><div class="actions"><button class="btn primary" id="analyze">开始分析录音</button></div></section>
+    <section class="card audio-intro"><div><span class="eyebrow">RECORDING REVIEW</span><h2>用清楚的输入，得到可追溯的课堂证据</h2><p>先选分析方式，再选择歌曲、课堂录音与所需参考旋律。课堂整体分析关注班级声音表现；单人练唱逐音评测只依据清晰人声参考音频。</p></div><span class="status info">可保存分析</span></section>
+    <section class="card audio-analysis-form">
+      <div class="audio-form-section"><div class="audio-form-heading"><span>01</span><div><h3>确定分析目标</h3><p>不同目标使用不同的分析依据和结果呈现。</p></div></div><div class="form-grid">
+        <label class="full">分析方式<select id="analysisMode"><option value="classroom">课堂整体分析 · 音高稳定、节拍、力度与分段建议</option><option value="solo">单人练唱逐音评测 · 参考旋律对齐与逐音偏差</option></select><small id="modeHint">适合课堂合唱、带环境声的录音；不输出逐音跑调结论。</small></label>
+        <label class="full">关联教案 <span class="field-optional">可选</span><select id="lessonPlanId"><option value="">私人练唱 / 不关联课堂教案</option>${lessons.map(item => `<option value="${item.id}">${esc(item.title)} · ${esc(item.class_name)}</option>`).join("")}</select><small>选择后，本次分析会绑定至该教案；课堂反馈只会显示本课的分析记录。</small></label>
+      </div></div>
+      <div class="audio-form-section"><div class="audio-form-heading"><span>02</span><div><h3>选择歌曲与课堂录音</h3><p>歌曲用于解释课堂情境；课堂录音是本次分析的必填材料。</p></div></div><div class="form-grid">
+        <label class="full">对应歌曲<div class="song-picker"><label class="search-field"><span>⌕</span><input id="songSearch" type="search" placeholder="搜索歌曲名称、地区或省份"></label><select id="songId"></select><div class="list-filters"><select id="songGradeFilter"><option value="">全部适用年级</option><option value="1">含 1 年级</option><option value="2">含 2 年级</option><option value="3">含 3 年级</option><option value="4">含 4 年级</option><option value="5">含 5 年级</option><option value="6">含 6 年级</option></select><select id="songRegionFilter"><option value="">全部地区</option></select></div><small id="songSearchCount"></small></div></label>
+        <label class="full audio-file-field"><span>课堂录音 <b>必填</b></span><input id="recording" class="file-input" type="file" accept="audio/*" required><span class="upload-control"><span class="upload-button">选择课堂录音</span><span class="file-name" id="recordingName">尚未选择文件</span></span><small>支持 WAV、MP3、M4A 等常见格式。</small></label>
+      </div></div>
+      <section class="reference-source-card" id="referenceSection"><div class="reference-source-head"><div><span class="eyebrow">REFERENCE MELODY</span><h3 id="referenceTitle">参考旋律 <em>可选</em></h3><p id="referenceCaption">课堂整体分析可不上传参考旋律；上传后可补充整体轮廓对比。</p></div><label class="reference-kind-field" id="referenceKindField"><span>参考素材类型</span><select id="referenceKind"><option value="mixed">原唱 / 伴奏混音（先分离人声）</option><option value="vocal">清晰单人参考人声（推荐）</option></select></label></div>
+        <label class="audio-file-field"><span>参考音频文件</span><input id="original" class="file-input" type="file" accept="audio/*"><span class="upload-control"><span class="upload-button secondary">选择参考旋律</span><span class="file-name" id="originalName">不上传也可分析</span></span><small id="referenceHint">参考音频文件与“参考素材类型”是两个独立选项。</small></label>
+      </section>
+      <div class="actions"><button class="btn primary" id="analyze">开始分析录音</button></div>
+    </section>
     <div id="analysis"></div>`;
   let searchTimer;
   document.getElementById("songSearch").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadSongs, 220); };
@@ -23,22 +30,37 @@ export async function renderAudio(container) {
   await loadSongs();
   const savedAnalysisId = localStorage.getItem("lastAudioAnalysisId");
   if (savedAnalysisId) {
-    api.audioAnalysis(savedAnalysisId).then(showResult).catch(() => localStorage.removeItem("lastAudioAnalysisId"));
+    // 此值只是一次性深链指针：消费后清除，避免以后从侧栏进入时反复显示上一次的旧失败/旧结果。
+    api.audioAnalysis(savedAnalysisId).then(showResult).finally(() => localStorage.removeItem("lastAudioAnalysisId"));
   }
   const activeJob = await refreshAudioJob();
   if (activeJob) showJobState(activeJob);
   document.getElementById("recording").onchange = event => { document.getElementById("recordingName").textContent = event.target.files[0]?.name || "尚未选择文件"; };
-  document.getElementById("original").onchange = event => { document.getElementById("originalName").textContent = event.target.files[0]?.name || "不上传也可分析"; };
-  document.getElementById("analysisMode").onchange = event => {
-    const solo = event.target.value === "solo";
-    document.getElementById("modeHint").textContent = solo ? "必须上传参考旋律；优先使用清晰单人声部。混音原唱只有在成功分离人声后才会生成逐音结果。" : "适合课堂合唱、带环境声的录音；不输出逐音跑调结论。";
-    document.getElementById("originalName").textContent = solo ? "逐音评测必须选择参考音频" : "不上传也可分析";
+  document.getElementById("original").onchange = event => { document.getElementById("originalName").textContent = event.target.files[0]?.name || (document.getElementById("analysisMode").value === "solo" ? "逐音评测必须选择参考音频" : "不上传也可分析"); };
+  const updateReferenceForm = () => {
+    const solo = document.getElementById("analysisMode").value === "solo";
+    const title = document.getElementById("referenceTitle");
+    const kindField = document.getElementById("referenceKindField");
+    const referenceKind = document.getElementById("referenceKind");
+    const file = document.getElementById("original");
+    document.getElementById("modeHint").textContent = solo
+      ? "单人练唱会将课堂录音与参考旋律逐段对齐，输出音符级偏差；请使用清晰单人示范人声。"
+      : "课堂整体分析适合合唱、带环境声的录音；结果描述整体表现，不输出逐音跑调结论。";
+    title.innerHTML = solo ? "参考旋律 <b>必填</b>" : "参考旋律 <em>可选</em>";
+    document.getElementById("referenceCaption").textContent = solo
+      ? "单人练唱必须提供清晰的单人主旋律，系统以它作为逐音对齐目标。"
+      : "课堂整体分析可不上传参考旋律；上传后可补充整体轮廓对比。";
+    kindField.classList.toggle("hidden", solo);
+    referenceKind.value = solo ? "vocal" : referenceKind.value;
+    file.required = solo;
+    document.getElementById("originalName").textContent = file.files[0]?.name || (solo ? "逐音评测必须选择参考音频" : "不上传也可分析");
+    document.getElementById("referenceHint").textContent = solo
+      ? "请上传清晰单人示范音频；课堂录音与它分别作为被评测对象和目标旋律。"
+      : (referenceKind.value === "vocal" ? "清晰单人示范会直接作为参考旋律。" : "原唱 / 伴奏混音会先分离人声；若无法可靠分离，会明确停在不可评分状态。");
   };
-  document.getElementById("referenceKind").onchange = event => {
-    document.getElementById("referenceHint").textContent = event.target.value === "vocal"
-      ? "请使用单人、主旋律清晰的示范音频；它会直接作为逐音目标。"
-      : "系统会先分离原唱中的人声；若 Demucs 未安装或分离失败，将显示明确原因并不生成假分数。";
-  };
+  document.getElementById("analysisMode").onchange = updateReferenceForm;
+  document.getElementById("referenceKind").onchange = updateReferenceForm;
+  updateReferenceForm();
 
   async function loadSongs() {
     const select = document.getElementById("songId");

@@ -1,12 +1,13 @@
 import { api } from "../api/client.js";
 import { esc, notify } from "../utils/dom.js";
-import { loadLocalSoundfont, playSampledTracks, soundSourceLabel, stopSampledPlayback } from "../audio/sampled-playback.js";
+import { activateLocalSoundfont, listLocalSoundfonts, loadLocalSoundfont, playSampledTracks, previewLocalSoundfont, removeLocalSoundfont, soundSourceLabel, stopSampledPlayback } from "../audio/sampled-playback.js";
 
 const LABEL = { piano: "钢琴", violin: "小提琴", guzheng: "古筝", erhu: "二胡", guitar: "原声吉他", drum: "非洲鼓" };
 const NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
 const KEYS = Array.from({ length: 61 }, (_, i) => i + 36); // C2–C7
 let audioContext, playing = [], current = null;
 let importState = null;
+let soundfontPacks = [];
 
 function ensureWorkbenchStyle() {
   if (document.getElementById("workbench-refinement")) return;
@@ -83,6 +84,17 @@ async function playTracks(tracks, muted = new Set(), volume = {}, options = {}) 
   }
 }
 function projectCard(p) { return `<button class="workbench-project ${current?.id === p.id ? "active" : ""}" data-project="${p.id}"><b>${esc(p.title)}</b><small>${esc(p.style)} · ${p.tempo} BPM</small></button>`; }
+function formatBytes(size) { return `${Math.max(1, Math.round(Number(size || 0) / 1024 / 1024 * 10) / 10)} MB`; }
+function sampleLibrary(packs) {
+  const selectable = ["guzheng", "erhu", "guitar", "violin", "drum"];
+  const cards = packs.length ? packs.map(pack => `<article class="soundfont-card" data-pack-card="${esc(pack.id)}">
+    <div class="soundfont-card-main"><div class="soundfont-file-icon">♫</div><div><b>${esc(pack.name)}</b><small>本机已保存 · ${formatBytes(pack.size)} · ${esc(pack.presetName || "已解析 Preset")}</small><div class="soundfont-tags">${(pack.instruments || []).map(id => `<span>${esc(LABEL[id] || id)}${pack.activeFor?.includes(id) ? " · 当前" : ""}</span>`).join("")}</div></div></div>
+    <div class="soundfont-actions"><button class="link" data-preview-pack="${esc(pack.id)}">试听</button><button class="link" data-activate-pack="${esc(pack.id)}">设为当前</button><button class="link danger-text" data-remove-pack="${esc(pack.id)}">移除</button></div>
+  </article>`).join("") : `<div class="soundfont-empty"><b>还没有本机采样音色</b><span>导入后会显示文件名、绑定乐器、可试听状态与当前使用状态。</span></div>`;
+  return `<section class="sample-library"><div class="sample-library-head"><div><span class="eyebrow">LOCAL SOUND LIBRARY</span><h3>传统乐器音色</h3><p id="sampleLoadStatus">音色包只保存在这台设备的浏览器内；导入成功后可试听并用于编曲。</p></div><label class="sample-file-button">添加 .sf2 音色包<input id="samplePackUpload" type="file" accept=".sf2" multiple></label></div>
+    <div class="soundfont-binding"><div><b>绑定到乐器</b><small>可同时勾选多个乐器。请只将音色包绑定到它实际包含的音色。</small></div><div class="soundfont-bind-options" id="samplePackInstruments">${selectable.map((id, index) => `<label><input type="checkbox" value="${id}" ${index === 0 ? "checked" : ""}> ${LABEL[id]}</label>`).join("")}</div></div>
+    <div class="soundfont-list" id="soundfontList">${cards}</div></section>`;
+}
 function importStatusView() {
   if (!importState) return '<div id="scoreImportStatus" class="score-import-status" aria-live="polite"></div>';
   const icon = importState.kind === "success" ? "✓" : importState.kind === "error" ? "!" : "…";
@@ -106,6 +118,7 @@ function stage(project) {
 
 export async function renderWorkbench(root) {
   ensureWorkbenchStyle();
+  try { soundfontPacks = await listLocalSoundfonts(); } catch (error) { soundfontPacks = []; console.warn("local soundfont catalog unavailable", error); }
   const projects = await api.workbenchProjects();
   // 侧栏接口只返回轻量摘要；当前工程才按需取完整音符和多轨数据。
   // 这避免工程数量增加后每次点击都传回、解码并渲染全部声部。
@@ -113,7 +126,7 @@ export async function renderWorkbench(root) {
   if (!hasCurrent) current = projects.length ? await api.workbenchProject(projects[0].id) : null;
   const melody = notesText(current?.melody), tempo = current?.tempo || 96;
   const chosenInstruments = current?.arrangement?.instruments || ["piano", "guzheng", "drum"];
-  root.innerHTML = `<div class="page-head workbench-head"><div><h1>数字乐器与编曲工作台</h1><p>写旋律、导入乐谱、试听多轨。</p></div></div><div class="workbench-layout"><aside class="project-rail"><div class="rail-title"><b>我的编曲工程</b><span>${projects.length}</span></div><div id="projectList">${projects.map(projectCard).join("") || '<p class="muted">还没有工程</p>'}</div></aside><div class="workbench-main"><section class="composer-card"><div class="composer-tabs"><b>乐谱与旋律</b><div class="score-actions"><a class="sample-score" href="/assets/samples/score-import-test.musicxml" download>下载示例</a><label class="file-import">导入乐谱 <input id="scoreUpload" type="file" accept=".musicxml,.xml,.mxl,.mid,.midi,.png,.jpg,.jpeg,.webp,.tif,.tiff,.pdf"></label></div></div>${importStatusView()}<div class="composer-fields"><input id="arrangementTitle" value="${esc(current?.title || "我的乡村音乐作品")}" placeholder="工程名称"><input id="melodyText" value="${esc(melody)}" placeholder="例如 C4 D4 E4 G4 A4"><label class="tempo-box"><span>BPM</span><input id="tempo" type="number" min="40" max="220" value="${tempo}"></label></div><div class="transport-bar"><button id="playMelody">▶ 试听旋律</button><button id="stopMelody">■</button><label>键盘音色 <select id="keyboardTimbre">${Object.entries(LABEL).filter(([id]) => id !== "drum").map(([id, name]) => `<option value="${id}">${name}</option>`).join("")}</select></label><label><input id="metronome" type="checkbox"> 节拍器</label><span>4/4 · 16 格编辑区</span></div><div class="sample-pack"><div><b>传统乐器音色</b><small id="sampleLoadStatus">选择古筝、二胡或非洲鼓的 .sf2 音色包</small></div><div class="sample-pack-controls"><select id="samplePackInstrument" aria-label="选择乐器"><option value="guzheng">古筝</option><option value="erhu">二胡</option><option value="drum">非洲鼓</option></select><label class="sample-file-button">选择 .sf2<input id="samplePackUpload" type="file" accept=".sf2"></label></div></div><section class="notation-workspace"><div id="notationPreview">${staff(current?.melody || [], "输入旋律预览")}</div><div id="rollMount">${pianoRoll(current?.melody || [])}</div><div class="keyboard-head"><div><b>完整电子钢琴 · C2–C7</b><span>键位总是钢琴音高；音色选择只改变试听声音</span></div><div><button class="link" id="clearMelody">清空旋律</button><button class="link" id="resetComposer">重置工程</button></div></div>${keyboard()}</section><div class="arrange-controls"><div class="style-pills" id="stylePills">${["乡土抒情", "欢快律动", "童谣清新", "器乐合奏"].map((x, i) => `<button data-style="${x}" class="${(!current && i === 0) || current?.style === x ? "selected" : ""}">${x}</button>`).join("")}</div><div class="instrument-pills" id="instrumentPills">${Object.entries(LABEL).map(([id, name]) => `<label><input type="checkbox" value="${id}" ${chosenInstruments.includes(id) ? "checked" : ""}> ${name}</label>`).join("")}</div><button class="button" id="makeArrangement">✦ 生成 / 更新多轨编曲</button></div><p class="composer-hint">勾选乐器后生成各自声部。</p></section><div id="stage">${stage(current)}</div></div></div>`;
+  root.innerHTML = `<div class="page-head workbench-head"><div><h1>数字乐器与编曲工作台</h1><p>写旋律、导入乐谱、试听多轨。</p></div></div><div class="workbench-layout"><aside class="project-rail"><div class="rail-title"><b>我的编曲工程</b><span>${projects.length}</span></div><div id="projectList">${projects.map(projectCard).join("") || '<p class="muted">还没有工程</p>'}</div></aside><div class="workbench-main"><section class="composer-card"><div class="composer-tabs"><b>乐谱与旋律</b><div class="score-actions"><a class="sample-score" href="/assets/samples/score-import-test.musicxml" download>下载示例</a><label class="file-import">导入乐谱 <input id="scoreUpload" type="file" accept=".musicxml,.xml,.mxl,.mid,.midi,.png,.jpg,.jpeg,.webp,.tif,.tiff,.pdf"></label></div></div>${importStatusView()}<div class="composer-fields"><input id="arrangementTitle" value="${esc(current?.title || "我的乡村音乐作品")}" placeholder="工程名称"><input id="melodyText" value="${esc(melody)}" placeholder="例如 C4 D4 E4 G4 A4"><label class="tempo-box"><span>BPM</span><input id="tempo" type="number" min="40" max="220" value="${tempo}"></label></div><section class="transport-panel"><div class="transport-label"><b>试听控制</b><span>所有键位按钢琴音高输入；演奏音色只影响听到的声音。</span></div><div class="transport-bar"><button id="playMelody">▶ 试听旋律</button><button id="stopMelody">■ 停止</button><label class="instrument-select"><span>演奏音色</span><select id="keyboardTimbre">${Object.entries(LABEL).filter(([id]) => id !== "drum").map(([id, name]) => `<option value="${id}">${name}</option>`).join("")}</select></label><label class="metronome-toggle"><input id="metronome" type="checkbox"><span>节拍器</span></label><span class="meter-badge">4/4 · 16 格编辑区</span></div></section>${sampleLibrary(soundfontPacks)}<section class="notation-workspace"><div id="notationPreview">${staff(current?.melody || [], "输入旋律预览")}</div><div id="rollMount">${pianoRoll(current?.melody || [])}</div><div class="keyboard-head"><div><b>完整电子钢琴 · C2–C7</b><span>键位总是钢琴音高；音色选择只改变试听声音</span></div><div><button class="link" id="clearMelody">清空旋律</button><button class="link" id="resetComposer">重置工程</button></div></div>${keyboard()}</section><div class="arrange-controls"><div class="style-pills" id="stylePills">${["乡土抒情", "欢快律动", "童谣清新", "器乐合奏"].map((x, i) => `<button data-style="${x}" class="${(!current && i === 0) || current?.style === x ? "selected" : ""}">${x}</button>`).join("")}</div><div class="instrument-pills" id="instrumentPills">${Object.entries(LABEL).map(([id, name]) => `<label><input type="checkbox" value="${id}" ${chosenInstruments.includes(id) ? "checked" : ""}> ${name}</label>`).join("")}</div><button class="button" id="makeArrangement">✦ 生成 / 更新多轨编曲</button></div><p class="composer-hint">勾选乐器后生成各自声部。</p></section><div id="stage">${stage(current)}</div></div></div>`;
 
   const melodyInput = root.querySelector("#melodyText"), tempoInput = root.querySelector("#tempo");
   const getNotes = () => textMelody(melodyInput.value, +tempoInput.value || 96);
@@ -141,7 +154,40 @@ export async function renderWorkbench(root) {
       notify(`导入失败：${err.message}`, "error");
     } finally { e.target.value = ""; }
   };
-  root.querySelector("#samplePackUpload").onchange = async e => { const file = e.target.files[0]; if (!file) return; const instrument = root.querySelector("#samplePackInstrument").value, status = root.querySelector("#sampleLoadStatus"); status.textContent = `正在读取 ${file.name}…`; try { const name = await loadLocalSoundfont(instrument, file, ({ loaded, total }) => { status.textContent = `正在读取 ${LABEL[instrument]}音源 ${loaded}/${total}`; }); status.textContent = `${LABEL[instrument]}已绑定 ${name}（仅本浏览器当前会话）`; notify(`${LABEL[instrument]}真实音源已导入；重新打开页面后需再次选择。`); } catch (error) { status.textContent = "音源包导入失败"; notify(`音源包导入失败：${error.message}`, "error"); } finally { e.target.value = ""; } };
+  root.querySelector("#samplePackUpload").onchange = async event => {
+    const files = [...(event.target.files || [])]; if (!files.length) return;
+    const instruments = [...root.querySelectorAll("#samplePackInstruments input:checked")].map(input => input.value);
+    if (!instruments.length) { notify("请先选择至少一种要绑定的乐器", "error"); event.target.value = ""; return; }
+    const status = root.querySelector("#sampleLoadStatus");
+    try {
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        status.textContent = `正在导入 ${index + 1}/${files.length}：${file.name}`;
+        await loadLocalSoundfont(instruments, file, ({ loaded, total }) => { status.textContent = `正在解析 ${file.name} · ${loaded}/${total || "?"}`; });
+      }
+      soundfontPacks = await listLocalSoundfonts();
+      notify(`已将 ${files.length} 个音色包保存到本机音色库，可立即试听。`);
+      await renderWorkbench(root);
+    } catch (error) { status.textContent = "音色包导入失败"; notify(`音色包导入失败：${error.message}`, "error"); }
+    finally { event.target.value = ""; }
+  };
+  root.querySelectorAll("[data-preview-pack]").forEach(button => button.onclick = async () => {
+    const pack = soundfontPacks.find(item => item.id === button.dataset.previewPack); if (!pack) return;
+    const status = root.querySelector("#sampleLoadStatus"); button.disabled = true; status.textContent = `正在加载 ${pack.name} 试听…`;
+    try { await previewLocalSoundfont(pack.id, pack.instruments?.[0], ({ loaded, total }) => { status.textContent = `正在加载 ${pack.name} · ${loaded}/${total || "?"}`; }); status.textContent = `正在试听：${pack.name}`; }
+    catch (error) { status.textContent = "试听失败"; notify(`无法试听：${error.message}`, "error"); }
+    finally { button.disabled = false; }
+  });
+  root.querySelectorAll("[data-activate-pack]").forEach(button => button.onclick = async () => {
+    const pack = soundfontPacks.find(item => item.id === button.dataset.activatePack); if (!pack) return;
+    try { for (const instrument of pack.instruments || []) await activateLocalSoundfont(pack.id, instrument); soundfontPacks = await listLocalSoundfonts(); notify(`${pack.name} 已设为对应乐器的当前音色`); await renderWorkbench(root); }
+    catch (error) { notify(`无法启用音色包：${error.message}`, "error"); }
+  });
+  root.querySelectorAll("[data-remove-pack]").forEach(button => button.onclick = async () => {
+    const pack = soundfontPacks.find(item => item.id === button.dataset.removePack); if (!pack) return;
+    try { await removeLocalSoundfont(pack.id); soundfontPacks = await listLocalSoundfonts(); notify(`已从本机音色库移除 ${pack.name}`); await renderWorkbench(root); }
+    catch (error) { notify(`移除音色包失败：${error.message}`, "error"); }
+  });
   melodyInput.oninput = refresh; tempoInput.onchange = refresh;
   root.querySelector("#clearMelody").onclick = () => { melodyInput.value = ""; refresh(); };
   root.querySelector("#resetComposer").onclick = () => { current = null; renderWorkbench(root); };

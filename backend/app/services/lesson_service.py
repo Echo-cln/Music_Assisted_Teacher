@@ -89,12 +89,31 @@ def _knowledge(db: Session, song: Song, profile: ClassProfile | None, teacher_id
     }
 
 
+def _song_design_basis(song: Song) -> dict:
+    """只从资源库字段取歌曲依据，让快速骨架也不能只替换歌名。"""
+    rhythm_focus = int(song.rhythm_score or 0) >= 3
+    range_focus = int(song.range_score or 0) >= 3
+    primary = "节拍进入与律动" if rhythm_focus else "旋律走向与音高稳定"
+    if range_focus:
+        practice = f"先用 {song.range_note} 范围内的骨干音轻声模唱，再接回完整乐句"
+    elif rhythm_focus:
+        practice = "先读节奏并用声势稳住首拍，再接回旋律演唱"
+    else:
+        practice = "先听辨乐句的起伏，用回声模唱建立稳定音高后再填词"
+    facts = [
+        f"歌曲情绪：{song.mood}", f"歌曲体裁：{song.song_type}", f"调式/音乐特征：{song.mode}",
+        f"建议音域：{song.range_note}", f"节奏难度指标：{song.rhythm_score}",
+    ]
+    return {"primary": primary, "practice": practice, "facts": facts, "rhythm_focus": rhythm_focus, "range_focus": range_focus}
+
+
 def _local_content(
     song: Song, profile: ClassProfile | None, duration: int, activity: str, requirements: str, knowledge: dict
 ) -> dict:
     class_name = profile.name if profile else "通用班级"
     rhythm = profile.rhythm_level if profile else "节奏基础一般"
     pitch = profile.pitch_level if profile else "音准基础一般"
+    basis = _song_design_basis(song)
     parts = [max(3, round(duration * x)) for x in (0.1, 0.14, 0.32, 0.26)]
     parts.append(duration - sum(parts))
     return {
@@ -107,19 +126,19 @@ def _local_content(
             "range_note": song.range_note,
         },
         "objectives": [
-            f"能用自然、稳定的声音演唱《{song.name}》主要乐句，表现“{song.mood}”的情绪。",
-            f"能在律动、拍手或小组接唱中保持基本节拍，改善“{rhythm}”。",
-            f"了解歌曲与{song.province}地方文化的联系，并说出一个听到的音乐特点。",
+            f"能用自然、稳定的声音演唱《{song.name}》主要乐句，并用声音或动作表现“{song.mood}”的情绪。",
+            f"围绕本曲的{basis['primary']}，在律动、拍手或小组接唱中完成可观察的节拍或音高任务，回应班级“{rhythm}”现状。",
+            f"能依据歌曲的{song.song_type}、{song.mode}或{song.range_note}中至少一项资料，说出并展示一个听到的音乐特点。",
         ],
-        "key_points": f"依据{song.range_note}分句学唱，用模唱和声势活动解决音准、节奏问题。",
-        "difficulties": f"针对“{pitch}”情况，避免长时间抽象讲解，先听、先唱、再总结。",
+        "key_points": f"本课优先解决{basis['primary']}：依据{song.range_note}分句学唱，用与“{song.mood}”相匹配的声音和律动完成听、唱、评。",
+        "difficulties": f"结合本曲{song.song_type}与{song.mode}特征，针对班级“{pitch}”情况，把抽象要求落实为可模仿的短句与即时互听。",
         "preparation": "歌曲音频或教师范唱、黑板/投影、节奏卡片；无乐器时使用拍手、跺脚和桌面敲击。",
         "timeline": [
             {
                 "minutes": parts[0],
                 "stage": "情境导入",
-                "teacher": f"用{song.province}生活场景或地方文化线索引出歌曲。",
-                "students": "聆听并用动作或词语表达感受。",
+                "teacher": f"先播放或范唱片段，引导学生捕捉《{song.name}》“{song.mood}”的声音感受；再补充{song.province}相关线索，避免只讲地区介绍。",
+                "students": f"用一个动作或两个关键词回应歌曲的{song.mood}情绪，并说出听到的一个节奏、旋律或音色线索。",
             },
             {
                 "minutes": parts[1],
@@ -130,20 +149,20 @@ def _local_content(
             {
                 "minutes": parts[2],
                 "stage": "分句学唱",
-                "teacher": "先用 lu 模唱旋律，再填歌词；每两句停一次处理音准、咬字和换气。",
-                "students": "听、模仿、互听；基础较弱者先唱骨干音。",
+                "teacher": f"{basis['practice']}；每两句停一次，重点观察学生能否在{song.range_note}内保持稳定起音与换气。",
+                "students": "先用 lu 回声模唱，再填词；基础较弱者先唱骨干音，同伴用“首拍、长音、情绪”三个词互听。",
             },
             {
                 "minutes": parts[3],
                 "stage": "难点练习",
-                "teacher": knowledge["mistake"]["correction"],
-                "students": "轮换练习并记录最容易出错的一句。",
+                "teacher": f"先回到本曲最需要处理的{basis['primary']}，再使用：{knowledge['mistake']['correction']}",
+                "students": "轮换练习并记录最容易出错的一句；能说清是首拍、音高、换气还是情绪表达需要再练。",
             },
             {
                 "minutes": parts[4],
                 "stage": "展示评价",
-                "teacher": "按节拍稳定、声音自然、合作完成三项标准评价。",
-                "students": "小组展示并说出一个优点和一个下次目标。",
+                "teacher": f"按“{basis['primary']}、声音是否表现{song.mood}、合作完成”三项标准评价，并记录下一节需要回看的乐句。",
+                "students": "小组展示，并用证据说出一个优点和一个下次目标。",
             },
         ],
         "theory_explanation": knowledge["theory"],
@@ -169,6 +188,7 @@ def _local_content(
                 "mode": song.mode,
                 "rhythm_score": song.rhythm_score,
                 "mood": song.mood,
+                "design_basis": basis,
             },
             "class_profile": {
                 "name": class_name,

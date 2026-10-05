@@ -142,3 +142,15 @@ def test_preview_adjust_save_and_personal_resource(monkeypatch):
     finally:
         app.dependency_overrides.clear()
         engine.dispose()
+
+
+def test_song_design_basis_changes_with_song_facts():
+    from types import SimpleNamespace
+    from app.services.lesson_service import _song_design_basis
+
+    rhythmic = SimpleNamespace(rhythm_score=5, range_score=1, range_note="c1-c2", mood="欢快", song_type="劳动号子", mode="五声音阶")
+    lyrical = SimpleNamespace(rhythm_score=1, range_score=5, range_note="a-c2", mood="抒情", song_type="山歌", mode="羽调式")
+    first, second = _song_design_basis(rhythmic), _song_design_basis(lyrical)
+    assert first["primary"] != second["primary"]
+    assert "节奏难度指标：5" in first["facts"]
+    assert "a-c2" in second["practice"]

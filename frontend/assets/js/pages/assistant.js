@@ -8,6 +8,32 @@ let selectedSong = null;
 let currentPlan = null;
 let recommendedSongs = [];
 
+function normalizeText(value) {
+  if (Array.isArray(value)) return value.join("
+").replace(/\s+/g, " ").trim();
+  if (value && typeof value === "object") return JSON.stringify(value);
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+function adjustmentChanges(before, after) {
+  const from = before?.content || before || {};
+  const to = after?.content || after || {};
+  const changes = [];
+  const fields = [
+    ["objectives", "教学目标"], ["key_points", "教学重点"], ["difficulties", "教学难点"],
+    ["preparation", "课前准备"], ["theory_explanation", "乐理讲解"], ["mistake_practice", "易错点练习"],
+    ["differentiation", "分层教学"], ["assessment", "课堂评价"],
+  ];
+  fields.forEach(([key, label]) => { if (normalizeText(from[key]) !== normalizeText(to[key])) changes.push({ label, detail: "已按本次要求调整" }); });
+  const beforeTimeline = from.timeline || [], afterTimeline = to.timeline || [];
+  afterTimeline.forEach((stage, index) => {
+    const old = beforeTimeline[index] || {};
+    if (normalizeText(old.teacher) !== normalizeText(stage.teacher) || normalizeText(old.students) !== normalizeText(stage.students)) {
+      changes.push({ label: `课堂流程 · ${stage.stage || `第 ${index + 1} 环节`}`, detail: "教师组织或学生任务已更新" });
+    }
+  });
+  return changes.slice(0, 6);
+}
+
 function classOptions(classes, includeGeneral = false) {
   const general = includeGeneral ? '<option value="">通用模式（不指定班级）</option>' : "";
   return general + classes.map(item => `<option value="${item.id}">${esc(item.name)} · ${esc(item.rhythm_level)}</option>`).join("");
@@ -25,7 +51,7 @@ export async function renderAssistant(container) {
             <label>授课班级<select id="classId">${classOptions(classes)}</select></label>
             <label>课时长度<select id="duration"><option value="40">40 分钟</option><option value="45">45 分钟</option><option value="30">30 分钟</option></select></label>
             <label>课堂偏好<select id="activity"><option>互动与分组合作</option><option>唱游与律动</option><option>地方文化体验</option><option>基础演唱训练</option></select></label>
-            <label>生成模式<select id="strategy"><option value="fast">快速生成 · 立即得到完整骨架</option><option value="deep" selected>深度思考 · 生成细化话术与活动</option></select></label>
+            <label>生成模式<select id="strategy"><option value="fast">快速模式 · 更快得到完整教案</option><option value="deep" selected>深度模式 · 深入生成完整教案</option></select></label>
             <label class="full">补充要求<textarea id="requirements" placeholder="例如：教室只有音响和黑板；学生不太敢开口……"></textarea></label>
             <button class="btn primary" id="recommend">从数据库推荐歌曲</button>
           </div>
@@ -34,7 +60,7 @@ export async function renderAssistant(container) {
             <label>授课班级<select id="manualClassId">${classOptions(classes, true)}</select></label>
             <label>课时长度<select id="manualDuration"><option value="40">40 分钟</option><option value="45">45 分钟</option></select></label>
             <label>课堂偏好<select id="manualActivity"><option>互动与分组合作</option><option>唱游与律动</option><option>地方文化体验</option></select></label>
-            <label>生成模式<select id="manualStrategy"><option value="fast">快速生成 · 立即得到完整骨架</option><option value="deep" selected>深度思考 · 丰富课堂细节</option></select></label>
+            <label>生成模式<select id="manualStrategy"><option value="fast">快速模式 · 更快得到完整教案</option><option value="deep" selected>深度模式 · 深入生成完整教案</option></select></label>
             <label class="full">补充要求<textarea id="manualRequirements"></textarea></label>
             <button class="btn primary" id="manualGenerate">检索并生成教案</button>
           </div>
@@ -153,7 +179,7 @@ async function generate(manual) {
     });
     currentPlan = job.preview;
     renderPreview(document.getElementById("lessonArea"), true, job);
-    notify(strategyElement.value === "fast" ? "快速教案已生成，可继续编辑或保存" : "已生成可用骨架，正在深度补全课堂细节");
+    notify(strategyElement.value === "fast" ? "快速模型正在生成完整教案" : "深度模型正在生成完整教案");
   } catch (error) {
     disableActions(false);
     document.getElementById("lessonArea").innerHTML = `<div class="notice">${esc(error.message)}</div>`;
@@ -223,12 +249,13 @@ async function streamPreviewAdjustment(area, instruction) {
     area.innerHTML = `<section class="card lesson-stream-panel"><h3>正在调整教案</h3><p class="muted">这里显示处理状态，不展示模型内部思维链。</p><div class="loading">AI 正在根据你的要求重新组织教案<i></i><i></i><i></i></div></section>`;
     await api.adjustPreviewStream({ content: currentPlan.content, instruction }, event => {
       if (event.type === "complete") {
-        currentPlan = { ...metadata, ...event.preview, is_saved: false };
+        const nextPlan = { ...metadata, ...event.preview, is_saved: false };
+        currentPlan = { ...nextPlan, adjustment_changes: adjustmentChanges(metadata, nextPlan) };
         renderPreview(area, false);
       }
     });
     disableActions(false);
-    notify("已按要求更新预览，尚未保存");
+    notify("已按要求更新预览；“本次调整重点”已标出实际变更内容，尚未保存。");
   } catch (error) {
     currentPlan = metadata;
     renderPreview(area, false);

@@ -34,7 +34,7 @@ def _build_messages(base: dict, instruction: str, *, adjustment: bool = False, g
     evidence = base.get("generation_context", {})
     contract = """
 【严格输出协议】只输出一个 JSON 对象，不要包装字段或 Markdown。必须包含 title、objectives（字符串数组）、key_points（字符串）、difficulties（字符串）、preparation（字符串）、timeline（对象数组）、theory_explanation（含 term、script）、mistake_practice（含 problem、correction）、differentiation（字符串数组）、assessment（字符串）。
-timeline 项数必须等于输入 lesson；每项只含 teacher 与 students 两个非空字符串。不要输出 summary、minutes、stage、generation_context。总正文控制在 2500 个汉字以内，JSON 结束后立即停止。
+timeline 项数必须等于输入 lesson；每项只含 teacher 与 students 两个非空字符串。不要输出 summary、minutes、stage、generation_context。总正文控制在 3600 个汉字以内，JSON 结束后立即停止。
 """
     if adjustment:
         system_prompt = """
@@ -45,15 +45,15 @@ timeline 项数必须等于输入 lesson；每项只含 teacher 与 students 两
 """ + contract
     elif generation_strategy == "fast":
         system_prompt = """
-你是一名乡村小学音乐教研员。现在执行“快速成课”任务：在给定事实与课时框架内，产出一份简明、完整、可立即上课的音乐教案。
+你是一名乡村小学音乐教研员。现在执行“快速成课”任务：使用更快的模型，在给定事实与课时框架内生成一份完整、细致、可立即上课的音乐教案。
 
 只输出一个合法 JSON 对象：不要 Markdown、不要解释、不要 generation_context。
 
-快速模式只压缩篇幅，不改变教案的教学判断、事实边界、阶段顺序、目标、活动和评价含义：
-1. 每个 timeline.teacher 和 timeline.students 各写 1—2 句，直接交代动作、任务和一句可用课堂话语；避免长段落。
-2. objectives、重点难点、乐理、易错纠正、分层和评价都必须保留，不能因为快速模式而省略任何一个字段或必要信息。
-3. 只删除重复表述、备用方案和冗长修饰，不得将“深度模式”改成另一套教学方案。
-4. 只能使用提供的歌曲、班级和知识库事实；不得编造歌词、简谱或地方文化事实。
+【快速模式的唯一差别是生成速度】
+1. 内容完整度、活动数量、课堂话术质量、个性化程度必须与深度模式相同；不得为了“快速”删减篇幅、字段、教学环节或细节。
+2. 快速来自更快的模型和较短的服务等待路径，不来自模板套用。必须从 evidence.selected_song_from_database 中选至少两项明确事实（如歌曲情绪、体裁、调式、音域、节奏难度、地区）并在目标、课堂流程或练习中落实为具体动作；同时至少落实一项班级画像事实。
+3. 同一地区的不同歌曲不能得到只替换歌名的同构教案。歌曲事实不足时，明确依照现有资料安排活动，不得编造歌词、简谱或地方文化事实。
+4. 每个 timeline.teacher 与 timeline.students 都要写清动作、任务、观察点和可直接使用的课堂语言；目标、重难点、乐理、易错纠正、分层和评价都必须完整保留。
 """ + contract
     else:
         # 深度模式是一次完整的“诊断→决策→落地”生成，而不是快速骨架的扩写版。
@@ -96,7 +96,7 @@ timeline 每一项的 teacher 与 students 均需与该项 stage 和 minutes 对
 
 def stream_lesson_json(base: dict, model: str | None = None, generation_strategy: str = "deep") -> Iterator[str]:
     instruction = (
-        "快速完成一份清晰、可直接执行的课堂教案。"
+        "快速模型生成一份内容完整、细节充分且按歌曲与班级个性化的课堂教案。"
         if generation_strategy == "fast"
         else "深度增强完整音乐教学方案，补足教师决策、课堂话术、学生任务与评价依据。"
     )
