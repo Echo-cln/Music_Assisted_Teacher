@@ -4,7 +4,6 @@ import { activateLocalSoundfont, listLocalSoundfonts, loadLocalSoundfont, playSa
 
 const LABEL = { piano: "钢琴", violin: "小提琴", guzheng: "古筝", erhu: "二胡", guitar: "原声吉他", drum: "非洲鼓" };
 const NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
-const KEYS = Array.from({ length: 61 }, (_, i) => i + 36); // C2–C7
 let audioContext, playing = [], current = null;
 let importState = null;
 let soundfontPacks = [];
@@ -24,11 +23,37 @@ function ensureWorkbenchStyle() {
   style.textContent += `
     .sample-library{padding:15px 16px}.sample-library-head{margin-bottom:8px}.soundfont-binding{display:flex!important;align-items:center!important;gap:8px;margin:8px 0 10px;padding:0;border:0;background:transparent}.soundfont-binding>b{font-size:.8rem;color:#735f54;white-space:nowrap}.soundfont-bind-options{display:flex!important;flex-wrap:wrap;gap:5px;width:auto}.soundfont-bind-options label{min-height:0!important;padding:4px 7px!important;border-radius:99px!important;font-size:.74rem!important}.soundfont-card{grid-template-columns:minmax(0,1fr) auto!important;gap:12px!important;padding:11px 0!important;border:0!important;border-bottom:1px solid #eee2d9!important;background:transparent!important}.soundfont-card:last-child{border-bottom:0!important}.soundfont-card-main{display:grid;grid-template-columns:28px minmax(0,1fr);gap:8px}.soundfont-file-icon{width:26px;height:26px;display:grid;place-items:center;border-radius:8px;background:#f7e6db;color:#a84d36}.soundfont-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}.soundfont-tags span{font-size:.69rem;padding:2px 6px}.soundfont-edit{display:flex!important;align-items:center;gap:8px;margin-top:8px!important;padding-top:8px!important;border-top:1px dashed #eadbd1}.pack-name-field{display:flex!important;align-items:center;gap:5px;margin:0!important;font-size:.75rem;color:#735f54}.pack-name-field input{width:160px!important;max-width:34vw!important;min-height:30px!important;padding:5px 7px!important}.pack-binding{position:relative}.pack-binding summary{list-style:none;cursor:pointer;padding:5px 7px;border:1px solid #e2d2c7;border-radius:8px;color:#8f4936;font-size:.75rem;font-weight:700;background:#fffdfa}.pack-binding summary::-webkit-details-marker{display:none}.pack-binding summary span{display:inline-grid;place-items:center;margin-left:4px;width:16px;height:16px;border-radius:50%;background:#f4e2d7;font-size:.65rem}.pack-binding .soundfont-bind-options{position:absolute;z-index:8;top:34px;left:0;width:260px;padding:8px;border:1px solid #e2d2c7;border-radius:10px;background:#fffdfa;box-shadow:0 12px 30px rgba(91,63,45,.16)}.soundfont-actions{display:flex!important;align-items:center;align-content:center;gap:7px;max-width:unset!important}.soundfont-actions .link{padding:4px 0!important;font-size:.76rem}.staff-caption{margin-bottom:4px!important}.staff-scroll{display:grid!important;justify-items:start!important;gap:3px!important;overflow:visible!important;padding:0!important}.staff-system{width:100%;max-width:980px;margin:0!important;padding:2px 0 5px!important;border:0!important;border-bottom:1px solid #eaded3!important;border-radius:0!important;background:transparent!important}.staff-system:last-child{border-bottom:0!important}.staff-system-head{margin:0 0 1px!important;font-size:.71rem!important}.staff-system svg{display:block;width:100%;max-width:840px;min-width:0!important;height:auto!important;max-height:none!important;margin:0!important}.staff-accidental{font-family:serif;font-size:14px;fill:#a84d36;stroke:none}.score-panel{padding:8px 10px!important}.chord-timeline{margin:8px 0!important;padding:9px 11px!important}.chord-timeline ol{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(62px,78px))!important;justify-content:start!important;overflow:visible!important;gap:5px!important;padding:7px 0 0!important}.chord-timeline li{min-width:0!important;min-height:42px;padding:5px 7px!important;border-radius:8px!important}.chord-timeline li small{font-size:.63rem!important;white-space:nowrap}.chord-timeline li b{font-size:.95rem!important}.toast{width:min(380px,calc(100vw - 30px));white-space:normal;line-height:1.45;box-shadow:0 12px 30px rgba(45,31,25,.22)}@media(max-width:860px){.soundfont-card{grid-template-columns:1fr!important}.soundfont-actions{justify-content:flex-start!important}.pack-name-field input{max-width:58vw!important}.soundfont-binding{align-items:flex-start!important;flex-direction:column}.pack-binding .soundfont-bind-options{width:min(260px,80vw)}.staff-system{max-width:100%}}@media(max-width:560px){.chord-timeline ol{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
   `;
+  // Keep the editor inside its column: no piano strip or roll grid may widen
+  // the whole document. Long ranges are navigated vertically, never sideways.
+  style.textContent += `
+    .workbench-layout,.workbench-main,.composer-card,.notation-workspace,.workbench-stage{min-width:0;max-width:100%}
+    .keyboard-scroll{width:100%;max-width:840px;max-height:340px;overflow-x:hidden!important;overflow-y:auto!important;padding:3px 4px 8px}
+    .virtual-keyboard{display:grid!important;width:100%!important;min-width:0!important;height:auto!important;gap:7px;padding:0!important;overflow:visible!important}
+    .keyboard-octave{display:grid;grid-template-columns:58px minmax(0,1fr);align-items:stretch;gap:8px;min-width:0}
+    .keyboard-range{display:grid;place-items:center;border-radius:8px;background:#f5e9df;color:#8d4935;font-size:.72rem;font-weight:750;white-space:nowrap}
+    .octave-keys{position:relative;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));height:78px;min-width:0}
+    .key.white{position:relative;display:flex;align-items:flex-end;justify-content:center;width:100%;min-width:0;height:78px!important;margin:0!important;padding:0 0 5px;border:1px solid #d8c9bd;border-radius:0 0 7px 7px;background:linear-gradient(#fffefa,#f4ece4);box-shadow:inset 0 -5px 0 #e9ddd1;z-index:1}
+    .key.white b{margin:0!important;color:#765c4f;font-size:.65rem;line-height:1}
+    .key.black{position:absolute;top:0;width:9.5%;height:49px!important;margin:0!important;padding:0;border:1px solid #3e2f2a;border-radius:0 0 5px 5px;background:linear-gradient(90deg,#604940,#241b18);box-shadow:inset 0 -4px 0 #17100e;z-index:2}
+    .keyboard-end{display:grid;grid-template-columns:58px minmax(0,1fr);gap:8px;height:40px}
+    .keyboard-end .key.white{width:14.285%;height:40px!important}
+    .piano-roll{width:100%;max-width:100%;max-height:none!important;overflow:hidden!important}
+    .roll-head{align-items:center;min-width:0}.roll-head span{white-space:normal;text-align:right}
+    .roll-grid{display:grid!important;grid-template-columns:38px minmax(0,1fr)!important;width:100%;min-width:0!important;max-width:100%;max-height:320px!important;overflow-x:hidden!important;overflow-y:auto!important}
+    .roll-labels,.roll-cells{grid-template-rows:repeat(61,18px)!important;min-width:0!important;width:100%}
+    .roll-labels span,.roll-row,.roll-cell{height:18px!important;min-height:18px!important;box-sizing:border-box}
+    .roll-row{display:grid!important;grid-template-columns:repeat(var(--roll-steps),minmax(0,1fr))!important;width:100%;min-width:0!important}
+    .roll-cell{width:auto!important;min-width:0!important;padding:0!important}
+    .roll-cell.bar-end{border-right:2px solid #c9aa98!important}
+    .staff-scroll{justify-items:start!important;max-width:100%;overflow:hidden!important}
+    .staff-system{max-width:min(100%,980px)!important}
+    .staff-system svg{max-width:100%!important;min-width:0!important}
+    @media(max-width:620px){.keyboard-octave,.keyboard-end{grid-template-columns:42px minmax(0,1fr);gap:5px}.octave-keys{height:68px}.key.white{height:68px!important}.key.black{height:43px!important;width:9%!important}.keyboard-end .key.white{height:36px!important}.roll-head{align-items:flex-start;flex-direction:column;gap:4px}.roll-head span{text-align:left}.roll-grid{grid-template-columns:30px minmax(0,1fr)!important;max-height:300px!important}}
+  `;
   document.head.append(style);
 }
 
 const noteName = pitch => `${NAMES[pitch % 12]}${Math.floor(pitch / 12) - 1}`;
-const isBlack = pitch => [1, 3, 6, 8, 10].includes(pitch % 12);
 function tokenPitch(token) {
   const m = String(token).trim().match(/^([A-Ga-g])([#♯b♭]?)([0-8])$/); if (!m) return null;
   const base = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1].toUpperCase()];
@@ -90,14 +115,21 @@ function staff(notes, title, meter = meterOf(), tempo = current?.tempo || 96) {
   return `<div class="staff-caption"><b>${title}</b><span>${safe.length ? `${safe.length} 个音符 · ${meter.numerator}/4 · ${count} 小节 · 每行最多 ${barsPerSystem} 小节` : "从键盘、卷帘或乐谱开始"}</span></div><div class="staff-scroll">${systems.map(oneSystem).join("")}</div>`;
 }
 function keyboard() {
-  const whites = KEYS.filter(p => !isBlack(p));
-  return `<div class="keyboard-scroll"><div class="virtual-keyboard" style="--white-count:${whites.length}">${whites.map(p => `<button class="key white" data-key="${p}" title="${noteName(p)}"><b>${p % 12 === 0 ? noteName(p) : ""}</b></button>${KEYS.includes(p + 1) && isBlack(p + 1) ? `<button class="key black" data-key="${p + 1}" title="${noteName(p + 1)}"></button>` : ""}`).join("")}</div></div>`;
+  const whites = [0, 2, 4, 5, 7, 9, 11], blackPositions = [[1, 1], [3, 2], [6, 4], [8, 5], [10, 6]];
+  const octaves = Array.from({ length: 5 }, (_, index) => index + 2).map(octave => {
+    const base = (octave + 1) * 12;
+    const whiteKeys = whites.map(semitone => `<button class="key white" data-key="${base + semitone}" title="${noteName(base + semitone)}"><b>${semitone === 0 ? `C${octave}` : ""}</b></button>`).join("");
+    const blackKeys = blackPositions.map(([semitone, boundary]) => `<button class="key black" data-key="${base + semitone}" title="${noteName(base + semitone)}" style="left:${(boundary / 7 * 100 - 4.75).toFixed(3)}%"></button>`).join("");
+    return `<div class="keyboard-octave"><span class="keyboard-range">C${octave}–B${octave}</span><div class="octave-keys">${whiteKeys}${blackKeys}</div></div>`;
+  }).join("");
+  return `<div class="keyboard-scroll"><div class="virtual-keyboard">${octaves}<div class="keyboard-end"><span class="keyboard-range">最高音</span><div><button class="key white" data-key="96" title="C7"><b>C7</b></button></div></div></div></div>`;
 }
 function pianoRoll(notes, tempo, meter) {
   const pitches = Array.from({ length: 61 }, (_, i) => 96 - i), stepSeconds = 60 / tempo / meter.division;
   const steps = Array.from({ length: meter.bars * meter.numerator * meter.division }, (_, i) => i);
+  const stepsPerBar = meter.numerator * meter.division;
   const active = new Set((notes || []).map(n => `${n.pitch}:${Math.round(n.start / stepSeconds)}`));
-  return `<section class="piano-roll"><div class="roll-head"><b>钢琴卷帘编辑 · C2–C7</b><span class="roll-meter">${meter.bars} 小节 · ${meter.numerator}/4 · 每拍 ${meter.division} 格 · 可上下滚动</span></div><div class="roll-grid"><div class="roll-labels">${pitches.map(p => `<span>${p % 12 === 0 ? noteName(p) : ""}</span>`).join("")}</div><div class="roll-cells">${pitches.map(p => `<div class="roll-row">${steps.map(s => `<button class="roll-cell ${active.has(`${p}:${s}`) ? "active" : ""}" data-roll-pitch="${p}" data-roll-step="${s}" title="${noteName(p)} · 第 ${Math.floor(s/(meter.numerator*meter.division))+1} 小节"></button>`).join("")}</div>`).join("")}</div></div></section>`;
+  return `<section class="piano-roll"><div class="roll-head"><b>钢琴卷帘编辑 · C2–C7</b><span class="roll-meter">${meter.bars} 小节 · ${meter.numerator}/4 · 每拍 ${meter.division} 格 · 横轴不滚动</span></div><div class="roll-grid" style="--roll-steps:${steps.length}"><div class="roll-labels">${pitches.map(p => `<span>${p % 12 === 0 ? noteName(p) : ""}</span>`).join("")}</div><div class="roll-cells">${pitches.map(p => `<div class="roll-row">${steps.map(s => `<button class="roll-cell ${active.has(`${p}:${s}`) ? "active" : ""} ${(s + 1) % stepsPerBar === 0 ? "bar-end" : ""}" data-roll-pitch="${p}" data-roll-step="${s}" title="${noteName(p)} · 第 ${Math.floor(s/stepsPerBar)+1} 小节"></button>`).join("")}</div>`).join("")}</div></div></section>`;
 }
 
 function stop() { playing.forEach(node => { try { node.stop(); } catch (_) {} }); playing = []; stopSampledPlayback(); }
