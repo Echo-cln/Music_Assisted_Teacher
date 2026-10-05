@@ -1,4 +1,554 @@
-YªçŠx-®éÜj×¢ëiºÚ+Š§j[h‘éÜ¢éí÷NõN‹Z–‹­¦ëeŠw¬Õ¥µÁ½ÉĞ©Í½¸)¥µÁ½ÉĞÉ”)™É½´½Áä¥µÁ½ÉĞ‘••Á½Áä)™É½´½±±•Ñ¥½¹Ì¹…‰Œ¥µÁ½ÉĞ%Ñ•É…Ñ½È()™É½´©Í½¹}É•Á…¥È¥µÁ½ÉĞÉ•Á…¥É}©Í½¸()™É½´ÍÅ±…±¡•µä¥µÁ½ÉĞ½É|°Í•±•Ğ)™É½´ÍÅ±…±¡•µä¹½É´¥µÁ½ÉĞM•ÍÍ¥½¸()™É½´…ÁÀ¹½É”¹½¹™¥œ¥µÁ½ÉĞ•Ñ}Í•ÑÑ¥¹Ì)™É½´…ÁÀ¹µ½‘•±Ì¹•¹Ñ¥Ñ¥•Ì¥µÁ½ÉĞ€ (€€€±…ÍÍAÉ½™¥±”°(€€€±…ÍÍÉ½½µI•½É°(€€€1•ÍÍ½¹A±…¸°(€€€5ÕÍ¥Q¡•½Éä°(€€€M½¹œ°(€€€Q•…¡¥¹…µ”°(€€€Q•…¡¥¹5¥ÍÑ…­”°(¤)™É½´…ÁÀ¹Í•ÉÙ¥•Ì¹…¥}ÁÉ½Ù¥‘•È¥µÁ½ÉĞÍÑÉ•…µ}…‘©ÕÍÑ•‘}±•ÍÍ½¹}©Í½¸°ÍÑÉ•…µ}±•ÍÍ½¹}©Í½¸(()‘•˜}Ù¥Í¥‰±”¡µ½‘•°°Ñ•…¡•É}¥è¥¹Ğ¤è(€€€É•ÑÕÉ¸½É|¡µ½‘•°¹½İ¹•É}Ñ•…¡•É}¥¹¥Í|¡9½¹”¤°µ½‘•°¹½İ¹•É}Ñ•…¡•É}¥€ôôÑ•…¡•É}¥¤(()‘•˜}­¹½İ±•‘”¡‘ˆèM•ÍÍ¥½¸°Í½¹œèM½¹œ°ÁÉ½™¥±”è±…ÍÍAÉ½™¥±”ğ9½¹”°Ñ•…¡•É}¥è¥¹Ğ¤€´ø‘¥Ğè(€€€É…‘”€ôÁÉ½™¥±”¹É…‘”¥˜ÁÉ½™¥±”•±Í”€Ì(€€€…µ•Ì€ô±¥ÍĞ¡‘ˆ¹Í…±…ÉÌ¡Í•±•Ğ¡Q•…¡¥¹…µ”¤¹İ¡•É”¡}Ù¥Í¥‰±”¡Q•…¡¥¹…µ”°Ñ•…¡•É}¥¤¤¤¹…±° ¤¤(€€€Ñ¡•½É¥•Ì€ô±¥ÍĞ¡‘ˆ¹Í…±…ÉÌ¡Í•±•Ğ¡5ÕÍ¥Q¡•½Éä¤¹İ¡•É”¡}Ù¥Í¥‰±”¡5ÕÍ¥Q¡•½Éä°Ñ•…¡•É}¥¤¤¤¹…±° ¤¤(€€€µ¥ÍÑ…­•Ì€ô±¥ÍĞ¡‘ˆ¹Í…±…ÉÌ¡Í•±•Ğ¡Q•…¡¥¹5¥ÍÑ…­”¤¹İ¡•É”¡}Ù¥Í¥‰±”¡Q•…¡¥¹5¥ÍÑ…­”°Ñ•…¡•É}¥¤¤¤¹…±° ¤¤(€€€…µ•Ì¹Í½ÉĞ¡­•äõ±…µ‰‘„¥Ñ•´è¥Ñ•´¹½İ¹•É}Ñ•…¡•É}¥€ôôÑ•…¡•É}¥°É•Ù•ÉÍ”õQÉÕ”¤(€€€Ñ¡•½É¥•Ì¹Í½ÉĞ¡­•äõ±…µ‰‘„¥Ñ•´è¥Ñ•´¹½İ¹•É}Ñ•…¡•É}¥€ôôÑ•…¡•É}¥°É•Ù•ÉÍ”õQÉÕ”¤(€€€µ¥ÍÑ…­•Ì¹Í½ÉĞ¡­•äõ±…µ‰‘„¥Ñ•´è¥Ñ•´¹½İ¹•É}Ñ•…¡•É}¥€ôôÑ•…¡•É}¥°É•Ù•ÉÍ”õQÉÕ”¤(€€€¥˜¹½Ğ…µ•Ì½È¹½ĞÑ¡•½É¥•Ì½È¹½Ğµ¥ÍÑ…­•Ìè(€€€€€€€É…¥Í”Y…±Õ•ÉÉ½È ‹šVg–¶›~—¢¾–êO’â7–º3šVÓ¾ò3¢¾ß–#–¾ó–—¦~Ï’æCšâãš"?’æCB–J3šbO¦Rgêƒš¶¢Öšê@ˆ¤((€€€ÑÉ…¥ÑÌ€ô€ˆ€ˆ¹©½¥¸ (€€€€€€€ƒÍ;ÖÚ$z{-®éÜj×ValueError("æ•™æ¡ˆåŒ…å«æ— æ³•ä¿å­˜çš„æ•°æ®æ ¼å¼") from exc
+import json
+import re
+from copy import deepcopy
+from collections.abc import Iterator
+
+from json_repair import repair_json
+
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+from app.models.entities import (
+    ClassProfile,
+    ClassroomRecord,
+    LessonPlan,
+    MusicTheory,
+    Song,
+    TeachingGame,
+    TeachingMistake,
+)
+from app.services.ai_provider import stream_adjusted_lesson_json, stream_lesson_json
+
+
+def _visible(model, teacher_id: int):
+    return or_(model.owner_teacher_id.is_(None), model.owner_teacher_id == teacher_id)
+
+
+def _knowledge(db: Session, song: Song, profile: ClassProfile | None, teacher_id: int) -> dict:
+    grade = profile.grade if profile else 3
+    games = list(db.scalars(select(TeachingGame).where(_visible(TeachingGame, teacher_id))).all())
+    theories = list(db.scalars(select(MusicTheory).where(_visible(MusicTheory, teacher_id))).all())
+    mistakes = list(db.scalars(select(TeachingMistake).where(_visible(TeachingMistake, teacher_id))).all())
+    games.sort(key=lambda item: item.owner_teacher_id == teacher_id, reverse=True)
+    theories.sort(key=lambda item: item.owner_teacher_id == teacher_id, reverse=True)
+    mistakes.sort(key=lambda item: item.owner_teacher_id == teacher_id, reverse=True)
+    if not games or not theories or not mistakes:
+        raise ValueError("æ•™å­¦çŸ¥è¯†åº“ä¸å®Œæ•´ï¼Œè¯·å…ˆå¯¼å…¥éŸ³ä¹æ¸¸æˆã€ä¹ç†å’Œæ˜“é”™çº æ­£èµ„æº")
+
+    traits = " ".join(
+        value
+        for value in (
+            profile.activity_level if profile else "",
+            profile.cooperation if profile else "",
+            profile.preferred_method if profile else "",
+            profile.rhythm_level if profile else "",
+        )
+    )
+
+    def game_score(game: TeachingGame) -> int:
+        score = 0
+        grade_numbers = [int(value) for value in re.findall(r"[1-6]", game.grade or "")]
+        if grade_numbers and min(grade_numbers) <= grade <= max(grade_numbers):
+            score += 8
+        condition = (game.match_condition or "") + " " + (game.personality or "")
+        for keyword in ("èŠ‚å¥", "åˆä½œ", "äº’åŠ¨", "å¾‹åŠ¨", "æ¼”å”±"):
+            if keyword in condition and keyword in traits:
+                score += 3
+        if "å¼±" in (profile.rhythm_level if profile else "") and "èŠ‚å¥" in condition:
+            score += 5
+        if song.province in condition or song.region in condition:
+            score += 4
+        if "æ¬¢å¿«" in song.mood and any(word in condition for word in ("æ¬¢å¿«", "æ´»è·ƒ")):
+            score += 3
+        if "å¼±" in (profile.pitch_level if profile else "") and "éŸ³å‡†" in condition:
+            score += 3
+        if game.owner_teacher_id == teacher_id:
+            score += 1
+        return score
+
+    game = max(games, key=game_score)
+    focus = "èŠ‚å¥" if profile and any(word in profile.rhythm_level for word in ("å¼±", "ä¸è¶³")) else "éŸ³å‡†"
+    theory_keyword = "èŠ‚æ‹" if focus == "èŠ‚å¥" else "æ—‹å¾‹"
+    theory = next((item for item in theories if theory_keyword in (item.category or "")), None)
+    theory = theory or next((item for item in theories if "èŠ‚æ‹" in (item.category or "")), None) or theories[0]
+    mistake = next((item for item in mistakes if focus in (item.category or "")), None) or mistakes[0]
+    return {
+        "game": {
+            "name": game.name,
+            "category": game.category,
+            "grade": game.grade,
+            "match_condition": game.match_condition,
+            "instructions": game.instructions,
+        },
+        "theory": {
+            "term": theory.term,
+            "script": theory.lower_grade_script if grade <= 3 else theory.upper_grade_script,
+        },
+        "mistake": {"problem": mistake.problem, "correction": mistake.correction},
+    }
+
+
+def _song_design_basis(song: Song) -> dict:
+    """åªä»èµ„æºåº“å­—æ®µå–æ­Œæ›²ä¾æ®ï¼Œè®©å¿«é€Ÿéª¨æ¶ä¹Ÿä¸èƒ½åªæ›¿æ¢æ­Œåã€‚"""
+    rhythm_focus = int(song.rhythm_score or 0) >= 3
+    range_focus = int(song.range_score or 0) >= 3
+    primary = "èŠ‚æ‹è¿›å…¥ä¸å¾‹åŠ¨" if rhythm_focus else "æ—‹å¾‹èµ°å‘ä¸éŸ³é«˜ç¨³å®š"
+    if range_focus:
+        practice = f"å…ˆç”¨ {song.range_note} èŒƒå›´å†…çš„éª¨å¹²éŸ³è½»å£°æ¨¡å”±ï¼Œå†æ¥å›å®Œæ•´ä¹å¥"
+    elif rhythm_focus:
+        practice = "å…ˆè¯»èŠ‚å¥å¹¶ç”¨å£°åŠ¿ç¨³ä½é¦–æ‹ï¼Œå†æ¥å›æ—‹å¾‹æ¼”å”±"
+    else:
+        practice = "å…ˆå¬è¾¨ä¹å¥çš„èµ·ä¼ï¼Œç”¨å›å£°æ¨¡å”±å»ºç«‹ç¨³å®šéŸ³é«˜åå†å¡«è¯"
+    facts = [
+        f"æ­Œæ›²æƒ…ç»ªï¼š{song.mood}", f"æ­Œæ›²ä½“è£ï¼š{song.song_type}", f"è°ƒå¼/éŸ³ä¹ç‰¹å¾ï¼š{song.mode}",
+        f"å»ºè®®éŸ³åŸŸï¼š{song.range_note}", f"èŠ‚å¥éš¾åº¦æŒ‡æ ‡ï¼š{song.rhythm_score}",
+    ]
+    return {"primary": primary, "practice": practice, "facts": facts, "rhythm_focus": rhythm_focus, "range_focus": range_focus}
+
+
+def _local_content(
+    song: Song, profile: ClassProfile | None, duration: int, activity: str, requirements: str, knowledge: dict
+) -> dict:
+    class_name = profile.name if profile else "é€šç”¨ç­çº§"
+    rhythm = profile.rhythm_level if profile else "èŠ‚å¥åŸºç¡€ä¸€èˆ¬"
+    pitch = profile.pitch_level if profile else "éŸ³å‡†åŸºç¡€ä¸€èˆ¬"
+    basis = _song_design_basis(song)
+    parts = [max(3, round(duration * x)) for x in (0.1, 0.14, 0.32, 0.26)]
+    parts.append(duration - sum(parts))
+    return {
+        "title": f"ã€Š{song.name}ã€‹ç­çº§é€‚é…éŸ³ä¹è¯¾",
+        "summary": {
+            "class_name": class_name,
+            "duration": duration,
+            "region": f"{song.region} Â· {song.province}",
+            "difficulty": song.difficulty,
+            "range_note": song.range_note,
+        },
+        "objectives": [
+            f"èƒ½ç”¨è‡ªç„¶ã€ç¨³å®šçš„å£°éŸ³æ¼”å”±ã€Š{song.name}ã€‹ä¸»è¦ä¹å¥ï¼Œå¹¶ç”¨å£°éŸ³æˆ–åŠ¨ä½œè¡¨ç°â€œ{song.mood}â€çš„æƒ…ç»ªã€‚",
+            f"å›´ç»•æœ¬æ›²çš„{basis['primary']}ï¼Œåœ¨å¾‹åŠ¨ã€æ‹æ‰‹æˆ–å°ç»„æ¥å”±ä¸­å®Œæˆå¯è§‚å¯Ÿçš„èŠ‚æ‹æˆ–éŸ³é«˜ä»»åŠ¡ï¼Œå›åº”ç­çº§â€œ{rhythm}â€ç°çŠ¶ã€‚",
+            f"èƒ½ä¾æ®æ­Œæ›²çš„{song.song_type}ã€{song.mode}æˆ–{song.range_note}ä¸­è‡³å°‘ä¸€é¡¹èµ„æ–™ï¼Œè¯´å‡ºå¹¶å±•ç¤ºä¸€ä¸ªå¬åˆ°çš„éŸ³ä¹ç‰¹ç‚¹ã€‚",
+        ],
+        "key_points": f"æœ¬è¯¾ä¼˜å…ˆè§£å†³{basis['primary']}ï¼šä¾æ®{song.range_note}åˆ†å¥å­¦å”±ï¼Œç”¨ä¸â€œ{song.mood}â€ç›¸åŒ¹é…çš„å£°éŸ³å’Œå¾‹åŠ¨å®Œæˆå¬ã€å”±ã€è¯„ã€‚",
+        "difficulties": f"ç»“åˆæœ¬æ›²{song.song_type}ä¸{song.mode}ç‰¹å¾ï¼Œé’ˆå¯¹ç­çº§â€œ{pitch}â€æƒ…å†µï¼ŒæŠŠæŠ½è±¡è¦æ±‚è½å®ä¸ºå¯æ¨¡ä»¿çš„çŸ­å¥ä¸å³æ—¶äº’å¬ã€‚",
+        "preparation": "æ­Œæ›²éŸ³é¢‘æˆ–æ•™å¸ˆèŒƒå”±ã€é»‘æ¿/æŠ•å½±ã€èŠ‚å¥å¡ç‰‡ï¼›æ— ä¹å™¨æ—¶ä½¿ç”¨æ‹æ‰‹ã€è·ºè„šå’Œæ¡Œé¢æ•²å‡»ã€‚",
+        "timeline": [
+            {
+                "minutes": parts[0],
+                "stage": "æƒ…å¢ƒå¯¼å…¥",
+                "teacher": f"å…ˆæ’­æ”¾æˆ–èŒƒå”±ç‰‡æ®µï¼Œå¼•å¯¼å­¦ç”Ÿæ•æ‰ã€Š{song.name}ã€‹â€œ{song.mood}â€çš„å£°éŸ³æ„Ÿå—ï¼›å†è¡¥å……{song.province}ç›¸å…³çº¿ç´¢ï¼Œé¿å…åªè®²åœ°åŒºä»‹ç»ã€‚",
+                "students": f"ç”¨ä¸€ä¸ªåŠ¨ä½œæˆ–ä¸¤ä¸ªå…³é”®è¯å›åº”æ­Œæ›²çš„{song.mood}æƒ…ç»ªï¼Œå¹¶è¯´å‡ºå¬åˆ°çš„ä¸€ä¸ªèŠ‚å¥ã€æ—‹å¾‹æˆ–éŸ³è‰²çº¿ç´¢ã€‚",
+            },
+            {
+                "minutes": parts[1],
+                "stage": knowledge["game"]["name"],
+                "teacher": knowledge["game"]["instructions"],
+                "students": "ä»¥å°ç»„å½¢å¼å®ŒæˆèŠ‚å¥æˆ–å£°éŸ³æ¨¡ä»¿ã€‚",
+            },
+            {
+                "minutes": parts[2],
+                "stage": "åˆ†å¥å­¦å”±",
+                "teacher": f"{basis['practice']}ï¼›æ¯ä¸¤å¥åœä¸€æ¬¡ï¼Œé‡ç‚¹è§‚å¯Ÿå­¦ç”Ÿèƒ½å¦åœ¨{song.range_note}å†…ä¿æŒç¨³å®šèµ·éŸ³ä¸æ¢æ°”ã€‚",
+                "students": "å…ˆç”¨ lu å›å£°æ¨¡å”±ï¼Œå†å¡«è¯ï¼›åŸºç¡€è¾ƒå¼±è€…å…ˆå”±éª¨å¹²éŸ³ï¼ŒåŒä¼´ç”¨â€œé¦–æ‹ã€é•¿éŸ³ã€æƒ…ç»ªâ€ä¸‰ä¸ªè¯äº’å¬ã€‚",
+            },
+            {
+                "minutes": parts[3],
+                "stage": "éš¾ç‚¹ç»ƒä¹ ",
+                "teacher": f"å…ˆå›åˆ°æœ¬æ›²æœ€éœ€è¦å¤„ç†çš„{basis['primary']}ï¼Œå†ä½¿ç”¨ï¼š{knowledge['mistake']['correction']}",
+                "students": "è½®æ¢ç»ƒä¹ å¹¶è®°å½•æœ€å®¹æ˜“å‡ºé”™çš„ä¸€å¥ï¼›èƒ½è¯´æ¸…æ˜¯é¦–æ‹ã€éŸ³é«˜ã€æ¢æ°”è¿˜æ˜¯æƒ…ç»ªè¡¨è¾¾éœ€è¦å†ç»ƒã€‚",
+            },
+            {
+                "minutes": parts[4],
+                "stage": "å±•ç¤ºè¯„ä»·",
+                "teacher": f"æŒ‰â€œ{basis['primary']}ã€å£°éŸ³æ˜¯å¦è¡¨ç°{song.mood}ã€åˆä½œå®Œæˆâ€ä¸‰é¡¹æ ‡å‡†è¯„ä»·ï¼Œå¹¶è®°å½•ä¸‹ä¸€èŠ‚éœ€è¦å›çœ‹çš„ä¹å¥ã€‚",
+                "students": "å°ç»„å±•ç¤ºï¼Œå¹¶ç”¨è¯æ®è¯´å‡ºä¸€ä¸ªä¼˜ç‚¹å’Œä¸€ä¸ªä¸‹æ¬¡ç›®æ ‡ã€‚",
+            },
+        ],
+        "theory_explanation": knowledge["theory"],
+        "mistake_practice": knowledge["mistake"],
+        "differentiation": [
+            "åŸºç¡€å±‚ï¼šèƒ½è·Ÿéšæ•™å¸ˆç¨³å®šå”±å®Œä¸»è¦ä¹å¥ã€‚",
+            "æé«˜å±‚ï¼šåŠ å…¥å£°åŠ¿ä¼´å¥æˆ–æ‹…ä»»å°ç»„é¢†å”±ã€‚",
+            "æ”¯æŒç­–ç•¥ï¼šéŸ³å‡†ä¸ç¨³è€…å…ˆè½»å£°æ¨¡å”±ï¼Œå†é€æ­¥æ‰©å¤§åˆ°å…¨ç­ã€‚",
+        ],
+        "assessment": "å­¦ç”Ÿå®Œæˆä¸‰é¢—æ˜Ÿè‡ªè¯„ï¼šèŠ‚æ‹ç¨³å®šã€å£°éŸ³è‡ªç„¶ã€åˆä½œå®Œæˆã€‚æ•™å¸ˆè®°å½•æœ€å®¹æ˜“å‡ºé”™çš„ä¹å¥ã€‚",
+        "activity_preference": activity,
+        "teacher_requirements": requirements,
+        "generation_context": {
+            "selected_song_from_database": {
+                "name": song.name,
+                "region": song.region,
+                "province": song.province,
+                "grade": song.grade,
+                "difficulty": song.difficulty,
+                "range_note": song.range_note,
+                "source": song.source,
+                "song_type": song.song_type,
+                "mode": song.mode,
+                "rhythm_score": song.rhythm_score,
+                "mood": song.mood,
+                "design_basis": basis,
+            },
+            "class_profile": {
+                "name": class_name,
+                "grade": profile.grade if profile else None,
+                "student_count": profile.student_count if profile else None,
+                "province": profile.province if profile else None,
+                "learning_level": profile.learning_level if profile else None,
+                "activity_level": profile.activity_level if profile else None,
+                "cooperation": profile.cooperation if profile else None,
+                "pitch_level": pitch,
+                "rhythm_level": rhythm,
+                "theory_level": profile.theory_level if profile else None,
+                "preferred_method": profile.preferred_method if profile else None,
+                "common_problems": profile.common_problems if profile else None,
+                "teacher_notes": profile.teacher_notes if profile else None,
+            },
+            "matched_database_resources": knowledge,
+        },
+    }
+
+
+def build_base_preview(
+    db: Session,
+    song: Song,
+    profile: ClassProfile | None,
+    duration: int,
+    activity: str,
+    requirements: str,
+    teacher_id: int,
+) -> dict:
+    return _local_content(song, profile, duration, activity, requirements, _knowledge(db, song, profile, teacher_id))
+
+
+def _chunks(base: dict, generation_strategy: str = "deep") -> tuple[str, Iterator[str]]:
+    settings = get_settings()
+    configured = bool(settings.ai_fast_api_key or settings.ai_api_key) if generation_strategy == "fast" else bool(settings.ai_api_key)
+    if configured:
+        return "ai", stream_lesson_json(base, generation_strategy=generation_strategy)
+    content = json.dumps(base, ensure_ascii=False)
+    return "rules", (content[i : i + 120] for i in range(0, len(content), 120))
+
+
+def _adjustment_chunks(content: dict, instruction: str) -> tuple[str, Iterator[str]]:
+    if get_settings().ai_api_key:
+        return "ai", stream_adjusted_lesson_json(content, instruction)
+    adjusted = json.loads(json.dumps(content, ensure_ascii=False))
+    adjusted["teacher_requirements"] = instruction
+    raw = json.dumps(adjusted, ensure_ascii=False)
+    return "rules", (raw[i : i + 120] for i in range(0, len(raw), 120))
+
+
+def _text_value(value: object, *, limit: int = 1800) -> str:
+    """æŠŠæ¨¡å‹çš„åˆç†å¯¹è±¡/åˆ—è¡¨å›ç­”è½¬æ¢ä¸ºé¡µé¢å¯ç¼–è¾‘çš„æ–‡æœ¬ï¼Œä¸ç”¨éª¨æ¶è¡¥å†™å†…å®¹ã€‚"""
+    if isinstance(value, str):
+        return value.strip()[:limit]
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, list):
+        parts = [_text_value(item, limit=limit) for item in value]
+        return "ï¼›".join(item for item in parts if item)[:limit]
+    if isinstance(value, dict):
+        preferred = ("content", "text", "description", "script", "criteria", "method", "evidence", "teacher", "students")
+        parts = []
+        for key in preferred:
+            if key in value:
+                text = _text_value(value[key], limit=limit)
+                if text:
+                    parts.append(text)
+        if not parts:
+            for key, item in value.items():
+                text = _text_value(item, limit=limit)
+                if text:
+                    parts.append(f"{key}ï¼š{text}")
+        return "ï¼›".join(parts)[:limit]
+    return ""
+
+
+def _string_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        result = [_text_value(item, limit=500) for item in value]
+    elif isinstance(value, str):
+        result = [item.strip(" -â€¢\t") for item in re.split(r"[\nï¼›;]+", value) if item.strip(" -â€¢\t")]
+    else:
+        result = []
+    return [item for item in result if item][:8]
+
+
+def _mapping_value(value: object, base_value: dict) -> dict:
+    if isinstance(value, dict):
+        result = {}
+        for key in base_value:
+            # å¸¸è§æ¨¡å‹ä¼šç”¨ explanation/plan æ›¿ä»£ script/correctionã€‚
+            aliases = {"script": ("script", "explanation", "content", "text"), "correction": ("correction", "action", "solution", "content", "text"), "term": ("term", "name", "title"), "problem": ("problem", "error", "issue")}
+            candidate = next((value.get(name) for name in aliases.get(key, (key,)) if value.get(name) is not None), None)
+            text = _text_value(candidate, limit=900)
+            if text:
+                result[key] = text
+        return {**base_value, **result}
+    text = _text_value(value, limit=900)
+    if not text:
+        return {}
+    # å­—ç¬¦ä¸²æœ‰æ˜ç¡®æ­£æ–‡æ—¶ï¼ŒæŠŠå®ƒæ”¾åœ¨å¯å±•ç¤ºçš„æ­£æ–‡é”®ï¼›æ ‡é¢˜/æœ¯è¯­ç»§ç»­æ¥è‡ªéª¨æ¶äº‹å®ã€‚
+    result = dict(base_value)
+    target = "script" if "script" in result else "correction" if "correction" in result else next(iter(result), "content")
+    result[target] = text
+    return result
+
+
+def _normalize_generated(generated: dict, base: dict) -> dict:
+    """æ¥å—ä¾›åº”å•†å¸¸è§ JSON å½¢æ€å·®å¼‚ï¼Œä¹‹åä»ä¸¥æ ¼æ£€æŸ¥å­—æ®µæ˜¯å¦çœŸå®å­˜åœ¨ã€‚"""
+    normalized = dict(generated)
+    for field in ("title", "key_points", "difficulties", "preparation", "assessment"):
+        normalized[field] = _text_value(generated.get(field), limit=2200)
+    for field in ("objectives", "differentiation"):
+        normalized[field] = _string_list(generated.get(field))
+    for field in ("theory_explanation", "mistake_practice"):
+        normalized[field] = _mapping_value(generated.get(field), base.get(field) or {})
+    timeline = generated.get("timeline")
+    if isinstance(timeline, dict):
+        timeline = timeline.get("items") or timeline.get("stages") or timeline.get("timeline")
+    if isinstance(timeline, list):
+        normalized["timeline"] = [
+            {**item, "teacher": _text_value(item.get("teacher"), limit=1000), "students": _text_value(item.get("students"), limit=1000)}
+            for item in timeline if isinstance(item, dict)
+        ]
+    return normalized
+
+def _validated_content(raw: str, base: dict) -> dict:
+    # å…¼å®¹å°‘æ•°æ¨¡å‹ä»åŒ…è£¹ Markdown ä»£ç å›´æ æˆ–é™„å¸¦ä¸€å¥å‰è¨€ï¼Œæå–å®Œæ•´å¯¹è±¡åå†æ ¡éªŒã€‚
+    normalized = raw.strip()
+    if normalized.startswith("```"):
+        normalized = normalized.split("\n", 1)[1] if "\n" in normalized else ""
+        normalized = normalized.rsplit("```", 1)[0].strip()
+    start, end = normalized.find("{"), normalized.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("æ¨¡å‹æ²¡æœ‰è¿”å›å®Œæ•´ JSON æ•™æ¡ˆï¼Œè¯·ç¨åé‡è¯•æˆ–æ£€æŸ¥æ¨¡å‹æœåŠ¡")
+    candidate = normalized[start : end + 1]
+    try:
+        content = json.loads(candidate)
+    except json.JSONDecodeError as exc:
+        # åªä¿®å¤å·²ç»å®Œæ•´è¿”å›çš„å¯¹è±¡ä¸­æ¼é€—å·ã€è½¬ä¹‰æˆ–å°¾é€—å·ç­‰æ ¼å¼ç‘•ç–µï¼›
+        # æˆªæ–­å†…å®¹ä»ä¼šè¢«æ‹’ç»ï¼Œä¸ä¼šä¼ªé€ æˆ–è¡¥å†™æ•™å­¦å†…å®¹ã€‚
+        try:
+            content = repair_json(candidate, return_objects=True)
+        except Exception as repair_exc:
+            raise ValueError(
+                f"æ¨¡å‹è¿”å›çš„ JSON æ— æ³•è§£æï¼ˆç¬¬ {exc.lineno} è¡Œã€ç¬¬ {exc.colno} åˆ—ï¼‰ï¼š{exc.msg}ã€‚æœ¬æ¬¡ç»“æœæœªä¿å­˜ï¼Œè¯·é‡è¯•ã€‚"
+            ) from repair_exc
+    if not isinstance(content, dict):
+        raise ValueError("æ¨¡å‹æ²¡æœ‰è¿”å›æ•™æ¡ˆå¯¹è±¡")
+    generated = content
+    # å…¼å®¹å…¼å®¹æ¥å£å¸¸è§çš„åŒ…è£…ã€‚éƒ¨åˆ†ç½‘å…³ä¼šæŠŠæœ¬åº”æ˜¯ JSON å¯¹è±¡çš„ content å†åŒ…æˆ
+    # JSON å­—ç¬¦ä¸²ï¼›æ­¤å‰ä¼šæŠŠå®ƒè¯¯åˆ¤ä¸ºâ€œç¼ºå°‘å…¨éƒ¨å­—æ®µâ€ã€‚åªè§£åŒ…æ¨¡å‹å®é™…è¿”å›çš„ JSONï¼Œ
+    # ä¸èƒ½ä»è§„åˆ™éª¨æ¶è¡¥å­—æ®µåä¼ªè£…ä¸ºæˆåŠŸã€‚
+    for wrapper in ("enhancement", "lesson", "data", "content", "æ•™æ¡ˆ", "result"):
+        wrapped = content.get(wrapper)
+        if isinstance(wrapped, dict):
+            generated = wrapped
+            break
+        if isinstance(wrapped, str) and wrapped.lstrip().startswith("{"):
+            try:
+                parsed = json.loads(wrapped)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                generated = parsed
+                break
+    generated = _normalize_generated(generated, base)
+    required_fields = (
+        "title", "objectives", "key_points", "difficulties", "preparation",
+        "timeline", "theory_explanation", "mistake_practice", "differentiation", "assessment",
+    )
+    missing = [field for field in required_fields if not generated.get(field)]
+    if missing:
+        present = ", ".join(sorted(generated.keys())) or "æ— "
+        raise ValueError(
+            f"æ¨¡å‹è¿”å›çš„æ•™æ¡ˆç¼ºå°‘å¿…è¦å­—æ®µï¼š{', '.join(missing)}ï¼ˆå®é™…å­—æ®µï¼š{present}ï¼‰ï¼›"
+            "æœ¬æ¬¡æ·±åº¦ç»“æœæœªä¿å­˜ï¼Œè¯·é‡è¯•"
+        )
+    wrong_types = [field for field in required_fields if not isinstance(generated.get(field), type(base.get(field)))]
+    if wrong_types:
+        raise ValueError(f"æ¨¡å‹è¿”å›çš„æ•™æ¡ˆå­—æ®µç»“æ„æ— æ³•è½¬æ¢ï¼š{', '.join(wrong_types)}ï¼›æœ¬æ¬¡æ·±åº¦ç»“æœæœªä¿å­˜ï¼Œè¯·é‡è¯•")
+    base_timeline_for_check = base.get("timeline") or []
+    timeline = generated.get("timeline") or []
+    if len(timeline) != len(base_timeline_for_check):
+        raise ValueError(f"æ¨¡å‹è¿”å›çš„ timeline é¡¹æ•°ä¸º {len(timeline)}ï¼Œåº”ä¸º {len(base_timeline_for_check)}ï¼›æœ¬æ¬¡æ·±åº¦ç»“æœæœªä¿å­˜ï¼Œè¯·é‡è¯•")
+    incomplete_timeline = [
+        str(index + 1) for index, item in enumerate(timeline)
+        if not isinstance(item, dict) or not isinstance(item.get("teacher"), str) or not item.get("teacher").strip()
+        or not isinstance(item.get("students"), str) or not item.get("students").strip()
+    ]
+    if incomplete_timeline:
+        raise ValueError(f"æ¨¡å‹è¿”å›çš„ç¬¬ {', '.join(incomplete_timeline)} ä¸ªè¯¾å ‚ç¯èŠ‚ç¼ºå°‘æ•™å¸ˆæˆ–å­¦ç”Ÿä»»åŠ¡ï¼›æœ¬æ¬¡æ·±åº¦ç»“æœæœªä¿å­˜ï¼Œè¯·é‡è¯•")
+    content = deepcopy(base)
+    for field in (
+        "title",
+        "objectives",
+        "key_points",
+        "difficulties",
+        "preparation",
+        "timeline",
+        "theory_explanation",
+        "mistake_practice",
+        "differentiation",
+        "assessment",
+    ):
+        value = generated.get(field)
+        if isinstance(value, type(content.get(field))) and value:
+            content[field] = value
+
+    # è¯¾å ‚æµç¨‹çš„é˜¶æ®µã€æ—¶é•¿ç”±è§„åˆ™å±‚æ ¹æ®è¯¾æ—¶ç”Ÿæˆï¼Œä¸èƒ½è¢«æ¨¡å‹åˆ å‡æˆ–æ”¹å†™ã€‚
+    # æ¨¡å‹åªå¯å¢å¼ºåŒä¸€ä½ç½®çš„æ•™å¸ˆã€å­¦ç”Ÿæ´»åŠ¨ï¼›è‹¥ä¸ªåˆ«é¡¹ç”Ÿæˆä¸å®Œæ•´ï¼Œåˆ™ä¿ç•™éª¨æ¶å†…å®¹ã€‚
+    base_timeline = base.get("timeline")
+    if base_timeline:
+        enhanced_timeline = []
+        for index, base_item in enumerate(base_timeline):
+            raw_timeline = generated.get("timeline", [])
+            generated_item = raw_timeline[index] if isinstance(raw_timeline, list) and index < len(raw_timeline) else {}
+            if not isinstance(generated_item, dict):
+                generated_item = {}
+            item = dict(base_item)
+            for field in ("teacher", "students"):
+                value = generated_item.get(field)
+                if isinstance(value, str) and value.strip():
+                    item[field] = value.strip()
+            enhanced_timeline.append(item)
+        content["timeline"] = enhanced_timeline
+    content["summary"] = base["summary"]
+    if base.get("generation_context"):
+        content["generation_context"] = base["generation_context"]
+    if base.get("activity_preference") is not None:
+        content["activity_preference"] = base.get("activity_preference")
+    if base.get("teacher_requirements") is not None:
+        content["teacher_requirements"] = base.get("teacher_requirements")
+    return content
+
+
+def stream_preview(
+    db: Session,
+    song: Song,
+    profile: ClassProfile | None,
+    duration: int,
+    activity: str,
+    requirements: str,
+    teacher_id: int,
+    generation_strategy: str = "deep",
+) -> Iterator[tuple[str, object]]:
+    base = build_base_preview(db, song, profile, duration, activity, requirements, teacher_id)
+    mode, pieces = _chunks(base, generation_strategy)
+    yield "start", mode
+    collected = []
+    for piece in pieces:
+        collected.append(piece)
+        yield "delta", piece
+    raw = "".join(collected).strip()
+    if not raw:
+        raise ValueError("æ¨¡å‹æœªè¿”å›å¯è§£æçš„æ•™æ¡ˆæ­£æ–‡ï¼Œè¯·æ£€æŸ¥æ¨¡å‹æœåŠ¡é…ç½®åé‡è¯•")
+    content = _validated_content(raw, base)
+    yield "complete", {"content": content, "generation_mode": mode}
+
+
+def stream_preview_adjustment(content: dict, instruction: str) -> Iterator[tuple[str, object]]:
+    mode, pieces = _adjustment_chunks(content, instruction)
+    yield "start", mode
+    collected = []
+    for piece in pieces:
+        collected.append(piece)
+        yield "delta", piece
+    base = deepcopy(content)
+    base["teacher_requirements"] = instruction
+    adjusted = _validated_content("".join(collected), base)
+    adjusted["teacher_requirements"] = instruction
+    adjusted.setdefault("adjustment_history", []).append(instruction)
+    yield "complete", {"content": adjusted, "generation_mode": mode}
+
+
+def _save_plan(
+    db: Session,
+    song: Song,
+    profile: ClassProfile | None,
+    duration: int,
+    requirements: str,
+    content: dict,
+    mode: str,
+    teacher_id: int,
+) -> LessonPlan:
+    plan = LessonPlan(
+        teacher_id=teacher_id,
+        title=content.get("title", f"ã€Š{song.name}ã€‹éŸ³ä¹è¯¾"),
+        class_id=profile.id if profile else None,
+        song_id=song.id,
+        duration_minutes=duration,
+        teacher_requirements=requirements,
+        content_json=json.dumps(content, ensure_ascii=False),
+        generation_mode=mode,
+    )
+    db.add(plan)
+    db.flush()
+    if profile:
+        db.add(
+            ClassroomRecord(
+                teacher_id=teacher_id,
+                class_id=profile.id,
+                lesson_plan_id=plan.id,
+                status="planned",
+            )
+        )
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+def _validate_saved_preview(content: dict) -> dict:
+    """Validate an already-rendered editor payload without treating it as a model reply.
+
+    ``_validated_content`` deliberately combines a model response with a generation
+    base.  Calling it again while saving discarded structured fields that do not
+    exist in that reduced base (notably theory_explanation and mistake_practice),
+    which made otherwise valid quick/deep lessons fail with HTTP 422.  Saving must
+    preserve the editor's complete contract instead of re-normalising it.
+    """
+    if not isinstance(content, dict):
+        raise ValueError("æ•™æ¡ˆå†…å®¹å¿…é¡»æ˜¯ä¸€ä¸ªå¯¹è±¡")
+
+    saved = deepcopy(content)
+    text_fields = ("title", "key_points", "difficulties", "preparation", "assessment")
+    missing = [field for field in text_fields if not isinstance(saved.get(field), str) or not saved[field].strip()]
+
+    for field in ("objectives", "differentiation"):
+        value = saved.get(field)
+        if not isinstance(value, list) or not any(isinstance(item, str) and item.strip() for item in value):
+            missing.append(field)
+
+    for field, required_keys in (
+        ("theory_explanation", ("term", "script")),
+        ("mistake_practice", ("problem", "correction")),
+    ):
+        value = saved.get(field)
+        if not isinstance(value, dict) or any(not isinstance(value.get(key), str) or not value[key].strip() for key in required_keys):
+            missing.append(field)
+
+    timeline = saved.get("timeline")
+    if not isinstance(timeline, list) or not timeline:
+        missing.append("timeline")
+    elif any(
+        not isinstance(item, dict)
+        or not isinstance(item.get("teacher"), str)
+        or not item["teacher"].strip()
+        or not isinstance(item.get("students"), str)
+        or not item["students"].strip()
+        for item in timeline
+    ):
+        missing.append("timeline")
+
+    if missing:
+        raise ValueError(f"æ•™æ¡ˆå°šæœ‰æœªå®Œæˆå­—æ®µï¼š{', '.join(dict.fromkeys(missing))}ï¼›è¯·è¡¥å……åå†ä¿å­˜")
+    try:
+        json.dumps(saved, ensure_ascii=False)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("æ•™æ¡ˆåŒ…å«æ— æ³•ä¿å­˜çš„æ•°æ®æ ¼å¼") from exc
     return saved
 
 

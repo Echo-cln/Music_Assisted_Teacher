@@ -1,5 +1,98 @@
-YªçŠx-®éÜj×¢ëiºÚ+Š§j[h‘éÜ¢éí×ÍuN‹Z–‹­¦ëeŠw¬Ôˆˆ‰Õ‘¥Ù•É¥Ìƒ–nû&½Aƒ’êSêÿ¢ÂÇ¢¾–"¯¦¦7–Æ()Õ‘¥Ù•É¥Ìƒšb¿šr³–rÃ–º'¢j–òšê@=5Hƒ¢/–ê?–º’â7’òk¢Š¯’ò«¢š"CšÖ?¢#–f£–ö»¢÷–*o¾òkšr«–º'¢+¢Úš^ÛšÊ‡šr'–¾ó–è5ÕÍ¥a50ƒ¦÷’òk¢şS–n{–>¿–ºk’ö7j¦Rg¢¾¿¾ò3šZç’úÿšVg–â#rš¶–’B¢¾¢ÂÇ–’Ç¢Ò—(ˆˆˆ)™É½´}}™ÕÑÕÉ•}|¥µÁ½ÉĞ…¹¹½Ñ…Ñ¥½¹Ì()¥µÁ½ÉĞÍ¡±•à)¥µÁ½ÉĞÍÕ‰ÁÉ½•ÍÌ)¥µÁ½ÉĞÑ•µÁ™¥±”)™É½´Á…Ñ¡±¥ˆ¥µÁ½ÉĞA…Ñ ()™É½´…ÁÀ¹½É”¹½¹™¥œ¥µÁ½ÉĞ•Ñ}Í•ÑÑ¥¹Ì()MUAA=IQ}=5I}MU%aL€ôì‰Á¹œˆ°€‰©Áœˆ°€‰©Á•œˆ°€‰İ•‰Àˆ°€‰Ñ¥˜ˆ°€‰Ñ¥™˜ˆ°€‰Á‘˜‰ô(()±…ÍÌ=5IU¹…Ù…¥±…‰±•ÉÉ½È¡IÕ¹Ñ¥µ•ÉÉ½È¤è(€€€€ˆˆ‰Õ‘¥Ù•É¥ÌƒšÊ‡šr'–º'¢š"[šÊ‡šr'¦7ö»š^Ûjšb;†»¦Rg¢¾¿ˆˆˆ(()‘•˜}½µµ…¹‘}Á…ÉÑÌ¡½µµ…¹èÍÑÈ¤€´ø±¥ÍÑmÍÑÉtè(€€€É…Ü€ô½µµ…¹¹ÍÑÉ¥À ¤(€€€€Œ]¥¹‘½İÌƒR£š"ß–âãš*+–â›¦ëš‚ój–º'¢¢Ş¿–únÓš:—–g¢şl€¹•¹Û–¾çŠs–6W.³j€¹‰…Ğ¼¹µ¼¹•á—Št(€€€€Œƒ’â7–7š2'¦ëš‚ó–"–"¾òo–B›–"déqqAÉ½É…´¥±•Íqp¸¸¹€ƒ’òk¢Š¯š.š"C’â“’â«–>šVÃ–¾ç’ê8(€€€€Œ©…Ù„€µ©…È€ˆ¸¸¸‰€ƒ¶'–’7–B#–F÷’î“¾ò3’î7’öÿR ]¥¹‘½İÌƒ¦;š‚ó–"¢¾7–æÛšâB’şwVgj–òW–>ß(€€€¥˜±•¸¡É…Ü¤€øô€È…¹É…İlÁt€ôôÉ…İl´Åt€ôô€œˆœè(€€€€€€€É…Ü€ôÉ…İlÄè´Åt¹ÍÑÉ¥À ¤(€€€¥˜É…Ü¹±½İ•È ¤¹•¹‘Íİ¥Ñ   ˆ¹‰…Ğˆ°€ˆ¹µˆ°€ˆ¹•á”ˆ¤¤è(€€€€€€€Á…ÉÑÌ€ômÉ…İt(€€€•±Í”è(€€€€€€€Á…ÉÑÌ€ômÁ…ÉĞ¹ÍÑÉ¥À œˆœ¤™½ÈÁ…ÉĞ¥¸Í¡±•à¹ÍÁ±¥Ğ¡É…Ü°Á½Í¥àõ…±Í”¥t(€€€¥˜¹½ĞÁ…ÉÑÌè(€€€€€€€É…¥Í”=5IU¹…Ù…¥±…‰±•ÉÉ½È (€€€€€€€€€€€€‹–Âkšr«¦7ö¸U%YI%M}=559¾ò3š^ƒšÎW¢¾–"¯–nû&½Aƒ’êSêÿ¢ÂÇˆ(€€€€€€€€€€€€‹¢¾ß–º'¢–ºcšZäÕ‘¥Ù•É¥Ìƒ–B;¾ò3–r ‰…­•¹¼¹•¹Øƒ–†¯–g–B¿–*£–F÷’î“ˆ(€€€€€€€€€€€€‰]¥¹‘½İÌƒ–ºcšZç–2¦k–âãšb¼‰¥¹qqÕ‘¥ÛÍu¶‰ËkºwµçH]Z[Hˆ‹š›Ú[Š›Ü›X[^™YœÜ][™\Ê
-VËLN—JVËLŒ—HÜˆ¹§*¹kï9aîˆ]\ÚXÖS‚ˆYˆ“›È[œİ[YĞÔˆ[™İXYÙ\Èˆ[ˆ›Ü›X[^™Y‚ˆ˜Z\ÙH[[YQ\œ›ÜŠˆ]Y]™\š\È9mì¹d+ùbª;ï#9/a¹¬¨y§"yk¢z(áHĞÔˆ:+ëz* 9c!{ï"9¥éyoåûï&“›È[œİ[YĞÔˆ[™İXYÙ\ûï"xà ˆ‚ˆº+íùab9ceyâë9¢dùo ]Y]™\š\ûï#9k¢z(áz"ìy¥¡È[™È:+ëz* 9¥l9£k»ï&ÕÚ[™İÜÈ9n.:)àyæë¹oey..ˆ‚ˆ‰PTUIW]Y]™\š\Ó]Y]™\š\×ÛÛ™šY×\ÜÙ]{ï#9k¢z(áyd#ºaãyd+ùd#¹êëùa£ykï9aixà ˆ‚ˆ
-BˆYˆÛİ[›İ^ÜÚ[˜ÙH˜[œØÜš\[ÛˆY›İÛÛ\]HİXØÙ\ÜÙ[Hˆ[ˆ›Ü›X[^™Y‚ˆ˜Z\ÙH[[YQ\œ›ÜŠˆ]Y]™\š\È9mìº+îùcå¹¥¡ù.í»ï#9/aº,,zghº/k9oey¬¨y§"yk£9¢$;ï#9fè9«i9.#z ïykï9aîˆ]\ÚXÖS8à ˆ‚ˆº+íù/&9ab9/oùå*9cezhmxà y«hùd$xà y¥è:f-9olxà y.¥9î¯ùk£9¥m9.%:gìùë)¹®!y¦l9æ¡9¢jù£ãù.í»ï&Ôˆ:+íùab:(àyaî¹cezhmya£z+åxà ˆ‚ˆ
-BˆÈ9.#y¢¢¹¥l9c`ùkeùæ¡•“KĞ]Y]™\š\È9¥éyoåù/(9b,9¥fykiºhmzgh¸à ¹d#¹êëù£©ùb-¹cì9.ãy/çykf9k£9¥mˆÈİİ]Üİ\œ»ï#:hmzgh¹cêºg :) yê,ùk¦¸à ycëú(c9bª9æ¡9i,z-)yc§ùfè8à ‚ˆ˜Z\ÙH[[YQ\œ›ÜŠˆ]Y]™\š\È:+áº,,yi,z-){ï":` 9aî¹è HÜ™\İ[œ™]\›˜ÛÙ_{ï"{ï&Ù]Z[ËLÍŒ—_HŠBˆ™]\›ˆ^ÜYœ™XYØ]\Ê
-KÂˆ™[™Ú[™Hˆ]Y]™\š\È‹ˆœÛİ\˜ÙWÙš[[˜[YHˆš[[˜[YKˆØ\›š[™Èˆº+áº,,yîäù§§9mì¹kï9aizd¨¹ä-9cmùn&;ï&ú+íú`$9l#ú" ¹¨.9kîzgìújæ8à z" ¹icøà z/çºgìù.#º, ùcíùd#¹a£yå*9.£º+ï¹h ¸à ˆ‹ˆB
+"""Audiveris å›¾ç‰‡/PDF äº”çº¿è°±è¯†åˆ«é€‚é…å±‚ã€‚
+
+Audiveris æ˜¯æœ¬åœ°å®‰è£…çš„å¼€æº OMR ç¨‹åºã€‚å®ƒä¸ä¼šè¢«ä¼ªè£…æˆæµè§ˆå™¨å†…ç½®èƒ½åŠ›ï¼šæœªå®‰è£…ã€
+è¶…æ—¶ã€æ²¡æœ‰å¯¼å‡º MusicXML éƒ½ä¼šè¿”å›å¯å®šä½çš„é”™è¯¯ï¼Œæ–¹ä¾¿æ•™å¸ˆçœŸæ­£å¤„ç†è¯†è°±å¤±è´¥ã€‚
+"""
+from __future__ import annotations
+
+import shlex
+import subprocess
+import tempfile
+from pathlib import Path
+
+from app.core.config import get_settings
+
+SUPPORTED_OMR_SUFFIXES = {"png", "jpg", "jpeg", "webp", "tif", "tiff", "pdf"}
+
+
+class OMRUnavailableError(RuntimeError):
+    """Audiveris æ²¡æœ‰å®‰è£…æˆ–æ²¡æœ‰é…ç½®æ—¶çš„æ˜ç¡®é”™è¯¯ã€‚"""
+
+
+def _command_parts(command: str) -> list[str]:
+    raw = command.strip()
+    # Windows ç”¨æˆ·å¸¸æŠŠå¸¦ç©ºæ ¼çš„å®‰è£…è·¯å¾„ç›´æ¥å†™è¿› .envã€‚å¯¹â€œå•ç‹¬çš„ .bat/.cmd/.exeâ€
+    # ä¸å†æŒ‰ç©ºæ ¼åˆ‡åˆ†ï¼›å¦åˆ™ `C:\\Program Files\\...` ä¼šè¢«æ‹†æˆä¸¤ä¸ªå‚æ•°ã€‚å¯¹äº
+    # `java -jar "..."` ç­‰å¤åˆå‘½ä»¤ï¼Œä»ä½¿ç”¨ Windows é£æ ¼åˆ†è¯å¹¶æ¸…ç†ä¿ç•™çš„å¼•å·ã€‚
+    if len(raw) >= 2 and raw[0] == raw[-1] == '"':
+        raw = raw[1:-1].strip()
+    if raw.lower().endswith((".bat", ".cmd", ".exe")):
+        parts = [raw]
+    else:
+        parts = [part.strip('"') for part in shlex.split(raw, posix=False)]
+    if not parts:
+        raise OMRUnavailableError(
+            "å°šæœªé…ç½® AUDIVERIS_COMMANDï¼Œæ— æ³•è¯†åˆ«å›¾ç‰‡/PDF äº”çº¿è°±ã€‚"
+            "è¯·å®‰è£…å®˜æ–¹ Audiveris åï¼Œåœ¨ backend/.env å¡«å†™å¯åŠ¨å‘½ä»¤ã€‚"
+            "Windows å®˜æ–¹åŒ…é€šå¸¸æ˜¯ bin\\Audiveris.batï¼›å¦‚æœä½ çš„ç‰ˆæœ¬åªæœ‰ Audiveris.exeï¼Œç›´æ¥å¡«å†™ .exeï¼›"
+            "ä¹Ÿå¯ä»¥ä½¿ç”¨ java -jar æ–¹å¼ã€‚ç¤ºä¾‹ AUDIVERIS_COMMAND=C:\\Program Files\\Audiveris\\bin\\Audiveris.batã€‚"
+        )
+    return parts
+
+
+def _export_file(output_dir: Path) -> Path | None:
+    # åªæ¥æ”¶ Audiveris å¯¼å‡ºçš„ MusicXMLï¼Œä¸æŠŠä¸­é—´ .omr/.xml é…ç½®è¯¯å½“ä½œä¹è°±ã€‚
+    candidates = [
+        path for path in output_dir.rglob("*")
+        if path.is_file() and path.suffix.lower() in {".musicxml", ".mxl"}
+    ]
+    return max(candidates, key=lambda path: path.stat().st_mtime) if candidates else None
+
+
+def recognize_staff_image(raw: bytes, filename: str, suffix: str) -> tuple[bytes, dict]:
+    """å°†ä¸€å¼ å›¾ç‰‡æˆ– PDF é€è‡³æœ¬æœº Audiverisï¼Œè¿”å›å¯¼å‡ºçš„ MusicXML å­—èŠ‚å’Œè¯´æ˜ã€‚"""
+    if suffix.lower() not in SUPPORTED_OMR_SUFFIXES:
+        raise ValueError("ä»…æ”¯æŒ PNG/JPG/WEBP/TIFF/PDF äº”çº¿è°±å›¾ç‰‡")
+    settings = get_settings()
+    executable = _command_parts(settings.audiveris_command)
+    with tempfile.TemporaryDirectory(prefix="xiangyin-omr-") as directory:
+        root = Path(directory)
+        source = root / f"score.{suffix.lower()}"
+        output = root / "export"
+        source.write_bytes(raw)
+        output.mkdir()
+        # Audiveris çš„å®˜æ–¹æ‰¹å¤„ç†å¯¼å‡ºå‚æ•°ã€‚ä¼ åˆ—è¡¨è€Œä¸æ˜¯ shell å­—ç¬¦ä¸²ï¼Œé¿å…æ–‡ä»¶åæ³¨å…¥ã€‚
+        command = [*executable, "-batch", "-export", "-output", str(output), str(source)]
+        try:
+            result = subprocess.run(
+                command, capture_output=True, text=True, timeout=max(30, settings.omr_timeout_seconds), check=False
+            )
+        except FileNotFoundError as exc:
+            raise OMRUnavailableError(f"æ‰¾ä¸åˆ° Audiverisï¼š{executable[0]}ã€‚è¯·æ£€æŸ¥ AUDIVERIS_COMMAND çš„è·¯å¾„ã€‚") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"Audiveris åœ¨ {settings.omr_timeout_seconds} ç§’å†…æ²¡æœ‰å®Œæˆè¯†åˆ«ï¼›è¯·è£å‰ªä¸ºå•é¡µã€æ¸…æ™°çš„äº”çº¿è°±åé‡è¯•ã€‚") from exc
+        exported = _export_file(output)
+        if result.returncode != 0 or not exported:
+            # å¤±è´¥æ—¥å¿—ä¸èƒ½åªä¿ç•™å¼€å¤´ï¼šAudiveris çš„çœŸæ­£å¼‚å¸¸ç»å¸¸ä½äºæœ€åçš„ Caused byã€‚
+            raw_log = (result.stderr or "") + ("\n" if result.stderr and result.stdout else "") + (result.stdout or "")
+            normalized = raw_log.strip().replace("\r", "")
+            detail = " ".join(normalized.splitlines()[-18:])[-2600:] or "æœªå¯¼å‡º MusicXML"
+            if "No installed OCR languages" in normalized:
+                raise RuntimeError(
+                    "Audiveris å·²å¯åŠ¨ï¼Œä½†æ²¡æœ‰å®‰è£… OCR è¯­è¨€åŒ…ï¼ˆæ—¥å¿—ï¼šNo installed OCR languagesï¼‰ã€‚"
+                    "è¯·å…ˆå•ç‹¬æ‰“å¼€ Audiverisï¼Œå®‰è£…è‹±æ–‡ eng è¯­è¨€æ•°æ®ï¼›Windows å¸¸è§ç›®å½•ä¸º "
+                    "%APPDATA%\\AudiverisLtd\\audiveris\\config\\tessdataï¼Œå®‰è£…åé‡å¯åç«¯å†å¯¼å…¥ã€‚"
+                )
+            if "Could not export since transcription did not complete successfully" in normalized:
+                raise RuntimeError(
+                    "Audiveris å·²è¯»å–æ–‡ä»¶ï¼Œä½†è°±é¢è½¬å½•æ²¡æœ‰å®Œæˆï¼Œå› æ­¤ä¸èƒ½å¯¼å‡º MusicXMLã€‚"
+                    "è¯·ä¼˜å…ˆä½¿ç”¨å•é¡µã€æ­£å‘ã€æ— é˜´å½±ã€äº”çº¿å®Œæ•´ä¸”éŸ³ç¬¦æ¸…æ™°çš„æ‰«æä»¶ï¼›PDF è¯·å…ˆè£å‡ºå•é¡µå†è¯•ã€‚"
+                )
+            # ä¸æŠŠæ•°åƒå­—çš„ JVM/Audiveris æ—¥å¿—ä¼ åˆ°æ•™å­¦é¡µé¢ã€‚åç«¯æ§åˆ¶å°ä»ä¿å­˜å®Œæ•´
+            # stdout/stderrï¼Œé¡µé¢åªéœ€è¦ç¨³å®šã€å¯è¡ŒåŠ¨çš„å¤±è´¥åŸå› ã€‚
+            raise RuntimeError(f"Audiveris è¯†è°±å¤±è´¥ï¼ˆé€€å‡ºç  {result.returncode}ï¼‰ï¼š{detail[-360:]}")
+        return exported.read_bytes(), {
+            "engine": "Audiveris",
+            "source_filename": filename,
+            "warning": "è¯†è°±ç»“æœå·²å¯¼å…¥é’¢ç´å·å¸˜ï¼›è¯·é€å°èŠ‚æ ¸å¯¹éŸ³é«˜ã€èŠ‚å¥ã€è¿éŸ³ä¸è°ƒå·åå†ç”¨äºè¯¾å ‚ã€‚",
+        }
