@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import math
+import logging
 import shutil
 import subprocess
 import sys
@@ -20,6 +21,8 @@ import numpy as np
 from fastapi import UploadFile
 
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -130,10 +133,20 @@ def _prepare_reference(path: Path | None, reference_kind: str) -> dict:
         stem = output_root / "htdemucs" / path.stem / "vocals.wav"
         if result.returncode == 0 and stem.exists() and stem.stat().st_size > 4096:
             return {"available": True, "path": stem, "source": "demucs_vocals", "message": "已从混音参考中分离人声，再用于主旋律对齐。"}
-        detail = (result.stderr or result.stdout or "").strip().replace("\n", " ")[:160]
+        raw_detail = (result.stderr or "") + ("\n" if result.stderr and result.stdout else "") + (result.stdout or "")
+        detail = " ".join(raw_detail.split())
         if "No module named demucs" in detail:
             return {"available": False, "code": "vocal_separator_not_installed", "message": "检测到原唱/伴奏混音，但未安装 Demucs 人声分离组件。为避免误判，本次不生成逐音分数；请上传清晰人声参考，或安装 Demucs 后重试。"}
-        return {"available": False, "code": "vocal_separation_failed", "message": f"混音参考的人声分离没有完成：{detail or 'Demucs 未返回人声轨'}。请改上传清晰单人参考人声，或检查 Demucs 安装。"}
+        # tqdm 的模型下载进度可能有数千字符，并非教师可读的诊断；保留在
+        # 后端日志用于排查，API 只返回稳定、可执行的短错误，不污染结果卡。
+        logger.warning("demucs_separation_failed returncode=%s detail=%s", result.returncode, detail[-1200:])
+        download_failure = any(token in detail.lower() for token in ("download", "http", "connection", "https", "100%|", "0%|", "urlopen"))
+        message = (
+            "混音人声分离失败：Demucs 模型下载或加载未完成。首次运行需要联网下载分离模型；请确认网络可访问，或改上传清晰单人参考人声后重试。"
+            if download_failure else
+            "混音人声分离未生成有效的人声轨。本次不输出逐音分数；请改上传清晰单人参考人声，或查看后端日志中的 Demucs 错误后重试。"
+        )
+        return {"available": False, "code": "vocal_separation_failed", "message": message}
     except (ModuleNotFoundError, FileNotFoundError):
         return {"available": False, "code": "vocal_separator_not_installed", "message": "检测到原唱/伴奏混音，但未安装 Demucs 人声分离组件。为避免误判，本次不生成逐音分数；请上传清晰人声参考，或安装 Demucs 后重试。"}
     except subprocess.TimeoutExpired:
