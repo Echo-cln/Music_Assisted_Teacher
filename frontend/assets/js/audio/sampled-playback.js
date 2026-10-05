@@ -89,7 +89,7 @@ export const soundSourceLabel = sourceNameFor;
 export async function listLocalSoundfonts() {
   const packs = await catalog();
   restoreActive(packs);
-  packs.forEach(pack => catalogNames.set(pack.id, { name: pack.name }));
+  packs.forEach(pack => catalogNames.set(pack.id, { name: pack.displayName || pack.name }));
   return packs.map(({ blob, ...meta }) => ({ ...meta, activeFor: (meta.instruments || []).filter(id => activePackIds.get(id) === meta.id) }));
 }
 
@@ -123,7 +123,7 @@ async function buildPlayer(record, onProgress) {
     const name = record.presetName || names[0];
     if (!name) throw new Error("该 SF2 没有可播放的预设；请换用包含乐器 Preset 的标准 SF2 文件");
     await player.loadInstrument(name);
-    const runtime = { player, url, name, displayName: record.name };
+    const runtime = { player, url, name, displayName: record.displayName || record.name };
     localPlayers.set(record.id, runtime);
     return runtime;
   } catch (error) {
@@ -145,7 +145,7 @@ export async function loadLocalSoundfont(instruments, file, onProgress) {
   const form = String.fromCharCode(...header.slice(8, 12));
   if (signature !== "RIFF" || form !== "sfbk") throw new Error("文件扩展名是 .sf2，但内容不是标准 SoundFont2（缺少 RIFF/sfbk 文件头）。请确认下载的不是 .sf3、.zip 或网页错误页。");
 
-  const record = { id: crypto.randomUUID(), name: file.name, instruments: assigned, blob: file, size: file.size, createdAt: Date.now(), presetName: "" };
+  const record = { id: crypto.randomUUID(), name: file.name, displayName: file.name.replace(/\.sf2$/i, ""), instruments: assigned, blob: file, size: file.size, createdAt: Date.now(), presetName: "" };
   let runtime;
   try {
     runtime = await buildPlayer(record, onProgress);
@@ -172,19 +172,42 @@ export async function activateLocalSoundfont(packId, instrument) {
   return record;
 }
 
-export async function previewLocalSoundfont(packId, instrument, onProgress) {
+export async function previewLocalSoundfont(packId, instrument, onProgress, notes = null) {
   const packs = await catalog();
   const record = packs.find(item => item.id === packId);
   if (!record) throw new Error("找不到该本地音色包");
   const runtime = await buildPlayer(record, onProgress);
   const ctx = context(); await ctx.resume();
   runtime.player.stop?.();
-  const now = ctx.currentTime + 0.05;
-  [60, 64, 67, 72].forEach((note, index) => {
-    const stop = runtime.player.start({ note, time: now + index * 0.28, duration: 0.42, velocity: 86 });
+  const now = ctx.currentTime + 0.08;
+  // 默认试听覆盖低、中、高音区并包含一段完整乐句；传入 notes 时试听当前完整旋律。
+  const phrase = Array.isArray(notes) && notes.length
+    ? notes.map(note => ({ note: Number(note.pitch), time: now + Number(note.start || 0), duration: Math.max(.12, Number(note.duration || .3)), velocity: Number(note.velocity || 88) }))
+    : [48, 52, 55, 60, 64, 67, 72, 67, 64, 60, 55, 52, 48, 60, 67, 72].map((note, index) => ({ note, time: now + index * .38, duration: .5, velocity: index % 4 === 0 ? 104 : 84 }));
+  phrase.forEach(item => {
+    const stop = runtime.player.start(item);
     if (typeof stop === "function") scheduledStops.push(stop);
   });
   if (instrument) { activePackIds.set(instrument, record.id); persistActive(); }
+  return record;
+}
+
+export async function updateLocalSoundfont(packId, patch = {}) {
+  const packs = await catalog();
+  const record = packs.find(item => item.id === packId);
+  if (!record) throw new Error("找不到该本地音色包");
+  const displayName = String(patch.displayName ?? record.displayName ?? record.name).trim();
+  const instruments = [...new Set((patch.instruments ?? record.instruments ?? []).filter(Boolean))];
+  if (!displayName) throw new Error("请填写音色包名称");
+  if (!instruments.length) throw new Error("请至少绑定一种乐器");
+  record.displayName = displayName.slice(0, 80);
+  record.instruments = instruments;
+  for (const [instrument, activeId] of activePackIds) {
+    if (activeId === record.id && !instruments.includes(instrument)) activePackIds.delete(instrument);
+  }
+  await dbPut(record); persistActive(); resetCatalog();
+  const runtime = localPlayers.get(record.id);
+  if (runtime) runtime.displayName = record.displayName;
   return record;
 }
 

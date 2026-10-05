@@ -263,16 +263,17 @@ def _segment_feedback(metrics: dict, start: float, end: float) -> dict:
         evidence.append(f"音高离散 {metrics['pitch_spread_cents']:.0f} cents")
     if metrics.get("rhythm_score") is not None:
         evidence.append(f"起音节拍稳定 {metrics['rhythm_score']} 分")
+    span = f"{int(start // 60):02d}:{int(start % 60):02d}—{int(end // 60):02d}:{int(end % 60):02d}"
     if metrics["voiced_ratio"] < .22:
-        focus, note = "录音可用性", "人声被伴奏或环境声覆盖，先做单声部、近距离录音；这段不宜据此判断学生音准。"
+        focus, note = "录音可用性", f"{span} 的可信人声只有 {metrics['voiced_ratio']:.0%}，伴奏或环境声覆盖较多。先降伴奏、靠近麦克风录 20 秒；这一段不做音准判断。"
     elif metrics["pitch_stability"] < 55:
-        focus, note = "音高轨迹", "该段音高离散明显；先用参考音逐音回声模唱，再把歌词接回去。"
+        focus, note = "音高稳定性", f"该段音高离散 {metrics.get('pitch_spread_cents') or 0:.0f} cents，主要问题是长音或换气后的轨迹波动。先给起始音，再做两拍回声模唱后接歌词。"
     elif metrics.get("rhythm_score") is not None and metrics["rhythm_score"] < 65:
-        focus, note = "起音与节拍", "该段起音间隔不均；先拍读节奏，再用慢速伴奏完成这一句。"
+        focus, note = "起音与节拍", f"该段起音节拍稳定度为 {metrics['rhythm_score']} 分，进入点不够一致。先只拍恒拍并读节奏，再用慢速伴奏完成这一句。"
     elif metrics.get("dynamics_score", 100) < 58:
-        focus, note = "气息与力度", "声音层次偏平；在句尾设计一次渐弱或换气，帮助乐句更完整。"
+        focus, note = "力度层次", f"该段能量变化较小（力度层次 {metrics['dynamics_score']} 分）。指定句尾渐弱与统一换气，再录一次前后对照。"
     else:
-        focus, note = "保持与迁移", "该段人声与节拍证据稳定，可保持速度，并把相同方法迁移到下一句。"
+        focus, note = "可迁移片段", f"该段人声与起音证据较稳定。保留当前进入方式，把相同的速度和音量平衡迁移到下一句。"
     return {"start_seconds": round(start, 1), "end_seconds": round(end, 1), "time": f"{int(start // 60):02d}:{int(start % 60):02d}—{int(end // 60):02d}:{int(end % 60):02d}", "focus": focus, "pitch_stability": metrics["pitch_stability"], "voiced_ratio": round(metrics["voiced_ratio"], 2), "evidence": " · ".join(evidence), "note": note}
 
 

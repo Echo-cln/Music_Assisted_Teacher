@@ -128,7 +128,7 @@ def parse_midi(raw: bytes) -> tuple[list[dict], int]:
     return sorted(notes, key=lambda n: n['start']), max(40, min(220, round(60_000_000 / tempo)))
 
 
-def arrange(melody: list[dict], tempo: int, style: str, instruments: list[str]) -> dict:
+def arrange(melody: list[dict], tempo: int, style: str, instruments: list[str], meter_numerator: int = 4, grid_division: int = 4, bars_hint: int = 4) -> dict:
     """根据旋律逐小节选择和弦，并以不同织体生成可试听的独立轨道。
 
     规则的目标是“可解释的课堂伴奏”，不是把一个固定 I–IV–V–I 套到每首旋律：
@@ -137,8 +137,11 @@ def arrange(melody: list[dict], tempo: int, style: str, instruments: list[str]) 
     melody = sorted(melody, key=lambda n: n['start'])
     if not melody:
         return {"style": style, "tracks": []}
+    meter_numerator = max(2, min(12, int(meter_numerator)))
+    grid_division = max(1, min(8, int(grid_division)))
+    bars_hint = max(1, min(16, int(bars_hint)))
     beat, end = 60 / tempo, max(n['start'] + n['duration'] for n in melody)
-    bar_seconds = beat * 4
+    bar_seconds = beat * meter_numerator
     instruments = list(dict.fromkeys(instruments or ["piano"]))
     tracks = [{"id": "melody", "name": "主旋律（钢琴键位）", "instrument": "piano", "notes": melody}]
     pcs = [int(n["pitch"]) % 12 for n in melody]
@@ -160,7 +163,7 @@ def arrange(melody: list[dict], tempo: int, style: str, instruments: list[str]) 
         "器乐合奏": {"degrees": [0, 1, 4, 0], "texture": "声部对位与延展和声", "kind": "ensemble"},
     }
     recipe = recipes.get(style, recipes["乡土抒情"])
-    bars = max(1, math.ceil(end / bar_seconds))
+    bars = max(bars_hint, math.ceil(end / bar_seconds))
     names = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"]
     roots, chords, chord_labels = [], [], []
     for bar in range(bars):
@@ -206,18 +209,18 @@ def arrange(melody: list[dict], tempo: int, style: str, instruments: list[str]) 
             if instrument == "piano":
                 if tone_kind == "lyric":
                     for idx, offset in enumerate((0, third, fifth, third)):
-                        put(notes, root + offset + 12, start + idx * beat, .84 * beat, 58)
+                        put(notes, root + offset + 12, start + idx * (meter_numerator / 4) * beat, .84 * beat, 58)
                 elif tone_kind == "rhythm":
-                    for pulse in (0, 1, 2, 3):
+                    for pulse in range(meter_numerator):
                         for pitch in chord: put(notes, pitch + 12, start + pulse * beat, .58 * beat, 54 if pulse % 2 else 68)
                 elif tone_kind == "nursery":
-                    put(notes, root, start, 1.7 * beat, 58)
-                    for pitch in (root + third + 12, root + fifth + 12): put(notes, pitch, start + 2 * beat, 1.55 * beat, 50)
+                    put(notes, root, start, max(1, meter_numerator / 2 - .3) * beat, 58)
+                    for pitch in (root + third + 12, root + fifth + 12): put(notes, pitch, start + max(1, meter_numerator / 2) * beat, max(.7, meter_numerator / 2 - .45) * beat, 50)
                 else:
-                    for pitch in chord: put(notes, pitch + 12, start, 3.75 * beat, 48)
+                    for pitch in chord: put(notes, pitch + 12, start, max(.5, meter_numerator - .25) * beat, 48)
             elif instrument == "guzheng":
                 sequence = (0, third, fifth, third) if tone_kind == "lyric" else (0, fifth, third, fifth, 0, fifth, third, fifth) if tone_kind == "rhythm" else (0, fifth) if tone_kind == "nursery" else (0, fifth, third, fifth)
-                spacing = 4 / len(sequence)
+                spacing = meter_numerator / len(sequence)
                 for idx, offset in enumerate(sequence): put(notes, root + offset + 12, start + idx * spacing * beat, (.72 if tone_kind == "rhythm" else 1.25) * beat, 54)
             elif instrument == "guitar":
                 pulses = (0, 2) if tone_kind == "lyric" else (0, .5, 1.5, 2, 2.5, 3.5) if tone_kind == "rhythm" else (0, 2) if tone_kind == "nursery" else (0, 1, 2, 3)
@@ -250,4 +253,4 @@ def arrange(melody: list[dict], tempo: int, style: str, instruments: list[str]) 
             pattern = ((0, 36, 88), (1, 42, 45), (2, 38, 68), (3, 42, 45)) if kind == "lyric" else ((0, 36, 90), (.5, 42, 45), (1, 38, 72), (1.5, 42, 45), (2, 36, 84), (2.5, 42, 45), (3, 38, 75), (3.5, 42, 50)) if kind == "rhythm" else ((0, 36, 70), (2, 38, 58)) if kind == "nursery" else ((0, 36, 76), (1.5, 42, 42), (2, 38, 70), (3, 42, 42))
             for pulse, pitch, velocity in pattern: put(drum, pitch, start + pulse * beat, .11, velocity)
         tracks.append({"id": "drum", "name": "课堂打击乐节奏", "instrument": "drum", "notes": drum})
-    return {"style": style, "key": f"{names[tonic]}{'大调' if mode == 'major' else '小调'}", "chord_roots": roots, "chord_labels": chord_labels, "instruments": instruments, "tracks": tracks, "tips": f"已根据主旋律推断 {names[tonic]}{'大调' if mode == 'major' else '小调'}；和弦走向为 {' – '.join(chord_labels)}；{style}使用{recipe['texture']}。"}
+    return {"style": style, "meter_numerator": meter_numerator, "grid_division": grid_division, "bars": bars, "key": f"{names[tonic]}{'大调' if mode == 'major' else '小调'}", "chord_roots": roots, "chord_labels": chord_labels, "instruments": instruments, "tracks": tracks, "tips": f"已根据主旋律推断 {names[tonic]}{'大调' if mode == 'major' else '小调'}；和弦走向为 {' – '.join(chord_labels)}；{style}使用{recipe['texture']}。"}

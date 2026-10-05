@@ -61,7 +61,7 @@ def project(project_id: int, db: Session = Depends(get_db), teacher: Teacher = D
 def create(payload: ProjectCreate, db: Session = Depends(get_db), teacher: Teacher = Depends(get_current_teacher)):
     melody = [n.model_dump() for n in payload.melody]
     row = ArrangementProject(teacher_id=teacher.id, title=payload.title, tempo=payload.tempo, style=payload.style,
-                             melody_json=json.dumps(melody, ensure_ascii=False), arrangement_json=json.dumps(arrange(melody, payload.tempo, payload.style, payload.instruments), ensure_ascii=False))
+                             melody_json=json.dumps(melody, ensure_ascii=False), arrangement_json=json.dumps(arrange(melody, payload.tempo, payload.style, payload.instruments, payload.meter_numerator, payload.grid_division, payload.bars), ensure_ascii=False))
     db.add(row); db.commit(); db.refresh(row)
     return present(row)
 
@@ -74,7 +74,7 @@ def make_arrangement(project_id: int, payload: ArrangeRequest, db: Session = Dep
         raise HTTPException(422, "请先输入旋律，或导入 MusicXML / MIDI 乐谱")
     row.tempo, row.style = payload.tempo, payload.style
     row.melody_json = json.dumps(melody, ensure_ascii=False)
-    row.arrangement_json = json.dumps(arrange(melody, payload.tempo, payload.style, payload.instruments), ensure_ascii=False)
+    row.arrangement_json = json.dumps(arrange(melody, payload.tempo, payload.style, payload.instruments, payload.meter_numerator, payload.grid_division, payload.bars), ensure_ascii=False)
     row.updated_at = datetime.utcnow()
     db.commit(); db.refresh(row)
     return present(row)
@@ -108,7 +108,7 @@ async def import_score(file: UploadFile = File(...), db: Session = Depends(get_d
     if not melody:
         raise HTTPException(422, "乐谱中没有识别到可播放音符")
     row = ArrangementProject(teacher_id=teacher.id, title=name.rsplit('.', 1)[0], source_kind=source, tempo=tempo,
-                             melody_json=json.dumps(melody, ensure_ascii=False), arrangement_json=json.dumps(arrange(melody, tempo, "乡土抒情", ["piano", "guzheng", "drum"]), ensure_ascii=False))
+                             melody_json=json.dumps(melody, ensure_ascii=False), arrangement_json=json.dumps(arrange(melody, tempo, "乡土抒情", ["piano", "guzheng", "drum"], 4, 4, 4), ensure_ascii=False))
     db.add(row); db.commit(); db.refresh(row)
     data = present(row)
     if import_notice:

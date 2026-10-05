@@ -78,7 +78,7 @@ async function navigate(route = "home") {
     bindRoutes();
   } catch (error) {
     if (error.status === 401) return showLogin();
-    app.innerHTML = `<div class="card notice"><h2>页面暂时无法加载</h2><p>${esc(error.message)}</p><p>请确认 Python 后端已经启动并完成数据导入。</p></div>`;
+    app.innerHTML = `<div class="card notice"><h2>页面暂时无法加载</h2><p>${esc(error.message)}</p><p>请打开浏览器控制台查看具体错误；此处会区分前端脚本、接口和数据错误。</p></div>`;
   }
 }
 

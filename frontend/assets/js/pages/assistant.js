@@ -9,8 +9,7 @@ let currentPlan = null;
 let recommendedSongs = [];
 
 function normalizeText(value) {
-  if (Array.isArray(value)) return value.join("
-").replace(/\s+/g, " ").trim();
+  if (Array.isArray(value)) return value.join("\n").replace(/\s+/g, " ").trim();
   if (value && typeof value === "object") return JSON.stringify(value);
   return String(value || "").replace(/\s+/g, " ").trim();
 }

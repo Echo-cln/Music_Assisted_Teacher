@@ -73,14 +73,17 @@ def recognize_staff_image(raw: bytes, filename: str, suffix: str) -> tuple[bytes
             raise RuntimeError(f"Audiveris 在 {settings.omr_timeout_seconds} 秒内没有完成识别；请裁剪为单页、清晰的五线谱后重试。") from exc
         exported = _export_file(output)
         if result.returncode != 0 or not exported:
-            detail = (result.stderr or result.stdout or "未导出 MusicXML").strip().replace("\n", " ")[:500]
-            if "No installed OCR languages" in detail:
+            # 失败日志不能只保留开头：Audiveris 的真正异常经常位于最后的 Caused by。
+            raw_log = (result.stderr or "") + ("\n" if result.stderr and result.stdout else "") + (result.stdout or "")
+            normalized = raw_log.strip().replace("\r", "")
+            detail = " ".join(normalized.splitlines()[-18:])[-2600:] or "未导出 MusicXML"
+            if "No installed OCR languages" in normalized:
                 raise RuntimeError(
                     "Audiveris 已启动，但没有安装 OCR 语言包（日志：No installed OCR languages）。"
                     "请先单独打开 Audiveris，安装英文 eng 语言数据；Windows 常见目录为 "
                     "%APPDATA%\\AudiverisLtd\\audiveris\\config\\tessdata，安装后重启后端再导入。"
                 )
-            raise RuntimeError(f"Audiveris 识谱失败（退出码 {result.returncode}）：{detail}")
+            raise RuntimeError(f"Audiveris 识谱失败（退出码 {result.returncode}）。关键日志：{detail}")
         return exported.read_bytes(), {
             "engine": "Audiveris",
             "source_filename": filename,

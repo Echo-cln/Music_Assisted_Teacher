@@ -128,10 +128,10 @@ export async function renderAudio(container) {
     const recordingWave = document.getElementById("recordingWave");
     if (recordingWave) drawWaveform(recordingWave, result.recording_waveform, "#547785");
     if (result.has_reference_comparison) drawWaveform(document.getElementById("referenceWave"), result.reference_waveform, "#9f4b35");
-    document.getElementById("toFeedback").onclick = () => {
+    document.getElementById("toFeedback")?.addEventListener("click", () => {
       localStorage.setItem("audioAnalysisForFeedback", JSON.stringify({ id: result.id }));
       window.dispatchEvent(new CustomEvent("app:navigate", { detail: "feedback" }));
-    };
+    });
   }
 }
 
@@ -150,23 +150,35 @@ function analysisProgress(message, progress) {
 }
 
 function resultView(result) {
-  if (!result.analysis_available) return `<section class="card notice"><h3>本次录音未能完成分析</h3><p>${esc(result.suggestions[0])}</p></section>`;
-  const scoreCards = Object.entries(result.scores).map(([key, value]) => `<div><b>${value}</b><small>${scoreNames[key]}</small></div>`).join("");
-  const comparison = result.intonation_comparison || {};
-  const note = result.note_assessment || {};
-  // 课堂整体分析没有参考旋律时绝不显示“跑调不可用”；那不是这个模式的结论。
-  // 单人模式里把对齐与逐音失败合并成一张状态卡，避免同一个 Demucs 原因重复两次。
-  const referenceStatus = result.analysis_mode === "solo" && !comparison.available && !note.available
-    ? `<section class="notice analysis-note"><b>本次单人逐音评测未给分</b><p>${esc(note.message || comparison.message || "参考旋律不可用；请检查参考类型和录音质量。")}</p></section>` : "";
-  const pitchComparison = result.analysis_mode === "solo" && comparison.available ? `<section class="intonation-card"><div><span class="eyebrow">PITCH COMPARISON</span><h3>参考音频对齐后的音准提示</h3><p>${esc(comparison.message)}</p></div><div class="intonation-score"><b>${comparison.intonation_score}</b><span>${esc(comparison.status)}</span></div><div class="analysis-summary"><span>中位偏差 <b>${comparison.median_deviation_cents} cents</b></span><span>疑似跑调帧 <b>${comparison.off_pitch_ratio}%</b></span></div><div class="segment-list compact">${(comparison.segments || []).map(item => `<div><b>${esc(item.part)}</b><span>${esc(item.status)}</span><p>偏差 ${item.median_deviation_cents} cents · 疑似跑调 ${item.off_pitch_ratio}%</p></div>`).join("")}</div></section>` : "";
-  const player = `<section class="audio-player-card"><h3>回听本次录音</h3><p class="muted">${esc(result.recording_filename || "课堂录音")}</p><audio controls preload="metadata" src="${esc(apiUrl(result.recording_url))}"></audio>${result.reference_url ? `<p class="muted">参考音频：${esc(result.reference_filename || "参考原唱")}</p><audio controls preload="metadata" src="${esc(apiUrl(result.reference_url))}"></audio>` : ""}</section>`;
+  if (!result.analysis_available) return `<section class="card notice"><h3>本次录音未能完成分析</h3><p>${esc(result.suggestions?.[0] || "请检查录音格式与内容")}</p></section>`;
+  const player = `<section class="audio-player-card"><h3>回听本次录音</h3><p class="muted">${esc(result.recording_filename || "课堂录音")}</p><audio controls preload="metadata" src="${esc(apiUrl(result.recording_url))}"></audio>${result.reference_url ? `<p class="muted">参考音频：${esc(result.reference_filename || "参考旋律")}</p><audio controls preload="metadata" src="${esc(apiUrl(result.reference_url))}"></audio>` : ""}</section>`;
+  const method = `<details class="method-details"><summary>查看本次分析的方法与边界</summary><ol>${(result.analysis_method || []).map(item => `<li>${esc(item)}</li>`).join("")}</ol></details>`;
+  if (result.analysis_mode === "solo") return soloResultView(result, player, method);
+  return classroomResultView(result, player, method);
+}
+
+function classroomResultView(result, player, method) {
+  const scoreCards = Object.entries(result.scores || {}).map(([key, value]) => `<div><b>${value}</b><small>${scoreNames[key] || key}</small></div>`).join("");
   const evidence = result.classroom_evidence || {};
   const evidencePanel = evidence.summary ? `<section class="classroom-evidence"><span class="eyebrow">EVIDENCE SUMMARY</span><h3>课堂分析依据</h3><p>${esc(evidence.summary)}</p>${(evidence.limitations || []).map(item => `<small>${esc(item)}</small>`).join("")}</section>` : "";
-  const noteAssessment = note.available ? `<section class="note-assessment"><div class="card-head"><div><span class="eyebrow">NOTE-BY-NOTE ASSESSMENT</span><h3>单人练唱逐音评测</h3><p>${esc(note.message)}</p></div><div class="intonation-score"><b>${note.score}</b><span>逐音得分</span></div></div><div class="analysis-summary"><span>匹配音符 <b>${note.matched_notes}</b></span><span>±50 cents 命中 <b>${note.accurate_note_ratio}%</b></span><span>中位偏差 <b>${note.median_deviation_cents} cents</b></span></div><div class="note-table"><table><thead><tr><th>#</th><th>目标音</th><th>时间</th><th>偏差</th><th>判定</th></tr></thead><tbody>${note.events.map(item => `<tr><td>${item.index}</td><td>${esc(item.expected_note)}</td><td>${item.start_seconds}–${item.end_seconds}s</td><td class="${Math.abs(item.deviation_cents) > 50 ? "off-pitch" : ""}">${item.deviation_cents > 0 ? "+" : ""}${item.deviation_cents} cents</td><td>${esc(item.status)}</td></tr>`).join("")}</tbody></table></div></section>` : "";
   const findings = result.findings || [];
   const findingPanel = findings.length ? `<h3>按录音证据排出的本次优先动作</h3><div class="segment-list evidence-actions">${findings.map(item => `<div><b>${esc(item.priority)} · ${esc(item.time)}</b><span>${esc(item.metric)}</span><p class="segment-evidence">${esc(item.evidence)}</p><p>${esc(item.action)}</p></div>`).join("")}</div>` : "";
-  return `<section class="analysis-result"><div class="card"><div class="card-head"><div><span class="eyebrow">ANALYSIS RESULT</span><h2>《${esc(result.song_name)}》${esc(result.analysis_mode_label || "课堂音频分析")}</h2><p class="muted">已保存 · 时长 ${result.duration_seconds} 秒 · 推测速度 ${result.tempo_bpm ?? "—"} BPM</p></div><span class="status ok">分析记录 #${result.id}</span></div><p class="analysis-scope">${esc(result.analysis_scope)}</p><div class="scores professional-scores">${scoreCards}</div>${evidencePanel}${player}${noteAssessment}${pitchComparison}${referenceStatus}${findingPanel}<h3>分段关注点</h3><div class="segment-list">${result.segment_feedback.map(item => `<div><b>${esc(item.time)}</b><span>${esc(item.focus)} · ${item.pitch_stability ?? "—"} 分</span><p class="segment-evidence">${esc(item.evidence || "")}</p><p>${esc(item.note)}</p></div>`).join("")}</div><details class="method-details"><summary>查看本次分析的方法与边界</summary><ol>${(result.analysis_method || []).map(item => `<li>${esc(item)}</li>`).join("")}</ol><p>课堂整体分析显示录音中的声音轨迹、起音与能量证据；逐音评测只适合参考主旋律可用的单人或主声部清晰录音。</p></details><button class="btn primary" id="toFeedback">将分析总结写入课堂反馈</button></div>${referenceView(result)}</section>`;
+  return `<section class="analysis-result"><div class="card"><div class="card-head"><div><span class="eyebrow">CLASSROOM EVIDENCE</span><h2>《${esc(result.song_name)}》课堂整体分析</h2><p class="muted">已保存 · 时长 ${result.duration_seconds} 秒 · 推测速度 ${result.tempo_bpm ?? "—"} BPM</p></div><span class="status ok">分析记录 #${result.id}</span></div><p class="analysis-scope">${esc(result.analysis_scope)}</p><div class="scores professional-scores">${scoreCards}</div>${evidencePanel}${player}${findingPanel}<h3>分段关注点</h3><div class="segment-list">${(result.segment_feedback || []).map(item => `<div><b>${esc(item.time)}</b><span>${esc(item.focus)} · ${item.pitch_stability ?? "—"} 分</span><p class="segment-evidence">${esc(item.evidence || "")}</p><p>${esc(item.note)}</p></div>`).join("")}</div>${method}<button class="btn primary" id="toFeedback">将分析总结写入课堂反馈</button></div>${referenceView(result)}</section>`;
 }
+
+function soloResultView(result, player, method) {
+  const comparison = result.intonation_comparison || {};
+  const note = result.note_assessment || {};
+  const diagnostics = result.solo_diagnostics || {};
+  const quality = diagnostics.recording_voiced_ratio;
+  const reference = diagnostics.reference || {};
+  const diagnosticsPanel = `<section class="classroom-evidence"><span class="eyebrow">SCORING CONDITIONS</span><h3>逐音评分条件</h3><p>练唱录音可用人声：<b>${quality == null ? "—" : `${Math.round(quality * 100)}%`}</b>；参考来源：<b>${esc(reference.source === "demucs_vocals" ? "已从混音分离人声" : reference.source === "clean_vocal" ? "清晰单人参考人声" : "待确认")}</b></p>${reference.message ? `<small>${esc(reference.message)}</small>` : ""}</section>`;
+  const referenceStatus = !comparison.available && !note.available ? `<section class="notice analysis-note"><b>本次单人逐音评测未给分</b><p>${esc(note.message || comparison.message || reference.message || "参考旋律不可用；请检查参考类型和录音质量。")}</p></section>` : "";
+  const comparisonCard = comparison.available ? `<section class="intonation-card"><div><span class="eyebrow">PITCH ALIGNMENT</span><h3>参考主旋律对齐</h3><p>${esc(comparison.message)}</p></div><div class="intonation-score"><b>${comparison.intonation_score}</b><span>${esc(comparison.status)}</span></div><div class="analysis-summary"><span>中位偏差 <b>${comparison.median_deviation_cents} cents</b></span><span>偏差帧 <b>${comparison.off_pitch_ratio}%</b></span></div></section>` : "";
+  const noteAssessment = note.available ? `<section class="note-assessment"><div class="card-head"><div><span class="eyebrow">NOTE-BY-NOTE ASSESSMENT</span><h3>逐音结果</h3><p>${esc(note.message)}</p></div><div class="intonation-score"><b>${note.score}</b><span>逐音得分</span></div></div><div class="analysis-summary"><span>匹配音符 <b>${note.matched_notes}</b></span><span>±50 cents 命中 <b>${note.accurate_note_ratio}%</b></span><span>中位偏差 <b>${note.median_deviation_cents} cents</b></span></div><div class="note-table"><table><thead><tr><th>#</th><th>目标音</th><th>时间</th><th>偏差</th><th>判定</th></tr></thead><tbody>${(note.events || []).map(item => `<tr><td>${item.index}</td><td>${esc(item.expected_note)}</td><td>${item.start_seconds}–${item.end_seconds}s</td><td class="${Math.abs(item.deviation_cents) > 50 ? "off-pitch" : ""}">${item.deviation_cents > 0 ? "+" : ""}${item.deviation_cents} cents</td><td>${esc(item.status)}</td></tr>`).join("")}</tbody></table></div></section>` : "";
+  return `<section class="analysis-result"><div class="card"><div class="card-head"><div><span class="eyebrow">SOLO VOICE ASSESSMENT</span><h2>《${esc(result.song_name)}》单人练唱逐音评测</h2><p class="muted">已保存 · 时长 ${result.duration_seconds} 秒 · 不使用课堂整体分数</p></div><span class="status ok">分析记录 #${result.id}</span></div><p class="analysis-scope">${esc(result.analysis_scope)}</p>${player}${diagnosticsPanel}${comparisonCard}${referenceStatus}${noteAssessment}${method}</div></section>`;
+}
+
 function referenceView(result) {
   if (!result.has_reference_comparison) return "";
   return `<section class="card reference-panel"><div class="card-head"><div><h3>参考原唱对比</h3><small>仅反映整体能量轮廓相似度，不等同音准评分。</small></div><b class="reference-score">${result.reference_similarity}</b></div><div class="wave"><b>参考音频</b><div id="referenceWave"></div></div><div class="wave"><b>课堂录音</b><div id="recordingWave"></div></div></section>`;
