@@ -176,7 +176,7 @@ python -m pytest -q
    docker compose -f docker-compose.edgeone.yml up -d --build
    ```
 
-3. 将 EdgeOne Pages 连接到本仓库，静态发布目录设为 `frontend`，无需 Node 构建命令。
+3. 将 EdgeOne Pages 连接到本仓库，根目录保持仓库根目录；仓库根目录的 `edgeone.json` 会将静态输出目录设为 `frontend`，无需 Node 构建命令。
 4. 将 `frontend/config.js` 的 `apiBaseUrl` 设置为后端 HTTPS 地址加 `/api`，并把后端 `ALLOWED_ORIGINS` 设为真实 Pages 域名。
 5. 按部署文档检查 `/api/health`、登录 Cookie、音频上传和任务流程。
 
