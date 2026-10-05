@@ -1,6 +1,20 @@
 # EdgeOne 部署
 
-本项目不是纯静态网站：浏览器前端可以部署到 EdgeOne Pages，而 FastAPI、音频解码、逐音评测、上传文件和数据库必须运行在一个长期存活的 Python/Docker 服务中。
+仓库根目录的 [`edgeone.json`](../edgeone.json) 已将 EdgeOne 静态发布目录设为 `frontend`，并关闭前端构建和依赖安装。导入仓库时，项目根目录应为仓库根目录；如果控制台已有旧构建设置，请改为：
+
+| 设置 | 值 |
+| --- | --- |
+| 根目录 | `/`（仓库根目录） |
+| 框架预设 | Other / Static |
+| 安装命令 | 留空或使用仓库 `edgeone.json` |
+| 构建命令 | 留空或使用仓库 `edgeone.json` |
+| 输出目录 | `frontend` |
+
+部署后检查 `https://你的站点/assets/css/main.css?v=20261005-3`：应返回 CSS 文本，响应类型为 `text/css`。若返回 HTML、404 或登录页，说明发布目录没有包含 `frontend/assets/`，页面就会显示浏览器默认样式。再检查 `https://你的站点/assets/js/main.js?v=20261005-3` 是否返回 JavaScript。
+
+静态资源可以放在 EdgeOne Pages，但页面仍需单独运行 FastAPI 后端。EdgeOne 也提供 Python Cloud Functions；本项目当前使用 SQLAlchemy/SQLite、本地上传目录、CPU 密集的音频处理和后台任务线程，不能只靠静态 Pages 完整运行。迁入函数前还需将数据库、上传文件和长任务改接持久化数据库、对象存储与任务服务。当前部署仍使用前端 Pages + 持久化 Python/Docker 后端。
+
+官方说明：[EdgeOne Pages 构建配置](https://pages.edgeone.ai/document/build-guide)、[edgeone.json 配置](https://pages.edgeone.ai/document/edgeone-json)、[Python Cloud Functions](https://pages.edgeone.ai/document/python)。
 
 ## 1. 部署 Python 后端
 
