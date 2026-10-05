@@ -25,7 +25,7 @@
 ## 三、图片/PDF 五线谱识别
 
 1. 从 Audiveris 官方发布页安装 Audiveris（不要使用名称相近的非官方站点）。
-2. 在 `backend/.env` 填入实际可执行文件。例如 Windows：
+2. 在 `backend/.env` 填入实际启动命令。官方 Windows 安装包通常在 `bin` 下提供 `Audiveris.bat`；如果你下载的版本只有 `Audiveris.exe`，直接填写 `.exe` 路径即可；也可以填写 `java -jar "...\\Audiveris.jar"`。例如：
 
    ```env
    AUDIVERIS_COMMAND=C:\Program Files\Audiveris\bin\Audiveris.bat

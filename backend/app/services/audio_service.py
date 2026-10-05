@@ -1,13 +1,34 @@
+"""音频分析服务。
+
+不能可靠判断，就明确说明不能判断，绝不把混音伴奏的错误转写伪装成学生
+“跑调 0 分”。逐音评测只接受可用的单人参考人声；混音原唱先尝试 Demucs
+人声分离，分离组件不可用时保留整体课堂分析而不输出假分数。
+"""
+
+from __future__ import annotations
+
 import math
 import shutil
 import subprocess
+import sys
+import tempfile
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 from fastapi import UploadFile
 
 from app.core.config import get_settings
+
+
+@dataclass
+class PitchTrack:
+    values: np.ndarray
+    times: np.ndarray
+    confidence: np.ndarray
+    voiced_ratio: float
+    backend: str
 
 
 def save_upload(file: UploadFile, folder: str) -> Path:
@@ -21,7 +42,7 @@ def save_upload(file: UploadFile, folder: str) -> Path:
 
 
 def _load_mono_audio(path: Path, sample_rate: int = 22050) -> tuple[np.ndarray, int]:
-    """通过项目自带的 FFmpeg 解码，统一处理 WAV、MP3、M4A，避开 audioread 的弃用回退。"""
+    """以 FFmpeg 统一解码，避免 PySoundFile/audioread 的格式回退。"""
     import imageio_ffmpeg
 
     command = [
@@ -42,8 +63,6 @@ def load_waveform(path: Path, points: int = 180) -> tuple[list[float], float]:
     try:
         signal, sample_rate = _load_mono_audio(path)
         duration = float(len(signal) / sample_rate)
-        if len(signal) == 0:
-            return [0.0] * points, 0.0
         blocks = np.array_split(np.abs(signal), points)
         waveform = [round(float(np.mean(block)), 5) if len(block) else 0.0 for block in blocks]
         maximum = max(waveform) or 1.0
@@ -52,208 +71,281 @@ def load_waveform(path: Path, points: int = 180) -> tuple[list[float], float]:
         return [0.0] * points, 0.0
 
 
-def _score(value: float) -> int:
-    """将声学指标限制在 0—100，且绝不把 NaN/无穷传给 round。"""
+def _score(value: float | None) -> int:
     try:
         numeric = float(value)
     except (TypeError, ValueError):
         return 0
-    if not math.isfinite(numeric):
-        return 0
-    return int(max(0, min(100, round(numeric))))
+    return int(max(0, min(100, round(numeric)))) if math.isfinite(numeric) else 0
 
 
-def _suggestions(scores: dict[str, int]) -> list[str]:
-    suggestions = []
-    if scores["pitch_stability"] < 70:
-        suggestions.append("音高起伏较大：先用钢琴或标准音做两小节回声模唱，再进入歌词演唱。")
-    if scores["rhythm_regularness"] < 70:
-        suggestions.append("节拍稳定度偏弱：先拍恒拍、后读节奏，最后把节奏放回旋律。")
-    if scores["dynamics"] < 65:
-        suggestions.append("声音层次不够清晰：在乐句末尾保留气息，避免全程同一力度。")
-    if scores["clarity"] < 65:
-        suggestions.append("录音环境或咬字清晰度影响较大：靠近麦克风、降低环境噪声后再复测。")
-    return suggestions or ["整体声学表现稳定：可挑选一个长音和一个节奏点，做更精细的分句打磨。"]
+def _pitch_track(path: Path) -> PitchTrack:
+    """提取单声部 F0 与置信度。
+
+    稳定基线为 pYIN；后续可换接 torchcrepe，但无论哪一后端都会经过同一
+    置信度门控和 DTW 对齐。
+    """
+    import librosa
+
+    signal, sr = _load_mono_audio(path)
+    values, voiced, probability = librosa.pyin(
+        signal, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7"),
+        sr=sr, hop_length=512,
+    )
+    values = np.asarray(values, dtype=float)
+    confidence = np.asarray(probability if probability is not None else voiced, dtype=float)
+    confidence = np.nan_to_num(confidence, nan=0.0)
+    times = librosa.frames_to_time(np.arange(len(values)), sr=sr, hop_length=512)
+    valid = np.isfinite(values) & (confidence >= 0.25)
+    values[~valid] = np.nan
+    return PitchTrack(values, np.asarray(times, dtype=float), confidence, float(valid.mean()) if len(valid) else 0.0, "librosa_pyin")
+
+
+def _midi(values: np.ndarray) -> np.ndarray:
+    output = np.full(len(values), np.nan, dtype=float)
+    valid = np.isfinite(values) & (values > 0)
+    output[valid] = 69 + 12 * np.log2(values[valid] / 440.0)
+    return output
+
+
+def _filled(values: np.ndarray) -> np.ndarray:
+    valid = np.isfinite(values)
+    if valid.sum() < 2:
+        raise ValueError("可用的人声音高帧不足")
+    return np.interp(np.arange(len(values)), np.flatnonzero(valid), values[valid])
+
+
+def _prepare_reference(path: Path | None, reference_kind: str) -> dict:
+    """将参考音频变为可用于主旋律比较的人声；混音不允许直接拿来打分。"""
+    if not path:
+        return {"available": False, "code": "reference_missing", "message": "未提供参考旋律：只能做课堂整体声学分析，不能判定是否唱准。"}
+    if reference_kind == "vocal":
+        return {"available": True, "path": path, "source": "clean_vocal", "message": "使用上传的清晰单人参考人声进行对齐。"}
+    if reference_kind not in {"mixed", "auto"}:
+        return {"available": False, "code": "reference_unsupported", "message": "参考类型无效。请选“清晰人声”或“原唱/伴奏混音”。"}
+    try:
+        output_root = Path(tempfile.gettempdir()) / "xiangyin-demucs" / uuid.uuid4().hex
+        command = [sys.executable, "-m", "demucs.separate", "--two-stems=vocals", "-n", "htdemucs", "-o", str(output_root), str(path)]
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=600, check=False)
+        stem = output_root / "htdemucs" / path.stem / "vocals.wav"
+        if result.returncode == 0 and stem.exists() and stem.stat().st_size > 4096:
+            return {"available": True, "path": stem, "source": "demucs_vocals", "message": "已从混音参考中分离人声，再用于主旋律对齐。"}
+        detail = (result.stderr or result.stdout or "").strip().replace("\n", " ")[:160]
+        if "No module named demucs" in detail:
+            return {"available": False, "code": "vocal_separator_not_installed", "message": "检测到原唱/伴奏混音，但未安装 Demucs 人声分离组件。为避免误判，本次不生成逐音分数；请上传清晰人声参考，或安装 Demucs 后重试。"}
+        return {"available": False, "code": "vocal_separation_failed", "message": f"混音参考的人声分离没有完成：{detail or 'Demucs 未返回人声轨'}。请改上传清晰单人参考人声，或检查 Demucs 安装。"}
+    except (ModuleNotFoundError, FileNotFoundError):
+        return {"available": False, "code": "vocal_separator_not_installed", "message": "检测到原唱/伴奏混音，但未安装 Demucs 人声分离组件。为避免误判，本次不生成逐音分数；请上传清晰人声参考，或安装 Demucs 后重试。"}
+    except subprocess.TimeoutExpired:
+        return {"available": False, "code": "vocal_separation_timeout", "message": "人声分离超过 10 分钟仍未完成，本次未生成逐音分数。请使用更短的片段或清晰人声参考。"}
+
+
+def _align_tracks(recording_path: Path, reference: dict) -> dict:
+    """用 DTW 对齐两次演唱，而不是按两段音频总时长硬切窗口。"""
+    if not reference.get("available"):
+        return {"available": False, "reason": reference.get("code"), "message": reference.get("message")}
+    try:
+        import librosa
+
+        recording = _pitch_track(recording_path)
+        expected = _pitch_track(Path(reference["path"]))
+        if recording.voiced_ratio < 0.16:
+            raise ValueError(f"学生录音可用人声仅 {recording.voiced_ratio:.0%}，请降低伴奏并靠近麦克风重录")
+        if expected.voiced_ratio < 0.18:
+            raise ValueError(f"参考人声可用音高仅 {expected.voiced_ratio:.0%}，不能作为主旋律目标")
+        actual_midi, expected_midi = _filled(_midi(recording.values)), _filled(_midi(expected.values))
+        # 对齐阶段去掉各自中位音高，避免男女声八度差把时间路径拉坏；评分仍用原始音高。
+        a_feature, e_feature = actual_midi - np.nanmedian(actual_midi), expected_midi - np.nanmedian(expected_midi)
+        _, warp = librosa.sequence.dtw(X=a_feature[np.newaxis, :], Y=e_feature[np.newaxis, :], metric="euclidean", global_constraints=True, band_rad=0.2)
+        pairs = np.asarray(warp[::-1], dtype=int)
+        if len(pairs) < 16:
+            raise ValueError("音高时间对齐路径不足")
+        actual_hz, expected_hz = recording.values[pairs[:, 0]], expected.values[pairs[:, 1]]
+        confidence = np.minimum(recording.confidence[pairs[:, 0]], expected.confidence[pairs[:, 1]])
+        valid = np.isfinite(actual_hz) & np.isfinite(expected_hz) & (confidence >= 0.25)
+        if valid.sum() < 14:
+            raise ValueError("对齐后可信人声音高不足")
+        pairs, actual_hz, expected_hz = pairs[valid], actual_hz[valid], expected_hz[valid]
+        raw_cents = 1200 * np.log2(actual_hz / expected_hz)
+        octave_shift = round(float(np.median(raw_cents)) / 1200) * 1200
+        cents = raw_cents - octave_shift
+        median_abs = float(np.median(np.abs(cents)))
+        if median_abs > 600:
+            return {"available": False, "reason": "reference_mismatch", "message": "对齐后中位音高差仍超过 600 cents，说明参考人声与练唱旋律不匹配，或分离结果被伴奏污染；本次不输出误导性的 0 分。", "diagnostics": {"median_deviation_cents": round(median_abs, 1), "reference_source": reference.get("source")}}
+        return {"available": True, "recording": recording, "reference_track": expected, "pairs": pairs, "actual_hz": actual_hz, "expected_hz": expected_hz, "cents": cents, "octave_shift": octave_shift, "reference_source": reference.get("source"), "message": reference.get("message")}
+    except Exception as exc:
+        return {"available": False, "reason": "alignment_failed", "message": f"主旋律对齐未完成：{str(exc)[:180]}。本次仍保留课堂整体分析，不输出逐音分数。"}
+
+
+def _score_details(cents: np.ndarray) -> tuple[int, float, float]:
+    absolute = np.abs(cents)
+    median_abs = float(np.median(absolute))
+    accurate = float(np.mean(absolute <= 50))
+    return _score(100 - median_abs * 0.72 - (1 - accurate) * 18), median_abs, accurate
+
+
+def _suggestions(scores: dict[str, int], evidence: dict | None = None) -> list[str]:
+    suggestions: list[str] = []
+    if scores.get("pitch_stability", 0) < 70:
+        suggestions.append("先用钢琴或标准音做两小节回声模唱；录制时尽量只保留一个主声部，避免伴奏盖住人声。")
+    if scores.get("rhythm_regularness", 0) < 70:
+        suggestions.append("把最不稳的一句拆成“拍恒拍 → 读节奏 → 加旋律”三步，再回到原速度。")
+    if scores.get("dynamics", 0) < 65:
+        suggestions.append("在句尾留出气息与力度变化，避免整句持续同一音量。")
+    if scores.get("clarity", 0) < 65:
+        suggestions.append("先降低伴奏和环境噪声、靠近麦克风，再录一次单独声部；否则音高结论可信度会降低。")
+    if evidence and evidence.get("low_voiced_ratio"):
+        suggestions.append("这段录音可用人声比例偏低，建议改用 20—40 秒的单人清唱片段做音准复测。")
+    return suggestions or ["整体证据较稳定：选一处长音和一处切分节奏，分别做一次精细的分句打磨。"]
+
+
+def _segment_metrics(track: PitchTrack, signal: np.ndarray, sr: int, start: float, end: float) -> dict:
+    import librosa
+
+    mask = (track.times >= start) & (track.times < end)
+    values, confidence = track.values[mask], track.confidence[mask]
+    valid = np.isfinite(values) & (confidence >= 0.25)
+    voiced_ratio = float(valid.mean()) if len(valid) else 0.0
+    local_cents = np.array([])
+    if valid.sum() > 2:
+        current = values[valid]
+        local_cents = 1200 * np.log2(current / np.median(current))
+    spread = float(np.median(np.abs(local_cents - np.median(local_cents)))) if len(local_cents) else None
+    pitch_score = _score(94 - (spread or 180) / 5 - max(0, .35 - voiced_ratio) * 80) if len(local_cents) else 0
+    chunk = signal[int(start * sr):min(len(signal), int(end * sr))]
+    if len(chunk) < 512:
+        return {"pitch_stability": pitch_score, "voiced_ratio": voiced_ratio, "pitch_spread_cents": spread, "rhythm_score": None, "dynamics_score": None}
+    onset = librosa.onset.onset_strength(y=chunk, sr=sr)
+    onset_times = librosa.frames_to_time(librosa.onset.onset_detect(onset_envelope=onset, sr=sr), sr=sr)
+    intervals = np.diff(onset_times)
+    rhythm_score = _score(100 - float(np.std(intervals) / max(np.mean(intervals), .01) * 100)) if len(intervals) >= 2 else None
+    rms = librosa.feature.rms(y=chunk)[0]
+    dynamic_range = float(np.percentile(rms, 90) - np.percentile(rms, 10))
+    return {"pitch_stability": pitch_score, "voiced_ratio": voiced_ratio, "pitch_spread_cents": spread, "rhythm_score": rhythm_score, "dynamics_score": _score(45 + dynamic_range * 260)}
+
+
+def _segment_feedback(metrics: dict, start: float, end: float) -> dict:
+    evidence = [f"可用人声 {metrics['voiced_ratio']:.0%}"]
+    if metrics.get("pitch_spread_cents") is not None:
+        evidence.append(f"音高离散 {metrics['pitch_spread_cents']:.0f} cents")
+    if metrics.get("rhythm_score") is not None:
+        evidence.append(f"起音节拍稳定 {metrics['rhythm_score']} 分")
+    if metrics["voiced_ratio"] < .22:
+        focus, note = "录音可用性", "人声被伴奏或环境声覆盖，先做单声部、近距离录音；这段不宜据此判断学生音准。"
+    elif metrics["pitch_stability"] < 55:
+        focus, note = "音高轨迹", "该段音高离散明显；先用参考音逐音回声模唱，再把歌词接回去。"
+    elif metrics.get("rhythm_score") is not None and metrics["rhythm_score"] < 65:
+        focus, note = "起音与节拍", "该段起音间隔不均；先拍读节奏，再用慢速伴奏完成这一句。"
+    elif metrics.get("dynamics_score", 100) < 58:
+        focus, note = "气息与力度", "声音层次偏平；在句尾设计一次渐弱或换气，帮助乐句更完整。"
+    else:
+        focus, note = "保持与迁移", "该段人声与节拍证据稳定，可保持速度，并把相同方法迁移到下一句。"
+    return {"start_seconds": round(start, 1), "end_seconds": round(end, 1), "time": f"{int(start // 60):02d}:{int(start % 60):02d}—{int(end // 60):02d}:{int(end % 60):02d}", "focus": focus, "pitch_stability": metrics["pitch_stability"], "voiced_ratio": round(metrics["voiced_ratio"], 2), "evidence": " · ".join(evidence), "note": note}
 
 
 def analyze_singing(path: Path) -> dict:
-    """课堂录音的可解释分析；不把合唱录音伪装成个人逐字评分。"""
+    """课堂整体分析：每一条建议携带录音中的真实音高、节拍或可用人声证据。"""
     try:
         import librosa
 
-        signal, sample_rate = _load_mono_audio(path)
-        duration = len(signal) / sample_rate
+        signal, sr = _load_mono_audio(path)
+        duration = len(signal) / sr
         if duration < 1:
             raise ValueError("录音时长不足 1 秒")
-
-        f0, voiced, _ = librosa.pyin(
-            signal, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7"), sr=sample_rate, hop_length=512
-        )
-        valid_f0 = f0[~np.isnan(f0)]
-        voiced_ratio = len(valid_f0) / max(1, len(f0))
-        if len(valid_f0) > 2:
-            cents = 1200 * np.log2(valid_f0 / np.median(valid_f0))
-            pitch_spread = float(np.median(np.abs(cents - np.median(cents))))
-            pitch_stability = _score(94 - pitch_spread / 5 - max(0, 0.35 - voiced_ratio) * 80)
-        else:
-            pitch_stability = 0
-
-        onset = librosa.onset.onset_strength(y=signal, sr=sample_rate)
-        tempo, beats = librosa.beat.beat_track(onset_envelope=onset, sr=sample_rate)
-        beat_times = librosa.frames_to_time(beats, sr=sample_rate)
-        if len(beat_times) >= 3:
-            intervals = np.diff(beat_times)
-            regularity = 100 - float(np.std(intervals) / max(np.mean(intervals), 0.01) * 100)
-            rhythm = _score(regularity)
-        else:
-            rhythm = 55
-
+        track = _pitch_track(path)
+        valid = track.values[np.isfinite(track.values)]
+        cents = 1200 * np.log2(valid / np.median(valid)) if len(valid) > 2 else np.array([])
+        spread = float(np.median(np.abs(cents - np.median(cents)))) if len(cents) else None
+        pitch_stability = _score(94 - (spread or 180) / 5 - max(0, .35 - track.voiced_ratio) * 80) if len(cents) else 0
+        onset = librosa.onset.onset_strength(y=signal, sr=sr)
+        tempo, beats = librosa.beat.beat_track(onset_envelope=onset, sr=sr)
+        intervals = np.diff(librosa.frames_to_time(beats, sr=sr))
+        rhythm = _score(100 - float(np.std(intervals) / max(np.mean(intervals), .01) * 100)) if len(intervals) >= 3 else 55
         rms = librosa.feature.rms(y=signal)[0]
         dynamic_range = float(np.percentile(rms, 90) - np.percentile(rms, 10))
         dynamics = _score(45 + dynamic_range * 260)
-        spectral = librosa.feature.spectral_centroid(y=signal, sr=sample_rate)[0]
+        spectral = librosa.feature.spectral_centroid(y=signal, sr=sr)[0]
         clarity = _score(45 + min(45, float(np.median(spectral)) / 55) - max(0, 0.16 - float(np.mean(rms))) * 100)
         scores = {"pitch_stability": pitch_stability, "rhythm_regularness": rhythm, "dynamics": dynamics, "clarity": clarity}
-
         section_count = min(6, max(3, int(duration // 7) + 1))
-        sections = []
-        frame_times = librosa.frames_to_time(np.arange(len(f0)), sr=sample_rate, hop_length=512)
-        for index in range(section_count):
-            start, end = index * duration / section_count, (index + 1) * duration / section_count
-            mask = (frame_times >= start) & (frame_times < end)
-            local_f0 = f0[mask]
-            local_valid = local_f0[~np.isnan(local_f0)]
-            local_voiced = len(local_valid) / max(1, len(local_f0))
-            local_spread = 0.0
-            if len(local_valid) > 2:
-                local_cents = 1200 * np.log2(local_valid / np.median(local_valid))
-                local_spread = float(np.median(np.abs(local_cents - np.median(local_cents))))
-            local_score = _score(94 - local_spread / 5 - max(0, .35 - local_voiced) * 80) if len(local_valid) > 2 else 0
-            if local_score >= 75:
-                note = "音高轨迹较稳定，可保持当前速度继续分句演唱。"
-            elif local_score >= 50:
-                note = "音高有起伏，建议用标准音做两小节回声模唱后再接歌词。"
-            else:
-                note = "有效有声音高不足或起伏较大；建议降低伴奏、靠近麦克风并录制单独声部。"
-            sections.append({
-                "start_seconds": round(start, 1), "end_seconds": round(end, 1),
-                "time": f"{int(start // 60):02d}:{int(start % 60):02d}—{int(end // 60):02d}:{int(end % 60):02d}",
-                "focus": "音高稳定" if index in (0, section_count - 1) else "音高、节拍与气息",
-                "pitch_stability": local_score, "voiced_ratio": round(local_voiced, 2), "note": note,
-            })
-        # librosa 在无稳定拍点的录音上会返回 NaN；这代表“无法估计速度”，
-        # 不能让一份仍可计算音高/响度的录音整体失败。
+        sections = [_segment_feedback(_segment_metrics(track, signal, sr, i * duration / section_count, (i + 1) * duration / section_count), i * duration / section_count, (i + 1) * duration / section_count) for i in range(section_count)]
         raw_tempo = float(np.asarray(tempo).item())
-        tempo_bpm = int(round(raw_tempo)) if np.isfinite(raw_tempo) and raw_tempo > 0 else None
-        return {
-            "analysis_available": True, "duration_seconds": round(duration, 1),
-            "tempo_bpm": tempo_bpm, "scores": scores,
-            "pitch_track": _compact_pitch_track(f0, frame_times), "segment_feedback": sections,
-            "suggestions": _suggestions(scores),
-        }
+        classroom_evidence = {"quality": {"voiced_ratio": round(track.voiced_ratio, 2), "pitch_spread_cents": round(spread, 1) if spread is not None else None, "pitch_backend": track.backend}, "summary": f"全段可用人声 {track.voiced_ratio:.0%}；音高离散 {round(spread) if spread is not None else '—'} cents；节拍稳定 {rhythm} 分。", "limitations": ["该指标描述录音中的声音表现；合唱、强伴奏或嘈杂环境不能直接推断到每个学生。"] if track.voiced_ratio < .55 else []}
+        return {"analysis_available": True, "duration_seconds": round(duration, 1), "tempo_bpm": int(round(raw_tempo)) if np.isfinite(raw_tempo) and raw_tempo > 0 else None, "scores": scores, "pitch_track": _compact_pitch_track(track.values, track.times), "segment_feedback": sections, "classroom_evidence": classroom_evidence, "suggestions": _suggestions(scores, {"low_voiced_ratio": track.voiced_ratio < .3})}
     except Exception as exc:
-        return {"analysis_available": False, "duration_seconds": 0.0, "tempo_bpm": None, "scores": {}, "segment_feedback": [], "suggestions": [f"无法完成声学分析：{str(exc)[:120]}。请上传清晰的 WAV、MP3 或 M4A 录音。"]}
+        return {"analysis_available": False, "duration_seconds": 0.0, "tempo_bpm": None, "scores": {}, "segment_feedback": [], "classroom_evidence": {}, "suggestions": [f"无法完成声学分析：{str(exc)[:160]}。请上传清晰的 WAV、MP3 或 M4A 录音。"]}
 
 
 def _compact_pitch_track(f0: np.ndarray, times: np.ndarray, points: int = 90) -> list[dict]:
-    """供前端展示的降采样音高轨迹（Hz），不把原始逐帧数据塞进数据库。"""
     if not len(f0):
         return []
     indices = np.linspace(0, len(f0) - 1, min(points, len(f0))).astype(int)
-    return [{"t": round(float(times[i]), 2), "hz": round(float(f0[i]), 1) if not np.isnan(f0[i]) else None} for i in indices]
+    return [{"t": round(float(times[i]), 2), "hz": round(float(f0[i]), 1) if np.isfinite(f0[i]) else None} for i in indices]
 
 
-def compare_intonation(recording_path: Path, reference_path: Path | None) -> dict:
-    """参考音频存在时，按归一化时间轴比较主音高轨迹，输出可解释的偏差而非波形相关性。"""
-    if not reference_path:
-        return {"available": False, "message": "未上传参考音频：系统只能评估课堂录音的音高稳定性，不能判定是否跑调。"}
+def compare_intonation(recording_path: Path, reference: dict) -> dict:
+    aligned = _align_tracks(recording_path, reference)
+    if not aligned.get("available"):
+        return {"available": False, "reason": aligned.get("reason"), "message": aligned.get("message"), "diagnostics": aligned.get("diagnostics", {})}
+    cents = aligned["cents"]
+    score, median_abs, accurate = _score_details(cents)
+    segments = []
+    for i, values in enumerate(np.array_split(cents, 4)):
+        error = float(np.median(np.abs(values)))
+        segments.append({"part": f"第 {i + 1} 段", "median_deviation_cents": round(error, 1), "off_pitch_ratio": round(float(np.mean(np.abs(values) > 50)) * 100), "status": "稳定" if error < 30 else "可校准" if error < 55 else "建议回声模唱"})
+    return {"available": True, "intonation_score": score, "status": "较准" if score >= 80 else "局部需校准" if score >= 60 else "音准需重点练习", "median_deviation_cents": round(median_abs, 1), "off_pitch_ratio": round((1 - accurate) * 100), "global_offset_cents": 0, "octave_adjustment_cents": aligned["octave_shift"], "reference_source": aligned["reference_source"], "segments": segments, "message": f"{aligned['message']} 已用动态时间规整对齐两次演唱；仅消除 {aligned['octave_shift']:+.0f} cents 的整八度声部差异，半音偏差仍会计入结果。", "_aligned": aligned}
+
+
+def _smooth_midi(values: np.ndarray, window: int = 5) -> np.ndarray:
+    rounded = np.rint(_midi(values))
+    result = rounded.copy()
+    for index in range(len(rounded)):
+        nearby = rounded[max(0, index - window // 2): index + window // 2 + 1]
+        nearby = nearby[np.isfinite(nearby)]
+        if len(nearby):
+            result[index] = round(float(np.median(nearby)))
+    return result
+
+
+def assess_note_accuracy(recording_path: Path, reference: dict, aligned: dict | None = None) -> dict:
+    """基于 DTW 后的人声轨迹分段，不再转写混音伴奏中的所有乐器。"""
+    if not reference.get("available"):
+        return {"available": False, "reason": reference.get("code"), "message": reference.get("message")}
+    aligned = aligned or _align_tracks(recording_path, reference)
+    if not aligned.get("available"):
+        return {"available": False, "reason": aligned.get("reason"), "message": aligned.get("message")}
     try:
         import librosa
 
-        def track(path: Path) -> np.ndarray:
-            signal, sr = _load_mono_audio(path)
-            values, _, _ = librosa.pyin(signal, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7"), sr=sr, hop_length=512)
-            return values
-
-        recording, reference = track(recording_path), track(reference_path)
-        target = min(120, len(recording), len(reference))
-        if target < 12:
-            raise ValueError("有效音高帧不足")
-        grid = np.linspace(0, 1, target)
-        def normalize(values: np.ndarray) -> np.ndarray:
-            valid = ~np.isnan(values)
-            if valid.sum() < 8:
-                raise ValueError("有效音高帧不足")
-            return np.interp(grid, np.linspace(0, 1, len(values))[valid], values[valid])
-        r, ref = normalize(recording), normalize(reference)
-        cents = 1200 * np.log2(r / ref)
-        # 参考音频与课堂录音常有整体音高偏移；先扣除整体偏移，再判断局部音准。
-        global_offset = float(np.median(cents))
-        residual = cents - global_offset
-        median_abs = float(np.median(np.abs(residual)))
-        off_ratio = float(np.mean(np.abs(residual) > 50))
-        score = _score(100 - median_abs * .7 - off_ratio * 35)
-        status = "较准" if score >= 80 else "局部需校准" if score >= 60 else "跑调风险较高"
-        segments = []
-        for i, values in enumerate(np.array_split(residual, 4)):
-            error = float(np.median(np.abs(values)))
-            segments.append({"part": f"第 {i + 1} 段", "median_deviation_cents": round(error, 1), "off_pitch_ratio": round(float(np.mean(np.abs(values) > 50)) * 100), "status": "稳定" if error < 30 else "注意音准" if error < 55 else "需回声模唱"})
-        return {"available": True, "intonation_score": score, "status": status, "median_deviation_cents": round(median_abs, 1), "off_pitch_ratio": round(off_ratio * 100), "global_offset_cents": round(global_offset, 1), "segments": segments, "message": "已按归一化时间轴比较主音高轨迹；结果适合单人或主声部清晰的录音，合唱与嘈杂环境只作教学参考。"}
-    except Exception as exc:
-        return {"available": False, "message": f"参考音高对齐未完成：{str(exc)[:100]}。仍保留课堂录音的稳定性分析。"}
-
-
-def assess_note_accuracy(recording_path: Path, reference_path: Path | None) -> dict:
-    """专业单人练唱模式：参考旋律转为音符事件，再以录音连续音高计算逐音偏差。"""
-    if not reference_path:
-        return {"available": False, "message": "单人练唱逐音评测必须上传参考音频。"}
-    try:
-        import librosa
-        from basic_pitch.inference import predict
-
-        _, _, note_events = predict(str(reference_path))
-        reference_signal, reference_sr = _load_mono_audio(reference_path)
-        signal, sr = _load_mono_audio(recording_path)
-        reference_duration, duration = len(reference_signal) / reference_sr, len(signal) / sr
-        f0, _, _ = librosa.pyin(signal, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7"), sr=sr, hop_length=512)
-        times = librosa.frames_to_time(np.arange(len(f0)), sr=sr, hop_length=512)
-        events = []
-        for raw in note_events:
-            if not isinstance(raw, (tuple, list)) or len(raw) < 3:
-                continue
-            start, end, midi = float(raw[0]), float(raw[1]), int(raw[2])
-            if end - start < .12:
-                continue
-            # 以相对时间对齐，避免两次录音时长不同导致逐音窗口偏移。
-            target_start, target_end = start / max(reference_duration, .01) * duration, end / max(reference_duration, .01) * duration
-            window = f0[(times >= target_start) & (times <= target_end)]
-            valid = window[~np.isnan(window)]
-            if len(valid) < 2:
-                continue
-            actual_hz, expected_hz = float(np.median(valid)), float(librosa.midi_to_hz(midi))
-            cents = float(1200 * np.log2(actual_hz / expected_hz))
-            label = "较准" if abs(cents) <= 35 else "偏高" if cents > 0 else "偏低"
-            events.append({
-                "index": len(events) + 1, "start_seconds": round(target_start, 2), "end_seconds": round(target_end, 2),
-                "expected_midi": midi, "expected_note": librosa.midi_to_note(midi), "actual_hz": round(actual_hz, 1),
-                "deviation_cents": round(cents, 1), "status": label,
-            })
+        ref_track, pairs = aligned["reference_track"], aligned["pairs"]
+        expected_hz, actual_hz, cents = aligned["expected_hz"], aligned["actual_hz"], aligned["cents"]
+        expected_midi = _smooth_midi(expected_hz)
+        events, start = [], 0
+        def append_event(begin: int, finish: int):
+            if finish - begin < 5:
+                return
+            group = expected_midi[begin:finish]
+            group = group[np.isfinite(group)]
+            if not len(group):
+                return
+            midi = int(round(float(np.median(group))))
+            start_ref, end_ref = pairs[begin, 1], pairs[finish - 1, 1]
+            start_time, end_time = float(ref_track.times[min(start_ref, end_ref)]), float(ref_track.times[max(start_ref, end_ref)])
+            if end_time - start_time < .14:
+                return
+            deviation = float(np.median(cents[begin:finish]))
+            events.append({"index": len(events) + 1, "start_seconds": round(start_time, 2), "end_seconds": round(end_time, 2), "expected_midi": midi, "expected_note": librosa.midi_to_note(midi), "actual_hz": round(float(np.median(actual_hz[begin:finish])), 1), "deviation_cents": round(deviation, 1), "status": "较准" if abs(deviation) <= 35 else "偏高" if deviation > 0 else "偏低"})
+        for index in range(1, len(expected_midi) + 1):
+            if index == len(expected_midi) or expected_midi[index] != expected_midi[start]:
+                append_event(start, index)
+                start = index
         if len(events) < 3:
-            raise ValueError("可对齐的音符不足，请使用更清晰的单人演唱和参考旋律")
-        deviations = np.asarray([item["deviation_cents"] for item in events])
-        accurate = float(np.mean(np.abs(deviations) <= 50))
-        score = _score(100 - np.median(np.abs(deviations)) * .65 - (1 - accurate) * 20)
-        return {
-            "available": True, "method": "basic_pitch_note_events_plus_pyin_cents", "score": score,
-            "matched_notes": len(events), "accurate_note_ratio": round(accurate * 100),
-            "median_deviation_cents": round(float(np.median(np.abs(deviations))), 1),
-            "events": events[:48],
-            "message": "逐音评测以参考旋律转写出的音符为目标，并按相对时间定位课堂录音的实际音高；适合单人清唱或主声部清晰的录音。",
-        }
-    except ModuleNotFoundError:
-        return {"available": False, "message": "专业逐音组件未安装。请在 backend 目录执行 pip install -r requirements.txt 后重启服务。"}
+            return {"available": False, "reason": "note_segmentation_failed", "message": "人声旋律未形成足够稳定的音符片段；请上传更清晰、无伴奏或伴奏较低的单人参考与练唱。"}
+        values = np.asarray([item["deviation_cents"] for item in events])
+        score, median_abs, accurate = _score_details(values)
+        return {"available": True, "method": "vocal_f0_dtw_note_segments", "score": score, "matched_notes": len(events), "accurate_note_ratio": round(accurate * 100), "median_deviation_cents": round(median_abs, 1), "events": events[:48], "message": "目标音来自已对齐的参考人声主旋律；没有把伴奏和低音声部当作学生应唱的音。"}
     except Exception as exc:
-        return {"available": False, "message": f"逐音评测未完成：{str(exc)[:140]}。可改用课堂整体分析，或使用清晰的单人练唱录音。"}
+        return {"available": False, "reason": "note_assessment_failed", "message": f"逐音评测未完成：{str(exc)[:160]}。课堂整体分析仍已保存。"}
 
 
 def compare_waveforms(reference: list[float] | None, recording: list[float]) -> dict:
@@ -262,19 +354,8 @@ def compare_waveforms(reference: list[float] | None, recording: list[float]) -> 
     a, b = np.asarray(reference, dtype=float), np.asarray(recording, dtype=float)
     length = min(len(a), len(b))
     if length <= 3 or np.std(a[:length]) < 1e-8 or np.std(b[:length]) < 1e-8:
-        return {
-            "has_reference_comparison": True, "reference_waveform": reference, "recording_waveform": recording,
-            "reference_similarity": None,
-            "comparison_note": "其中一段音频的能量变化过小，无法计算可靠的波形相似度；不影响音高、节拍和分段分析。",
-        }
+        return {"has_reference_comparison": True, "reference_waveform": reference, "recording_waveform": recording, "reference_similarity": None, "comparison_note": "其中一段音频的能量变化过小，已跳过波形相似度；这不是音准结论。"}
     correlation = float(np.corrcoef(a[:length], b[:length])[0, 1])
     if not np.isfinite(correlation):
-        return {
-            "has_reference_comparison": True, "reference_waveform": reference, "recording_waveform": recording,
-            "reference_similarity": None,
-            "comparison_note": "参考音频与课堂录音无法形成有效相关性，已跳过波形相似度，不影响其余分析。",
-        }
-    return {
-        "has_reference_comparison": True, "reference_waveform": reference, "recording_waveform": recording,
-        "reference_similarity": _score(50 + correlation * 45),
-    }
+        return {"has_reference_comparison": True, "reference_waveform": reference, "recording_waveform": recording, "reference_similarity": None, "comparison_note": "两段音频无法形成有效波形相关性，已跳过此展示指标。"}
+    return {"has_reference_comparison": True, "reference_waveform": reference, "recording_waveform": recording, "reference_similarity": _score(50 + correlation * 45)}

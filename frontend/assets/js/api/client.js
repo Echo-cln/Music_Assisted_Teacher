@@ -26,6 +26,36 @@ async function request(path, options = {}) {
   return response.json();
 }
 
+// fetch 对 FormData 上传没有标准的上传进度回调。乐谱图片可能要经过本机 OMR，
+// 因此这里使用 XMLHttpRequest：上传阶段显示真实字节进度，上传结束后明确切换到
+// “服务器正在读取/识别”，不再让用户只看到一句“正在导入”。
+function uploadRequest(path, form, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", apiUrl(path));
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = event => {
+      if (!event.lengthComputable) return;
+      onProgress?.({ phase: "正在上传乐谱", progress: Math.min(65, Math.round(event.loaded / event.total * 65)) });
+    };
+    xhr.upload.onload = () => onProgress?.({ phase: "上传完成，正在读取乐谱", progress: 70 });
+    xhr.onerror = () => reject(new Error("上传连接中断，请检查后端是否仍在运行"));
+    xhr.onload = () => {
+      let body;
+      try { body = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch (_) { body = null; }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        const error = new Error(body?.detail || `导入失败（HTTP ${xhr.status}）`);
+        error.status = xhr.status;
+        reject(error);
+        return;
+      }
+      onProgress?.({ phase: "乐谱已解析，正在载入工程", progress: 96 });
+      resolve(body);
+    };
+    xhr.send(form);
+  });
+}
+
 async function streamRequest(path, payload, onEvent) {
   const response = await fetch(apiUrl(path), {
     method: "POST",
@@ -102,7 +132,7 @@ export const api = {
   workbenchProject: id => request(`/workbench/projects/${id}`),
   createWorkbenchProject: payload => request("/workbench/projects", { method: "POST", body: JSON.stringify(payload) }),
   arrangeProject: (id, payload) => request(`/workbench/projects/${id}/arrange`, { method: "POST", body: JSON.stringify(payload) }),
-  importScore: form => request("/workbench/import", { method: "POST", body: form }),
+  importScore: (form, onProgress) => uploadRequest("/workbench/import", form, onProgress),
   parseNotes: payload => request("/workbench/parse-notes", { method: "POST", body: JSON.stringify(payload) }),
   deleteWorkbenchProject: id => request(`/workbench/projects/${id}`, { method: "DELETE" }),
   adminUsers: () => request("/admin/users"),

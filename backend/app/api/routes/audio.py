@@ -14,7 +14,7 @@ from app.core.security import get_current_teacher
 from app.db.session import SessionLocal, get_db
 from app.models.entities import AudioAnalysis, AudioAnalysisJob, AudioAsset, ClassroomRecord, LessonPlan, Song, Teacher
 from app.repositories.song_repository import SongRepository
-from app.services.audio_service import analyze_singing, assess_note_accuracy, compare_intonation, compare_waveforms, load_waveform, save_upload
+from app.services.audio_service import _prepare_reference, analyze_singing, assess_note_accuracy, compare_intonation, compare_waveforms, load_waveform, save_upload
 
 router = APIRouter(prefix="/audio", tags=["音频"])
 logger = logging.getLogger(__name__)
@@ -45,24 +45,32 @@ def _check_request(db: Session, teacher: Teacher, song_id: int, lesson_plan_id: 
 
 def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: int | None, classroom_record_id: int | None,
                     analysis_mode: str, recording_path: Path, recording_name: str, recording_type: str,
-                    reference_path: Path | None, reference_name: str | None, reference_type: str | None,
+    reference_path: Path | None, reference_name: str | None, reference_type: str | None, reference_kind: str,
                     report=None):
     if report:
-        report(20, "正在读取录音并校验格式")
+        report(12, "正在解码课堂录音")
     recording_waveform, recording_duration = load_waveform(recording_path)
     if report:
-        report(42, "正在提取音高轨迹、起音与节拍")
+        report(20, "录音格式已校验，正在准备声学特征")
+        report(30, "正在提取音高轨迹、起音与节拍")
     singing_analysis = analyze_singing(recording_path)
     if report:
-        report(68, "正在计算分段声学指标")
+        report(55, "正在整理分段声学证据")
+        report(68, "正在计算课堂建议")
     if reference_path and song.owner_teacher_id == teacher_id:
         song.original_audio_path = str(reference_path)
     reference_waveform = load_waveform(reference_path)[0] if reference_path else None
     waveform_result = compare_waveforms(reference_waveform, recording_waveform)
-    intonation = compare_intonation(recording_path, reference_path)
+    if report and reference_path and reference_kind == "mixed":
+        report(73, "正在分离参考原唱的人声，避免把伴奏当成目标旋律")
+    prepared_reference = _prepare_reference(reference_path, reference_kind)
+    intonation = compare_intonation(recording_path, prepared_reference)
+    aligned = intonation.pop("_aligned", None)
     if report:
         report(82, "正在生成逐音结果与教学建议" if analysis_mode == "solo" else "正在生成课堂建议")
-    note_assessment = assess_note_accuracy(recording_path, reference_path) if analysis_mode == "solo" else None
+    note_assessment = assess_note_accuracy(recording_path, prepared_reference, aligned) if analysis_mode == "solo" else None
+    if report:
+        report(92, "正在保存分析记录")
     recording_asset = AudioAsset(teacher_id=teacher_id, song_id=song.id, classroom_record_id=classroom_record_id,
         asset_type="recording", file_path=str(recording_path), original_filename=recording_name,
         mime_type=recording_type, duration_seconds=recording_duration, is_reference=False)
@@ -79,12 +87,12 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
         "song_id": song.id, "song_name": song.name, "analysis_mode": analysis_mode,
         "analysis_mode_label": "单人练唱逐音评测" if analysis_mode == "solo" else "课堂整体分析",
         "has_original": reference_path is not None,
-        "analysis_scope": "课堂录音可评估整体音高稳定、节拍和声音表现；只有参考音频与主声部清晰时才给出音准对齐提示。",
+        "analysis_scope": "课堂录音可评估整体音高稳定、节拍和声音表现；逐音结果只在参考主旋律可用时生成，混音参考不会再被误当成音符目标。",
         "analysis_method": [
             "以 librosa.pyin 提取有声帧基频，计算音高稳定度与分段音高轨迹。",
             "检测起音、拍点与相邻拍间隔，估计节拍稳定性和推测速度。",
             "以短时能量与频谱特征估计力度层次、清晰度和录音可用性。",
-            "若提供参考音频，则将两条主音高轨迹归一化到同一时间轴，扣除整体音高偏移后计算局部偏差与疑似跑调比例。",
+            "若提供清晰参考人声，则以动态时间规整对齐两次演唱；混音参考先分离人声，失败时明确停在不可评分状态。",
         ],
         **singing_analysis, **waveform_result, "intonation_comparison": intonation,
         "note_assessment": note_assessment,
@@ -125,11 +133,11 @@ def _run_job(job_id: str):
                 raise RuntimeError("任务已取消")
             job.progress, job.stage, job.status = progress, stage, "running"
             db.commit()
-        report(8, "后台任务已开始，正在读取音频")
+        report(5, "后台任务已开始，正在读取音频")
         analysis, recording, reference = _build_analysis(db, job.teacher_id, song, payload.get("lesson_plan_id"),
             payload.get("classroom_record_id"), payload["analysis_mode"], Path(payload["recording_path"]),
             payload["recording_name"], payload["recording_type"], Path(payload["reference_path"]) if payload.get("reference_path") else None,
-            payload.get("reference_name"), payload.get("reference_type"), report)
+            payload.get("reference_name"), payload.get("reference_type"), payload.get("reference_kind", "mixed"), report)
         db.refresh(job)
         if job.status == "cancelled":
             db.rollback()
@@ -167,6 +175,7 @@ def analyze_audio(
     lesson_plan_id: int | None = Form(default=None),
     classroom_record_id: int | None = Form(default=None),
     analysis_mode: str = Form(default="classroom"),
+    reference_kind: str = Form(default="mixed"),
     recording: UploadFile = File(...),
     original: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
@@ -182,14 +191,14 @@ def analyze_audio(
     analysis, recording_asset, reference_asset = _build_analysis(db, teacher.id, song, lesson_plan_id, classroom_record_id,
         analysis_mode, recording_path, recording.filename or recording_path.name, recording.content_type or "application/octet-stream",
         reference_path, (original.filename if original else reference_path.name) if reference_path else None,
-        (original.content_type if original else "audio/mpeg") if reference_path else None)
+        (original.content_type if original else "audio/mpeg") if reference_path else None, reference_kind)
     db.commit()
     return _serialize_analysis(analysis, song, recording_asset, reference_asset)
 
 
 @router.post("/jobs", status_code=202)
 def create_audio_job(song_id: int = Form(...), lesson_plan_id: int | None = Form(default=None), classroom_record_id: int | None = Form(default=None),
-                     analysis_mode: str = Form(default="classroom"), recording: UploadFile = File(...), original: UploadFile | None = File(default=None),
+                     analysis_mode: str = Form(default="classroom"), reference_kind: str = Form(default="mixed"), recording: UploadFile = File(...), original: UploadFile | None = File(default=None),
                      db: Session = Depends(get_db), teacher: Teacher = Depends(get_current_teacher)):
     song, classroom_record_id = _check_request(db, teacher, song_id, lesson_plan_id, classroom_record_id, analysis_mode, bool(original))
     recording_path = save_upload(recording, f"recordings/{teacher.id}")
@@ -199,7 +208,8 @@ def create_audio_job(song_id: int = Form(...), lesson_plan_id: int | None = Form
           "analysis_mode": analysis_mode, "recording_path": str(recording_path), "recording_name": recording.filename or recording_path.name,
           "recording_type": recording.content_type or "application/octet-stream", "reference_path": str(reference_path) if reference_path else None,
           "reference_name": (original.filename if original else reference_path.name) if reference_path else None,
-          "reference_type": (original.content_type if original else "audio/mpeg") if reference_path else None}, ensure_ascii=False))
+          "reference_type": (original.content_type if original else "audio/mpeg") if reference_path else None,
+          "reference_kind": reference_kind}, ensure_ascii=False))
     db.add(job); db.commit()
     audio_executor.submit(_run_job, job.id)
     return _serialize_job(job, db)

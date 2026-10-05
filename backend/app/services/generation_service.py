@@ -81,7 +81,8 @@ def create_generation_job(teacher_id: int, payload: LessonGenerateRequest) -> di
             teacher_id=teacher_id,
             status="pending",
             stage="已完成教案骨架，准备连接模型服务",
-            progress=35,
+            # 进度从低值开始；后续每一个真实正文分片只递增 1%，不再出现 35→55→90 的跳跃。
+            progress=5,
             request_json=payload.model_dump_json(),
             preview_json=json.dumps(preview, ensure_ascii=False),
             result_json="{}",
@@ -118,7 +119,7 @@ def _run_generation_job(job_id: str) -> None:
             if not song or (payload.class_id and not profile):
                 raise ValueError("生成所需歌曲或班级已不存在")
 
-            _set_job(job, status="running", stage="正在连接模型服务", progress=38, step_index=3)
+            _set_job(job, status="running", stage="正在连接模型服务", progress=10, step_index=3)
             db.commit()
 
             completed = None
@@ -138,14 +139,14 @@ def _run_generation_job(job_id: str) -> None:
                 if job.status == "cancelled":
                     return
                 if kind == "start":
-                    _set_job(job, status="running", stage="模型已接受请求，等待首段正文", progress=42, step_index=3)
+                    _set_job(job, status="running", stage="模型已接受请求，等待首段正文", progress=18, step_index=3)
                     db.commit()
                 elif kind == "delta":
                     # 每个真正收到的 SSE 正文分片都推进 1%，最多到 88%。
                     # 这不是按时间猜测；无正文时不会假装进度已经完成。
                     received_chunks += 1
                     received_chars += len(str(value))
-                    next_progress = min(88, 42 + received_chunks)
+                    next_progress = min(88, 18 + received_chunks)
                     if next_progress > int(job.progress or 0):
                         _set_job(
                             job,
@@ -189,7 +190,8 @@ def _run_generation_job(job_id: str) -> None:
                 job,
                 status="failed",
                 stage="生成失败",
-                progress=max(job.progress or 0, 55),
+                # 失败时保留最后一个真实阶段，不伪造额外的百分比进度。
+                progress=max(job.progress or 0, 1),
                 step_index=3,
                 error=str(exc)[:800],
             )

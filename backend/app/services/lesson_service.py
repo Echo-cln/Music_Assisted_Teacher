@@ -243,20 +243,34 @@ def _validated_content(raw: str, base: dict) -> dict:
             ) from repair_exc
     if not isinstance(content, dict):
         raise ValueError("模型没有返回教案对象")
-    # 模型只负责教学决策；课程摘要、时长和阶段是服务端事实骨架。
-    # 兼容 OpenAI 兼容接口常见的包装，不能把包装误判为“全字段缺失”。
     generated = content
-    for wrapper in ("enhancement", "lesson", "data", "content", "教案"):
-        if isinstance(content.get(wrapper), dict):
-            generated = content[wrapper]
+    # 兼容兼容接口常见的包装。部分网关会把本应是 JSON 对象的 content 再包成
+    # JSON 字符串；此前会把它误判为“缺少全部字段”。只解包模型实际返回的 JSON，
+    # 不能从规则骨架补字段后伪装为成功。
+    for wrapper in ("enhancement", "lesson", "data", "content", "教案", "result"):
+        wrapped = content.get(wrapper)
+        if isinstance(wrapped, dict):
+            generated = wrapped
             break
+        if isinstance(wrapped, str) and wrapped.lstrip().startswith("{"):
+            try:
+                parsed = json.loads(wrapped)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                generated = parsed
+                break
     required_fields = (
         "title", "objectives", "key_points", "difficulties", "preparation",
         "timeline", "theory_explanation", "mistake_practice", "differentiation", "assessment",
     )
     missing = [field for field in required_fields if not generated.get(field)]
     if missing:
-        raise ValueError(f"模型返回的教案缺少必要字段：{', '.join(missing)}；本次深度结果未保存，请重试")
+        present = ", ".join(sorted(generated.keys())) or "无"
+        raise ValueError(
+            f"模型返回的教案缺少必要字段：{', '.join(missing)}（实际字段：{present}）；"
+            "本次深度结果未保存，请重试"
+        )
     wrong_types = [field for field in required_fields if not isinstance(generated.get(field), type(base.get(field)))]
     if wrong_types:
         raise ValueError(f"模型返回的教案字段类型不正确：{', '.join(wrong_types)}；本次深度结果未保存，请重试")

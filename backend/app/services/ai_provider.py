@@ -33,14 +33,14 @@ def _build_messages(base: dict, instruction: str, *, adjustment: bool = False, g
     lesson = {key: value for key, value in base.items() if key != "generation_context"}
     evidence = base.get("generation_context", {})
     contract = """
-【严格输出协议】只输出一个 JSON 对象（可包在 enhancement 中），必须包含 title、objectives、key_points、difficulties、preparation、timeline、theory_explanation、mistake_practice、differentiation、assessment。
-timeline 项目数必须等于输入 lesson；每项只返回 teacher 与 students。不要返回 summary、minutes、stage、generation_context：它们是后端已经确定的事实与课时骨架。JSON 结束后立即停止。
+【严格输出协议】只输出一个 JSON 对象（可包在 enhancement 中），且必须包含：title、objectives、key_points、difficulties、preparation、timeline、theory_explanation、mistake_practice、differentiation、assessment。
+timeline 的项目数必须等于输入 lesson 的项目数；每一项只返回 teacher 与 students。不要返回 summary、minutes、stage、generation_context：这些是后端已经确定的事实与课时骨架。JSON 结束后立即停止。
 """
     if adjustment:
         system_prompt = """
 你是一名具有多年乡村小学音乐教学经验的优秀音乐教研员。根据教师的调整要求修改现有教案。
 只输出一个合法 JSON 对象，不要 Markdown、不要解释、不要 generation_context。
-保留 timeline 项数；minutes、stage 由后端保留，模型不要输出。
+保留 timeline 项数；每项的 minutes、stage 由后端保留，模型不要输出。
 只能依据输入资料，不得编造歌词、简谱或地方文化事实。请把修改真正落实到目标、流程、话术和评价中。
 """ + contract
     elif generation_strategy == "fast":

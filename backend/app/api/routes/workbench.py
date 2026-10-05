@@ -23,6 +23,22 @@ def present(row: ArrangementProject) -> dict:
     }
 
 
+def present_summary(row: ArrangementProject) -> dict:
+    """工程侧栏只需要元数据，绝不能把所有轨道 JSON 一次传回浏览器。
+
+    旧实现最多传 60 个完整工程，每个工程都包含音符、编曲声部和和弦；工程增多后
+    点击一个项目之前就要反复解码、传输和渲染大量无关数据，造成明显卡顿。
+    """
+    return {
+        "id": row.id,
+        "title": row.title,
+        "source_kind": row.source_kind,
+        "tempo": row.tempo,
+        "style": row.style,
+        "updated_at": row.updated_at.isoformat(),
+    }
+
+
 def own(project_id: int, db: Session, teacher: Teacher) -> ArrangementProject:
     row = db.scalar(select(ArrangementProject).where(ArrangementProject.id == project_id, ArrangementProject.teacher_id == teacher.id))
     if not row:
@@ -33,7 +49,7 @@ def own(project_id: int, db: Session, teacher: Teacher) -> ArrangementProject:
 @router.get("/projects")
 def projects(db: Session = Depends(get_db), teacher: Teacher = Depends(get_current_teacher)):
     rows = db.scalars(select(ArrangementProject).where(ArrangementProject.teacher_id == teacher.id).order_by(ArrangementProject.updated_at.desc()).limit(60)).all()
-    return [present(row) for row in rows]
+    return [present_summary(row) for row in rows]
 
 
 @router.get("/projects/{project_id}")

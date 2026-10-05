@@ -20,12 +20,22 @@ class OMRUnavailableError(RuntimeError):
 
 
 def _command_parts(command: str) -> list[str]:
-    parts = shlex.split(command, posix=False)
+    raw = command.strip()
+    # Windows 用户常把带空格的安装路径直接写进 .env。对“单独的 .bat/.cmd/.exe”
+    # 不再按空格切分；否则 `C:\\Program Files\\...` 会被拆成两个参数。对于
+    # `java -jar "..."` 等复合命令，仍使用 Windows 风格分词并清理保留的引号。
+    if len(raw) >= 2 and raw[0] == raw[-1] == '"':
+        raw = raw[1:-1].strip()
+    if raw.lower().endswith((".bat", ".cmd", ".exe")):
+        parts = [raw]
+    else:
+        parts = [part.strip('"') for part in shlex.split(raw, posix=False)]
     if not parts:
         raise OMRUnavailableError(
             "尚未配置 AUDIVERIS_COMMAND，无法识别图片/PDF 五线谱。"
-            "请安装官方 Audiveris 后，在 backend/.env 填写其可执行文件完整路径，"
-            "例如 AUDIVERIS_COMMAND=C:\\Program Files\\Audiveris\\bin\\Audiveris.bat。"
+            "请安装官方 Audiveris 后，在 backend/.env 填写启动命令。"
+            "Windows 官方包通常是 bin\\Audiveris.bat；如果你的版本只有 Audiveris.exe，直接填写 .exe；"
+            "也可以使用 java -jar 方式。示例 AUDIVERIS_COMMAND=C:\\Program Files\\Audiveris\\bin\\Audiveris.bat。"
         )
     return parts
 
@@ -64,6 +74,12 @@ def recognize_staff_image(raw: bytes, filename: str, suffix: str) -> tuple[bytes
         exported = _export_file(output)
         if result.returncode != 0 or not exported:
             detail = (result.stderr or result.stdout or "未导出 MusicXML").strip().replace("\n", " ")[:500]
+            if "No installed OCR languages" in detail:
+                raise RuntimeError(
+                    "Audiveris 已启动，但没有安装 OCR 语言包（日志：No installed OCR languages）。"
+                    "请先单独打开 Audiveris，安装英文 eng 语言数据；Windows 常见目录为 "
+                    "%APPDATA%\\AudiverisLtd\\audiveris\\config\\tessdata，安装后重启后端再导入。"
+                )
             raise RuntimeError(f"Audiveris 识谱失败（退出码 {result.returncode}）：{detail}")
         return exported.read_bytes(), {
             "engine": "Audiveris",

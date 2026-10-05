@@ -3,7 +3,12 @@
 // Pin the player/parser versions together: unversioned CDN imports can silently
 // change their ESM export shape and break every local SF2 import at once.
 const SMPLR_URL = "https://unpkg.com/smplr@1.0.0/dist/index.mjs";
-const SOUNDFONT2_PARSER_URL = "https://esm.sh/soundfont2@0.5.0?bundle";
+const SOUNDFONT2_PARSER_URLS = [
+  // 两个 CDN 的导出形态不同：esm.sh 只有 default，jsDelivr 同时有 named export。
+  // 依次尝试可避免单一 CDN 被校园网/代理拦截后所有 SF2 都无法导入。
+  "https://esm.sh/soundfont2@0.5.0?bundle",
+  "https://cdn.jsdelivr.net/npm/soundfont2@0.5.0/+esm",
+];
 
 let audioContext;
 let smplrPromise;
@@ -77,18 +82,21 @@ export async function loadLocalSoundfont(instrument, file, onProgress) {
     throw new Error("文件扩展名是 .sf2，但内容不是标准 SoundFont2（缺少 RIFF/sfbk 文件头）；请确认下载到的是 .sf2 而不是 .sf3/.zip/网页错误页");
   }
   const api = await smplr();
-  let parser;
-  try {
-    parser = await import(SOUNDFONT2_PARSER_URL);
-  } catch (error) {
-    throw new Error(`SoundFont2 解析器加载失败（检查网络/CDN）：${error?.message || error}`);
+  let SoundFont2, loadErrors = [];
+  for (const parserUrl of SOUNDFONT2_PARSER_URLS) {
+    try {
+      const parser = await import(parserUrl);
+      // esm.sh only exposes default.SoundFont2; jsDelivr exposes SoundFont2 as well.
+      SoundFont2 = [parser.SoundFont2, parser.default?.SoundFont2, parser.default]
+        .find(candidate => typeof candidate === "function" && candidate.prototype);
+      if (SoundFont2) break;
+      loadErrors.push(`${new URL(parserUrl).host}：模块没有 SoundFont2 构造器`);
+    } catch (error) {
+      loadErrors.push(`${new URL(parserUrl).host}：${error?.message || error}`);
+    }
   }
-  // esm.sh may expose the package's named export in different namespace shapes
-  // depending on its CJS/ESM wrapper. Resolve only actual constructors.
-  const SoundFont2 = [parser.SoundFont2, parser.default?.SoundFont2, parser.default]
-    .find(candidate => typeof candidate === "function" && candidate.prototype);
   if (!SoundFont2) {
-    throw new Error("SoundFont2 解析器模块未提供可用构造器；请刷新页面重试，或检查 CDN 是否被代理/安全软件替换");
+    throw new Error(`SoundFont2 解析器不可用（${loadErrors.join("；")}）。请检查浏览器是否拦截 CDN 或校园网代理。`);
   }
   const url = URL.createObjectURL(file);
   const player = api.Soundfont2(context(), {
@@ -99,7 +107,7 @@ export async function loadLocalSoundfont(instrument, file, onProgress) {
   try {
     await player.ready;
     const name = player.instrumentNames?.[0];
-    if (!name) throw new Error("该 SF2 没有可播放的乐器音色");
+    if (!name) throw new Error("该 SF2 没有可播放的乐器音色；它可能是空包、SF3 转换文件或未包含标准预设");
     await player.loadInstrument(name);
     const old = customPacks.get(instrument);
     old?.url && URL.revokeObjectURL(old.url);

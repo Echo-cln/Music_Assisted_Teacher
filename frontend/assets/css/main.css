@@ -389,7 +389,7 @@ td small { color: var(--muted); }
 .archive-item dt { font-weight: 700; color: var(--ink); }.archive-item dd { margin: 0; color: var(--muted); white-space: pre-wrap; }
 .archive-actions { min-width: 290px; display: grid; gap: 10px; }.archive-actions audio, .audio-player-card audio { width: 100%; }
 .feedback-audio-module { border: 1px solid #dfc8b8; background: #fff9f3; padding: 16px; margin: 18px 0; border-radius: 14px; }.feedback-audio-module h3 { margin: 4px 0; }.feedback-audio-module small { color: var(--muted); font-weight: 400; }
-.module-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }.audio-player-card, .intonation-card { border: 1px solid var(--line); background: #fcfaf7; padding: 16px; margin: 20px 0; border-radius: 14px; }.audio-player-card h3, .intonation-card h3 { margin: 4px 0 8px; }
+.module-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }.audio-player-card, .intonation-card, .classroom-evidence { border: 1px solid var(--line); background: #fcfaf7; padding: 16px; margin: 20px 0; border-radius: 14px; }.audio-player-card h3, .intonation-card h3, .classroom-evidence h3 { margin: 4px 0 8px; }.classroom-evidence { border-left: 4px solid #547785; background: linear-gradient(90deg, #f2f7f8, #fcfaf7); }.classroom-evidence p { margin: 6px 0; font-weight: 650; }.classroom-evidence small, .segment-evidence { display: block; color: var(--muted); font-size: .88rem; }.segment-evidence { margin: 8px 0 2px !important; }.inline-controls { display: flex; gap: 8px; margin: 4px 0 9px; }.inline-controls select { max-width: 330px; }
 .intonation-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; }.intonation-card > .analysis-summary, .intonation-card > .segment-list { grid-column: 1 / -1; }.intonation-score { min-width: 88px; display: grid; place-content: center; text-align: center; background: #f4e7dc; color: var(--brand); border-radius: 14px; padding: 8px; }.intonation-score b { font-size: 1.65rem; }.intonation-score span { font-size: .8rem; font-weight: 700; }
 .segment-list.compact { grid-template-columns: repeat(4, minmax(0, 1fr)); }.analysis-note { margin: 20px 0; }
 .note-assessment { margin: 20px 0; padding: 18px; border: 1px solid #c9dbe1; border-radius: 14px; background: #f7fbfc; }.note-assessment .analysis-summary { margin: 14px 0; }
@@ -420,3 +420,24 @@ td small { color: var(--muted); }
   .professional-scores { grid-template-columns: repeat(2, 1fr); }
   .segment-list, .segment-list.compact { grid-template-columns: 1fr; }.intonation-card { grid-template-columns: 1fr; }.archive-item dl { grid-template-columns: 1fr; gap: 3px; }.archive-tabs { overflow-x: auto; }
 }
+/* 工作台：收紧说明文字，并使用与全站一致的文件选择控件 */
+.workbench-head { max-width: 1240px; margin: 0 auto 18px; }
+.workbench-head h1 { margin: 0 0 6px; }
+.workbench-head p { margin: 0; color: var(--muted); }
+.workbench-layout { max-width: 1240px; margin: 0 auto; }
+.composer-tabs { min-height: 38px; }
+.score-actions, .sample-pack-controls { display: flex; align-items: center; gap: 8px; }
+.sample-score, .file-import, .sample-file-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #dfc4b4; border-radius: 10px; padding: 9px 12px; background: #fffdfa; color: #9f4b35; font-size: .84rem; font-weight: 750; text-decoration: none; cursor: pointer; }
+.sample-score { color: #706159; border-color: #e6d9cf; }
+.file-import:hover, .sample-file-button:hover { background: #fbefe7; }
+.sample-file-button input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.sample-file-button:focus-within, .file-import:focus-within { outline: 3px solid rgba(191, 100, 70, .18); outline-offset: 2px; }
+.sample-pack { padding: 13px 14px; background: #fffdf9; }
+.sample-pack small { max-width: 440px; }
+.sample-pack-controls select { min-width: 104px; margin: 0; }
+.sample-pack input[type=file] { width: 1px; }
+.composer-hint { margin-top: 12px; }
+.score-import-status { display:none; grid-template-columns:minmax(0,1fr) 170px auto; align-items:center; gap:12px; margin:12px 0 0; padding:10px 12px; border:1px solid #eaded4; border-radius:12px; background:#fffdf9; color:#74655b; font-size:.82rem; }
+.score-import-status:not(:empty) { display:grid; }.score-import-status b,.score-import-status small { display:block; }.score-import-status small { margin-top:2px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.score-import-status.running b { color:var(--brand); }.score-import-status.success { border-color:#b7d4be; background:#f5fbf5; }.score-import-status.success b { color:#39724a; }.score-import-status.error { border-color:#e1b9b0; background:#fff6f3; }.score-import-status.error b { color:#a54335; }.score-import-progress { height:7px; overflow:hidden; border-radius:99px; background:#ede4dc; }.score-import-progress i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#b75236,#d88b67); transition:width .2s ease; }.score-import-status.running .score-import-progress i { background:linear-gradient(90deg,#b75236,#d88b67,#b75236); background-size:180% 100%; animation:import-progress 1.1s linear infinite; }.workbench-project.loading { opacity:.65; cursor:wait; }.workbench-project:disabled { cursor:wait; }
+@keyframes import-progress { to { background-position:180% 0; } }
+@media (max-width: 700px) { .composer-tabs, .sample-pack { align-items: flex-start; flex-direction: column; }.score-actions, .sample-pack-controls { width: 100%; }.file-import, .sample-file-button { flex: 1; }.workbench-layout { margin: 0; } }
