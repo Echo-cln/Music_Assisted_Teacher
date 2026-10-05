@@ -33,8 +33,8 @@ def _build_messages(base: dict, instruction: str, *, adjustment: bool = False, g
     lesson = {key: value for key, value in base.items() if key != "generation_context"}
     evidence = base.get("generation_context", {})
     contract = """
-【严格输出协议】只输出一个 JSON 对象（可包在 enhancement 中），且必须包含：title、objectives、key_points、difficulties、preparation、timeline、theory_explanation、mistake_practice、differentiation、assessment。
-timeline 的项目数必须等于输入 lesson 的项目数；每一项只返回 teacher 与 students。不要返回 summary、minutes、stage、generation_context：这些是后端已经确定的事实与课时骨架。JSON 结束后立即停止。
+【严格输出协议】只输出一个 JSON 对象，不要包装字段或 Markdown。必须包含 title、objectives（字符串数组）、key_points（字符串）、difficulties（字符串）、preparation（字符串）、timeline（对象数组）、theory_explanation（含 term、script）、mistake_practice（含 problem、correction）、differentiation（字符串数组）、assessment（字符串）。
+timeline 项数必须等于输入 lesson；每项只含 teacher 与 students 两个非空字符串。不要输出 summary、minutes、stage、generation_context。总正文控制在 2500 个汉字以内，JSON 结束后立即停止。
 """
     if adjustment:
         system_prompt = """
@@ -59,15 +59,9 @@ timeline 的项目数必须等于输入 lesson 的项目数；每一项只返回
         # 深度模式是一次完整的“诊断→决策→落地”生成，而不是快速骨架的扩写版。
         system_prompt = """
 你是一名具有多年乡村小学音乐教学经验的优秀音乐教研员。
-你的任务不是润色或机械扩写已有骨架，而是先根据班级画像、歌曲资料、知识库和教师补充要求完成教学诊断，再将决策落到一份能直接带进课堂的教案中。
+根据班级画像、歌曲资料、知识库和教师补充要求，写出一份能直接带进课堂的教案。先选定一个最需要优先解决的学习问题，再把决定落实到目标、活动和评价中。
 
-在内部完成以下四个步骤，但绝不输出你的推理过程：
-1. 判断本班最需要优先解决的一个音乐学习问题，以及课堂可利用的优势；
-2. 为每个既定环节确定“让学生做什么、教师看什么、做不到时怎么支架”；
-3. 检查目标、活动、评价是否前后一致，且总时长不被改变；
-4. 删除空话、重复建议和未经资料支持的内容。
-
-只输出一个合法 JSON 对象；不允许 Markdown、解释或 generation_context。不得删除、合并、减少、调换 timeline 数组中的课堂环节；minutes 和 stage 由后端保留。
+只输出合法 JSON，不要解释或推理过程。不得删除、合并、减少、调换 timeline 数组中的课堂环节；minutes 和 stage 由后端保留。
 
 【每个课堂环节必须可执行】
 timeline 每一项的 teacher 与 students 均需与该项 stage 和 minutes 对应：

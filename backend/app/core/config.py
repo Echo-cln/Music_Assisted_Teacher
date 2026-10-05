@@ -24,9 +24,9 @@ class Settings(BaseSettings):
     ai_fast_api_key: str = ""
     # GLM-5.3 系列始终会先生成推理 token。若不显式设置，供应商默认 max，
     # 很容易在输出教案正文前耗尽 max_tokens。其它兼容服务不会收到该参数。
-    ai_reasoning_effort: str = "high"
+    ai_reasoning_effort: str = "low"
     ai_fast_reasoning_effort: str = "low"
-    ai_max_tokens: int = 12288
+    ai_max_tokens: int = 32768
     ai_fast_max_tokens: int = 8192
     smtp_host: str = ""
     smtp_port: int = 465

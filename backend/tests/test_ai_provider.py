@@ -1,39 +1,17 @@
-import json
-from types import SimpleNamespace
-
-import httpx
 from app.services import ai_provider
 
 
-def test_bigmodel_stream_sends_selected_model_and_yields_text(monkeypatch):
-    settings = SimpleNamespace(
-        ai_api_key="test-key",
-        ai_base_url="https://open.bigmodel.cn/api/paas/v4",
-        ai_model="glm-5.3-flash",
-    )
-    monkeypatch.setattr(ai_provider, "get_settings", lambda: settings)
+def test_stream_lesson_json_selects_fast_model_and_forwards_strategy(monkeypatch):
+    calls = []
 
-    def handle(request):
-        assert str(request.url) == "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-        assert request.headers["Authorization"] == "Bearer test-key"
-        payload = json.loads(request.content)
-        assert payload["model"] == "glm-5.3-flash"
-        assert payload["stream"] is True
-        assert payload["temperature"] == 1
-        assert "response_format" not in payload
-        return httpx.Response(
-            200,
-            text=(
-                'data: {"choices":[{"delta":{"content":"{\\"title\\":"}}]}\n\n'
-                'data: {"choices":[{"delta":{"content":"\\"教案\\"}"}}]}\n\n'
-                "data: [DONE]\n\n"
-            ),
-        )
+    class Adapter:
+        def stream(self, messages, generation_strategy):
+            calls.append((messages, generation_strategy))
+            yield '{"title":"教案"}'
 
-    real_client = httpx.Client
-    monkeypatch.setattr(
-        ai_provider.httpx,
-        "Client",
-        lambda **kwargs: real_client(transport=httpx.MockTransport(handle), **kwargs),
-    )
-    assert "".join(ai_provider.stream_lesson_json({"title": "教案"})) == '{"title":"教案"}'
+    monkeypatch.setattr(ai_provider, "get_settings", lambda: type("Settings", (), {"ai_model": "deep", "ai_fast_model": "fast"})())
+    monkeypatch.setattr(ai_provider, "get_adapter", lambda model, generation_strategy: Adapter())
+
+    assert "".join(ai_provider.stream_lesson_json({"title": "教案"}, generation_strategy="fast")) == '{"title":"教案"}'
+    assert calls[0][1] == "fast"
+    assert calls[0][0][0]["role"] == "system"

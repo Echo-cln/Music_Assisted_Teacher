@@ -63,10 +63,23 @@ async function playTracks(tracks, muted = new Set(), volume = {}, options = {}) 
       const status = document.querySelector("#sampleLoadStatus"); if (status) status.textContent = `正在加载${LABEL[instrument] || instrument}采样 ${loaded}/${total}`;
     } });
     const status = document.querySelector("#sampleLoadStatus"); if (status) status.textContent = "真实采样已就绪";
-    if (result.unavailable.length) notify(`${result.unavailable.map(id => LABEL[id] || id).join("、")}没有已授权音源包，已跳过该轨；请在“传统音色包”导入对应 .sf2。`, "error");
+    const fallback = result.failed || [];
+    // 标准采样加载失败（离线、CDN 被拦截或某个 SF2 不兼容）时，保留可听的本地合成试听。
+    // 每条失败轨独立回退，不能让一份坏 SF2 静音整首作品或电子钢琴。
+    fallback.forEach(({ track }) => {
+      const gain = Math.max(0, Math.min(1, Number(volume[track.id] ?? 1)));
+      (track.notes || []).forEach(note => tone(track.instrument, note, Math.max(now, ctx.currentTime + .02) + Number(note.start || 0), Math.max(.06, Number(note.duration || .2)), gain));
+    });
+    if (fallback.length) {
+      const names = [...new Set(fallback.map(item => LABEL[item.track.instrument] || item.track.instrument))].join("、");
+      if (status) status.textContent = `采样暂不可用，已用本地试听音色播放：${names}`;
+      notify(`部分真实采样未加载，已继续播放本地试听音色：${names}`);
+    } else if (status) status.textContent = "真实采样已就绪";
+    if (result.unavailable.length) notify(`${result.unavailable.map(id => LABEL[id] || id).join("、")}没有可用音源，已跳过该轨；请在“传统音色包”导入对应 .sf2。`, "error");
   } catch (error) {
-    const status = document.querySelector("#sampleLoadStatus"); if (status) status.textContent = "采样加载失败";
-    notify(`真实采样加载失败：${error.message}`, "error");
+    // AudioContext 被浏览器拒绝等基础错误才会走到这里；仍尽量保留键盘试听。
+    const status = document.querySelector("#sampleLoadStatus"); if (status) status.textContent = "浏览器音频启动失败";
+    notify(`无法启动浏览器音频：${error.message}`, "error");
   }
 }
 function projectCard(p) { return `<button class="workbench-project ${current?.id === p.id ? "active" : ""}" data-project="${p.id}"><b>${esc(p.title)}</b><small>${esc(p.style)} · ${p.tempo} BPM</small></button>`; }

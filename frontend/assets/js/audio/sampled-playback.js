@@ -61,9 +61,16 @@ async function standardPlayer(instrument, notes, onProgress) {
   else if (standard[instrument]?.kind === "soundfont") player = api.Soundfont(context(), { ...options, instrument: standard[instrument].instrument, kit: "FluidR3_GM", loadLoopData: instrument === "violin" });
   else if (standard[instrument]?.kind === "drums") player = api.DrumMachine(context(), { ...options, instrument: "TR-808", notesToLoad: { notes: ["kick", "snare", "hat"] } });
   else return null;
-  players.set(key, player);
-  await player.ready;
-  return player;
+  try {
+    await player.ready;
+    // 只有完整加载成功后才缓存。失败的 CDN 请求不能把后续每一次试听都毒化。
+    players.set(key, player);
+    return player;
+  } catch (error) {
+    players.delete(key);
+    try { player.stop?.(); } catch (_) {}
+    throw error;
+  }
 }
 
 /**
@@ -99,15 +106,21 @@ export async function loadLocalSoundfont(instrument, file, onProgress) {
     throw new Error(`SoundFont2 解析器不可用（${loadErrors.join("；")}）。请检查浏览器是否拦截 CDN 或校园网代理。`);
   }
   const url = URL.createObjectURL(file);
-  const player = api.Soundfont2(context(), {
-    url,
-    createSoundfont: data => new SoundFont2(data instanceof Uint8Array ? data : new Uint8Array(data)),
-    onLoadProgress: ({ loaded, total }) => onProgress?.({ instrument, loaded, total }),
-  });
+  let player;
   try {
+    // 先在这里解析一次：某些 SF2 变体会触发 soundfont2 的内部数组错误。
+    // 这样错误只影响本次导入，不会进入全局播放路径。
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const parsed = new SoundFont2(bytes);
+    player = api.Soundfont2(context(), {
+      url,
+      createSoundfont: () => parsed,
+      onLoadProgress: ({ loaded, total }) => onProgress?.({ instrument, loaded, total }),
+    });
     await player.ready;
-    const name = player.instrumentNames?.[0];
-    if (!name) throw new Error("该 SF2 没有可播放的乐器音色；它可能是空包、SF3 转换文件或未包含标准预设");
+    const names = Array.isArray(player.instrumentNames) ? player.instrumentNames.filter(Boolean) : [];
+    const name = names[0];
+    if (!name) throw new Error("该 SF2 没有可播放的预设；请换用包含乐器 Preset 的标准 SF2 文件");
     await player.loadInstrument(name);
     const old = customPacks.get(instrument);
     old?.url && URL.revokeObjectURL(old.url);
@@ -115,6 +128,10 @@ export async function loadLocalSoundfont(instrument, file, onProgress) {
     return name;
   } catch (error) {
     URL.revokeObjectURL(url);
+    const detail = error?.message || String(error);
+    if (/reading ['\"]?1|undefined/i.test(detail)) {
+      throw new Error("该 SF2 使用了当前浏览器解析器不兼容的分区格式；文件本身未被上传。请换用标准 SF2（不是 SF3/压缩包），或使用内置试听音色。");
+    }
     throw error;
   }
 }
@@ -131,22 +148,28 @@ export async function playSampledTracks(tracks, { muted = new Set(), volume = {}
   stopSampledPlayback();
   const playable = (tracks || []).filter(track => !muted.has(track.id));
   const unavailable = [];
+  const failed = [];
   const now = ctx.currentTime + 0.12;
   for (const track of playable) {
     const instrument = track.instrument;
-    let player = customPacks.get(instrument)?.player;
-    if (!player) player = await standardPlayer(instrument, notesFor(track.notes), onProgress);
-    if (!player) { unavailable.push(instrument); continue; }
-    const gain = Math.max(0, Math.min(1, Number(volume[track.id] ?? 1)));
-    for (const note of track.notes || []) {
-      const stop = player.start({
-        note: instrument === "drum" && !customPacks.has(instrument) ? drumName(Number(note.pitch)) : Number(note.pitch),
-        time: now + Number(note.start || 0),
-        duration: Math.max(0.06, Number(note.duration || 0.2)),
-        velocity: Math.max(1, Math.round(Number(note.velocity || 82) * gain)),
-      });
-      if (typeof stop === "function") scheduledStops.push(stop);
+    try {
+      let player = customPacks.get(instrument)?.player;
+      if (!player) player = await standardPlayer(instrument, notesFor(track.notes), onProgress);
+      if (!player) { unavailable.push(instrument); continue; }
+      const gain = Math.max(0, Math.min(1, Number(volume[track.id] ?? 1)));
+      for (const note of track.notes || []) {
+        const stop = player.start({
+          note: instrument === "drum" && !customPacks.has(instrument) ? drumName(Number(note.pitch)) : Number(note.pitch),
+          time: now + Number(note.start || 0),
+          duration: Math.max(0.06, Number(note.duration || 0.2)),
+          velocity: Math.max(1, Math.round(Number(note.velocity || 82) * gain)),
+        });
+        if (typeof stop === "function") scheduledStops.push(stop);
+      }
+    } catch (error) {
+      // 单个采样包或 CDN 失败不得静音其它声部。调用方会用本地 WebAudio 试听该轨。
+      failed.push({ track, message: error?.message || String(error) });
     }
   }
-  return { unavailable: [...new Set(unavailable)] };
+  return { unavailable: [...new Set(unavailable)], failed };
 }

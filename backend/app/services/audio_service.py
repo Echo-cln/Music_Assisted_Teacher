@@ -184,20 +184,53 @@ def _score_details(cents: np.ndarray) -> tuple[int, float, float]:
     return _score(100 - median_abs * 0.72 - (1 - accurate) * 18), median_abs, accurate
 
 
-def _suggestions(scores: dict[str, int], evidence: dict | None = None) -> list[str]:
-    suggestions: list[str] = []
-    if scores.get("pitch_stability", 0) < 70:
-        suggestions.append("先用钢琴或标准音做两小节回声模唱；录制时尽量只保留一个主声部，避免伴奏盖住人声。")
-    if scores.get("rhythm_regularness", 0) < 70:
-        suggestions.append("把最不稳的一句拆成“拍恒拍 → 读节奏 → 加旋律”三步，再回到原速度。")
-    if scores.get("dynamics", 0) < 65:
-        suggestions.append("在句尾留出气息与力度变化，避免整句持续同一音量。")
-    if scores.get("clarity", 0) < 65:
-        suggestions.append("先降低伴奏和环境噪声、靠近麦克风，再录一次单独声部；否则音高结论可信度会降低。")
-    if evidence and evidence.get("low_voiced_ratio"):
-        suggestions.append("这段录音可用人声比例偏低，建议改用 20—40 秒的单人清唱片段做音准复测。")
-    return suggestions or ["整体证据较稳定：选一处长音和一处切分节奏，分别做一次精细的分句打磨。"]
+def _classroom_findings(sections: list[dict], scores: dict[str, int]) -> list[dict]:
+    """从实际最弱片段生成可定位的课堂动作，避免四个总分换成固定模板。"""
+    findings: list[dict] = []
+    usable = [section for section in sections if section.get("voiced_ratio", 0) >= .22]
+    weak_voice = min(sections, key=lambda item: item.get("voiced_ratio", 0), default=None)
+    if weak_voice and weak_voice.get("voiced_ratio", 0) < .35:
+        findings.append({
+            "priority": "先处理", "time": weak_voice["time"], "metric": "人声可用性",
+            "evidence": f"可用人声 {weak_voice['voiced_ratio']:.0%}",
+            "action": f"先在 {weak_voice['time']} 这一段让主唱靠近麦克风、伴奏降到较低音量后重录 20 秒；当前录音不适合把音高稳定度解释为学生唱准程度。",
+        })
+    if usable:
+        unstable = min(usable, key=lambda item: item.get("pitch_stability", 100))
+        if unstable.get("pitch_stability", 100) < 72:
+            findings.append({
+                "priority": "重点练", "time": unstable["time"], "metric": "音高稳定性",
+                "evidence": f"稳定度 {unstable['pitch_stability']} 分；{unstable.get('evidence', '')}",
+                "action": f"截取 {unstable['time']} 的一句，先给起始音，再做“教师唱两拍—学生回唱两拍—保留长音”的三轮练习；此项描述稳定性，不是跑调判定。",
+            })
+        rhythmic = [item for item in usable if item.get("rhythm_score") is not None]
+        if rhythmic:
+            weakest = min(rhythmic, key=lambda item: item["rhythm_score"])
+            if weakest["rhythm_score"] < 76:
+                findings.append({
+                    "priority": "随后练", "time": weakest["time"], "metric": "起音节拍",
+                    "evidence": f"起音节拍稳定 {weakest['rhythm_score']} 分",
+                    "action": f"在 {weakest['time']} 先只拍恒拍并读节奏，再加旋律；下一次回听只检查每个小组是否同时进入首拍。",
+                })
+    if scores.get("dynamics", 100) < 65:
+        findings.append({
+            "priority": "表达练习", "time": "全段", "metric": "力度层次",
+            "evidence": f"力度层次 {scores['dynamics']} 分",
+            "action": "挑一句句尾做一次渐弱与统一换气，然后录一遍前后对照；评价时记录能否听出句尾变化。",
+        })
+    if not findings:
+        strongest = max(sections, key=lambda item: item.get("pitch_stability", 0), default=None)
+        findings.append({
+            "priority": "保持并迁移", "time": strongest.get("time", "全段") if strongest else "全段", "metric": "可复用片段",
+            "evidence": strongest.get("evidence", "录音证据稳定") if strongest else "录音证据稳定",
+            "action": "保留这一段的进入方式和音量平衡，再把同样的排练顺序迁移到最难的一句。",
+        })
+    # 同一课堂最多呈现三个优先动作，按录音证据排序，避免模板式建议堆叠。
+    return findings[:3]
 
+
+def _suggestions(findings: list[dict]) -> list[str]:
+    return [f"{item['time']}｜{item['action']}" for item in findings]
 
 def _segment_metrics(track: PitchTrack, signal: np.ndarray, sr: int, start: float, end: float) -> dict:
     import librosa
@@ -270,8 +303,13 @@ def analyze_singing(path: Path) -> dict:
         section_count = min(6, max(3, int(duration // 7) + 1))
         sections = [_segment_feedback(_segment_metrics(track, signal, sr, i * duration / section_count, (i + 1) * duration / section_count), i * duration / section_count, (i + 1) * duration / section_count) for i in range(section_count)]
         raw_tempo = float(np.asarray(tempo).item())
-        classroom_evidence = {"quality": {"voiced_ratio": round(track.voiced_ratio, 2), "pitch_spread_cents": round(spread, 1) if spread is not None else None, "pitch_backend": track.backend}, "summary": f"全段可用人声 {track.voiced_ratio:.0%}；音高离散 {round(spread) if spread is not None else '—'} cents；节拍稳定 {rhythm} 分。", "limitations": ["该指标描述录音中的声音表现；合唱、强伴奏或嘈杂环境不能直接推断到每个学生。"] if track.voiced_ratio < .55 else []}
-        return {"analysis_available": True, "duration_seconds": round(duration, 1), "tempo_bpm": int(round(raw_tempo)) if np.isfinite(raw_tempo) and raw_tempo > 0 else None, "scores": scores, "pitch_track": _compact_pitch_track(track.values, track.times), "segment_feedback": sections, "classroom_evidence": classroom_evidence, "suggestions": _suggestions(scores, {"low_voiced_ratio": track.voiced_ratio < .3})}
+        findings = _classroom_findings(sections, scores)
+        classroom_evidence = {
+            "quality": {"voiced_ratio": round(track.voiced_ratio, 2), "pitch_spread_cents": round(spread, 1) if spread is not None else None, "pitch_backend": track.backend},
+            "summary": f"全段可用人声 {track.voiced_ratio:.0%}；音高离散 {round(spread) if spread is not None else '—'} cents；节拍稳定 {rhythm} 分。",
+            "limitations": ["课堂整体分析基于整段录音，显示的是声音轨迹与起音证据；没有参考主旋律时，不判断学生是否唱准。"] if track.voiced_ratio < .72 else ["没有参考主旋律时，音高稳定度不等同于跑调结论。"],
+        }
+        return {"analysis_available": True, "duration_seconds": round(duration, 1), "tempo_bpm": int(round(raw_tempo)) if np.isfinite(raw_tempo) and raw_tempo > 0 else None, "scores": scores, "pitch_track": _compact_pitch_track(track.values, track.times), "segment_feedback": sections, "classroom_evidence": classroom_evidence, "findings": findings, "suggestions": _suggestions(findings)}
     except Exception as exc:
         return {"analysis_available": False, "duration_seconds": 0.0, "tempo_bpm": None, "scores": {}, "segment_feedback": [], "classroom_evidence": {}, "suggestions": [f"无法完成声学分析：{str(exc)[:160]}。请上传清晰的 WAV、MP3 或 M4A 录音。"]}
 

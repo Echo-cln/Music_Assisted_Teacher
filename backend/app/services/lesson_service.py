@@ -220,6 +220,82 @@ def _adjustment_chunks(content: dict, instruction: str) -> tuple[str, Iterator[s
     return "rules", (raw[i : i + 120] for i in range(0, len(raw), 120))
 
 
+def _text_value(value: object, *, limit: int = 1800) -> str:
+    """把模型的合理对象/列表回答转换为页面可编辑的文本，不用骨架补写内容。"""
+    if isinstance(value, str):
+        return value.strip()[:limit]
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, list):
+        parts = [_text_value(item, limit=limit) for item in value]
+        return "；".join(item for item in parts if item)[:limit]
+    if isinstance(value, dict):
+        preferred = ("content", "text", "description", "script", "criteria", "method", "evidence", "teacher", "students")
+        parts = []
+        for key in preferred:
+            if key in value:
+                text = _text_value(value[key], limit=limit)
+                if text:
+                    parts.append(text)
+        if not parts:
+            for key, item in value.items():
+                text = _text_value(item, limit=limit)
+                if text:
+                    parts.append(f"{key}：{text}")
+        return "；".join(parts)[:limit]
+    return ""
+
+
+def _string_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        result = [_text_value(item, limit=500) for item in value]
+    elif isinstance(value, str):
+        result = [item.strip(" -•\t") for item in re.split(r"[\n；;]+", value) if item.strip(" -•\t")]
+    else:
+        result = []
+    return [item for item in result if item][:8]
+
+
+def _mapping_value(value: object, base_value: dict) -> dict:
+    if isinstance(value, dict):
+        result = {}
+        for key in base_value:
+            # 常见模型会用 explanation/plan 替代 script/correction。
+            aliases = {"script": ("script", "explanation", "content", "text"), "correction": ("correction", "action", "solution", "content", "text"), "term": ("term", "name", "title"), "problem": ("problem", "error", "issue")}
+            candidate = next((value.get(name) for name in aliases.get(key, (key,)) if value.get(name) is not None), None)
+            text = _text_value(candidate, limit=900)
+            if text:
+                result[key] = text
+        return {**base_value, **result}
+    text = _text_value(value, limit=900)
+    if not text:
+        return {}
+    # 字符串有明确正文时，把它放在可展示的正文键；标题/术语继续来自骨架事实。
+    result = dict(base_value)
+    target = "script" if "script" in result else "correction" if "correction" in result else next(iter(result), "content")
+    result[target] = text
+    return result
+
+
+def _normalize_generated(generated: dict, base: dict) -> dict:
+    """接受供应商常见 JSON 形态差异，之后仍严格检查字段是否真实存在。"""
+    normalized = dict(generated)
+    for field in ("title", "key_points", "difficulties", "preparation", "assessment"):
+        normalized[field] = _text_value(generated.get(field), limit=2200)
+    for field in ("objectives", "differentiation"):
+        normalized[field] = _string_list(generated.get(field))
+    for field in ("theory_explanation", "mistake_practice"):
+        normalized[field] = _mapping_value(generated.get(field), base.get(field) or {})
+    timeline = generated.get("timeline")
+    if isinstance(timeline, dict):
+        timeline = timeline.get("items") or timeline.get("stages") or timeline.get("timeline")
+    if isinstance(timeline, list):
+        normalized["timeline"] = [
+            {**item, "teacher": _text_value(item.get("teacher"), limit=1000), "students": _text_value(item.get("students"), limit=1000)}
+            for item in timeline if isinstance(item, dict)
+        ]
+    return normalized
+
 def _validated_content(raw: str, base: dict) -> dict:
     # 兼容少数模型仍包裹 Markdown 代码围栏或附带一句前言，提取完整对象后再校验。
     normalized = raw.strip()
@@ -260,6 +336,7 @@ def _validated_content(raw: str, base: dict) -> dict:
             if isinstance(parsed, dict):
                 generated = parsed
                 break
+    generated = _normalize_generated(generated, base)
     required_fields = (
         "title", "objectives", "key_points", "difficulties", "preparation",
         "timeline", "theory_explanation", "mistake_practice", "differentiation", "assessment",
@@ -273,7 +350,7 @@ def _validated_content(raw: str, base: dict) -> dict:
         )
     wrong_types = [field for field in required_fields if not isinstance(generated.get(field), type(base.get(field)))]
     if wrong_types:
-        raise ValueError(f"模型返回的教案字段类型不正确：{', '.join(wrong_types)}；本次深度结果未保存，请重试")
+        raise ValueError(f"模型返回的教案字段结构无法转换：{', '.join(wrong_types)}；本次深度结果未保存，请重试")
     base_timeline_for_check = base.get("timeline") or []
     timeline = generated.get("timeline") or []
     if len(timeline) != len(base_timeline_for_check):

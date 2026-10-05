@@ -131,3 +131,25 @@ python -m pytest -q
 ```
 
 当前测试覆盖 AI Provider、教案预览/调整/保存、个人资源、推荐规则。
+
+## 混音原唱的逐音评测
+
+“原唱 / 伴奏混音”必须先分离人声，不能把伴奏当作学生目标音。先运行：
+
+```text
+setup_audio_pro.bat
+```
+
+它会把 Demucs 安装到项目自己的 `.venv`。首次使用会下载模型权重；推荐用 20—40 秒、同一主旋律的参考主唱与练唱录音测试。若没有运行该脚本，课堂整体分析仍可用，但单人逐音评测会明确显示“未给分”。
+
+## AI 模型的推荐配置
+
+```ini
+AI_MODEL=glm-5.3-flash
+AI_REASONING_EFFORT=low
+AI_MAX_TOKENS=32768
+AI_FAST_MODEL=doubao-seed-2-0-mini-260428
+AI_FAST_MAX_TOKENS=8192
+```
+
+`glm-5.3-flash` 的深度模式会保留推理，但使用较低推理力度和更大的正文预算，避免先耗尽 token 后没有 JSON 正文。服务端会将常见的对象型评价归一化为可编辑文本；缺字段或截断 JSON 仍会明确失败，不会把规则骨架当作模型结果保存。

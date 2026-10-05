@@ -25,10 +25,11 @@ def test_styles_produce_different_rhythm_content_not_just_a_new_label():
     nursery = _arrange(melody, "童谣清新")
     ensemble = _arrange(melody, "器乐合奏")
 
-    def track(result, instrument):
-        return next(item for item in result["tracks"] if item["instrument"] == instrument)["notes"]
+    def track(result, track_id):
+        # 主旋律在任何主题下都必须原样保留；比较的是实际编曲伴奏轨，而非钢琴键位主旋律。
+        return next(item for item in result["tracks"] if item["id"] == track_id)["notes"]
 
-    # 吉他、鼓和钢琴的时值/起点必须随主题真实变化。
+    # 吉他、鼓和钢琴伴奏的时值/起点必须随主题真实变化。
     assert track(lyrical, "guitar") != track(rhythm, "guitar")
     assert track(rhythm, "drum") != track(nursery, "drum")
     assert track(nursery, "piano") != track(ensemble, "piano")

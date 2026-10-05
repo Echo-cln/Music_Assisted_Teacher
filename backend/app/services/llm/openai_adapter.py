@@ -55,27 +55,27 @@ class OpenAICompatibleAdapter:
             "max_tokens": (
                 getattr(self.settings, "ai_fast_max_tokens", 8192)
                 if generation_strategy == "fast"
-                else getattr(self.settings, "ai_max_tokens", 12288)
+                else getattr(self.settings, "ai_max_tokens", 32768)
             ),
         }
-        # GLM-5.3 的 thinking 不能关闭，且未指定 effort 时会默认 max。此前
-        # 3200 个 token 会被 reasoning_content 耗尽，从而发生“有数千 SSE 事件、
-        # 但 content 为空且 finish_reason=length”。这不是密钥问题。
+        # GLM-5.3 会先生成推理 token；高/max effort 会显著挤占正文预算。
+        # 默认 low 并保留 32768 tokens，避免出现“有数千 SSE 事件、但 content 为空且
+        # finish_reason=length”。这属于参数与单请求结构的组合问题，而非密钥问题。
         # 仅向 GLM-5.3 发送其专用参数，以免豆包等 OpenAI-compatible 服务拒绝它。
         if "glm-5.3" in self.model.lower():
             effort = (
                 getattr(self.settings, "ai_fast_reasoning_effort", "low")
                 if generation_strategy == "fast"
-                else getattr(self.settings, "ai_reasoning_effort", "high")
+                else getattr(self.settings, "ai_reasoning_effort", "low")
             )
-            payload["reasoning_effort"] = effort if effort in {"low", "high", "max"} else ("low" if generation_strategy == "fast" else "high")
+            payload["reasoning_effort"] = effort if effort in {"low", "high", "max"} else "low"
             payload["thinking"] = {"type": "enabled", "clear_thinking": True}
         # 不传 response_format：GLM-5.3-Flash 的兼容接口会因该参数出现不一致行为。
         # JSON 约束由提示词和后端解析承担，避免把参数不兼容伪装为空内容。
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         event_count, text_count, text_chars, finish_reason, observed = 0, 0, 0, "", set()
         try:
-            with httpx.Client(timeout=httpx.Timeout(180, connect=20)) as client:
+            with httpx.Client(timeout=httpx.Timeout(300, connect=20)) as client:
                 with client.stream("POST", f"{self.base_url}/chat/completions", headers=headers, json=payload) as response:
                     logger.info("llm_response model=%s strategy=%s status=%s content_type=%s request_id=%s", self.model, generation_strategy, response.status_code, response.headers.get("content-type", ""), response.headers.get("x-request-id") or response.headers.get("request-id") or "-")
                     if response.status_code >= 400:
