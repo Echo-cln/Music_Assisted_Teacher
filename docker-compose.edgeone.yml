@@ -8,17 +8,25 @@ services:
       - "8000:8000"
     environment:
       APP_ENV: production
-      # 在仓库根目录的 .env 中设置 Supabase PostgreSQL URI；未设置时保留本地 SQLite 默认值。
-      DATABASE_URL: ${DATABASE_URL:-sqlite:///./data/zhiban.db}
+      # Supabase Session Pooler URI. Compose fails early when required production settings are absent.
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the root .env file}
       UPLOAD_DIR: data/uploads
-      # 改为实际 EdgeOne Pages 域名，多个域名用英文逗号分隔。
-      ALLOWED_ORIGINS: https://your-pages-domain.edgeone.app
-      SESSION_COOKIE_SECURE: "true"
-      AI_BASE_URL: ${AI_BASE_URL}
-      AI_API_KEY: ${AI_API_KEY}
-      AI_MODEL: ${AI_MODEL}
-      AI_FAST_BASE_URL: ${AI_FAST_BASE_URL}
-      AI_FAST_API_KEY: ${AI_FAST_API_KEY}
-      AI_FAST_MODEL: ${AI_FAST_MODEL}
+      # The EdgeOne preview origin is the default; override when deploying another frontend domain.
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://music-assisted-teacher-qiszkhgt.edgeone.cool}
+      SESSION_COOKIE_SECURE: "${SESSION_COOKIE_SECURE:-true}"
+      SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL in the root .env file}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?Set SUPABASE_SERVICE_ROLE_KEY in the root .env file}
+      SUPABASE_STORAGE_BUCKET: ${SUPABASE_STORAGE_BUCKET:-teacher-media}
+      AI_BASE_URL: ${AI_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-glm-5.3-flash}
+      AI_FAST_BASE_URL: ${AI_FAST_BASE_URL:-https://ark.cn-beijing.volces.com/api/v3}
+      AI_FAST_API_KEY: ${AI_FAST_API_KEY:-}
+      AI_FAST_MODEL: ${AI_FAST_MODEL:-doubao-seed-2-0-mini-260428}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     volumes:
       - ./runtime:/app/backend/data
