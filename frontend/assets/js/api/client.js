@@ -8,20 +8,59 @@ export function apiUrl(path) {
   return `${API_ROOT}${String(relative).startsWith("/") ? relative : `/${relative}`}`;
 }
 
-async function request(path, options = {}) {
-  const response = await fetch(apiUrl(path), {
-    credentials: "include",
-    ...options,
-    headers: options.body instanceof FormData
-      ? options.headers
-      : { "Content-Type": "application/json", ...(options.headers || {}) },
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: "请求失败" }));
-    const err = new Error(error.detail || "请求失败");
-    err.status = response.status;
-    throw err;
+async function responseError(response, path) {
+  const url = apiUrl(path);
+  const raw = await response.text().catch(() => "");
+  let body = null;
+  try { body = raw ? JSON.parse(raw) : null; } catch (_) {}
+  let detail = body?.detail || body?.message || body?.error;
+  if (Array.isArray(detail)) {
+    detail = detail.map(item => item?.msg || JSON.stringify(item)).join("；");
   }
+  if (detail && typeof detail === "object") detail = JSON.stringify(detail);
+  if (response.status === 404 && API_ROOT === "/api" && location.hostname.endsWith(".edgeone.cool")) {
+    detail = "EdgeOne 当前只发布了静态前端，预览站点没有找到 /api 后端。请先部署 FastAPI 后端，并在 frontend/config.js 配置它的 HTTPS 地址。";
+  } else if (!detail) {
+    detail = raw && !raw.trimStart().startsWith("<")
+      ? raw.slice(0, 240)
+      : `接口未返回错误说明（HTTP ${response.status}）`;
+  }
+  const err = new Error(`${detail}（HTTP ${response.status}，${url}）`);
+  err.status = response.status;
+  err.endpoint = url;
+  err.requestId = response.headers.get("x-request-id") || response.headers.get("x-vercel-id") || "";
+  console.error("API 返回错误", { status: err.status, endpoint: err.endpoint, requestId: err.requestId });
+  return err;
+}
+
+function networkError(cause, path) {
+  const url = apiUrl(path);
+  const sameOrigin = API_ROOT.startsWith("/");
+  const edgePreview = location.hostname.endsWith(".edgeone.cool");
+  const hint = sameOrigin && edgePreview
+    ? "当前预览站仍使用同源 /api，但 EdgeOne 只发布了静态前端；需要部署后端并配置其 HTTPS API 地址。"
+    : "请检查后端是否运行、API 地址是否正确，以及后端 ALLOWED_ORIGINS 是否包含当前页面来源。";
+  const err = new Error(`无法连接后端：${url}。 ${hint}`);
+  err.cause = cause;
+  err.endpoint = url;
+  console.error("API 网络错误", { endpoint: url, cause: cause?.message || String(cause) });
+  return err;
+}
+
+async function request(path, options = {}) {
+  let response;
+  try {
+    response = await fetch(apiUrl(path), {
+      credentials: "include",
+      ...options,
+      headers: options.body instanceof FormData
+        ? options.headers
+        : { "Content-Type": "application/json", ...(options.headers || {}) },
+    });
+  } catch (cause) {
+    throw networkError(cause, path);
+  }
+  if (!response.ok) throw await responseError(response, path);
   if (response.status === 204) return null;
   return response.json();
 }
@@ -57,18 +96,18 @@ function uploadRequest(path, form, onProgress) {
 }
 
 async function streamRequest(path, payload, onEvent) {
-  const response = await fetch(apiUrl(path), {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: "请求失败" }));
-    const err = new Error(error.detail || "请求失败");
-    err.status = response.status;
-    throw err;
+  let response;
+  try {
+    response = await fetch(apiUrl(path), {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (cause) {
+    throw networkError(cause, path);
   }
+  if (!response.ok) throw await responseError(response, path);
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -76,10 +115,10 @@ async function streamRequest(path, payload, onEvent) {
   while (true) {
     const { value, done } = await reader.read();
     buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const messages = buffer.split("\n\n");
+    const messages = buffer.split("\\n\\n");
     buffer = messages.pop();
     for (const message of messages) {
-      const dataLine = message.split("\n").find(line => line.startsWith("data: "));
+      const dataLine = message.split("\\n").find(line => line.startsWith("data: "));
       if (!dataLine) continue;
       const event = JSON.parse(dataLine.slice(6));
       if (event.type === "error") throw new Error(event.message);
