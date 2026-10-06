@@ -6,7 +6,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,7 @@ from app.db.session import SessionLocal, get_db
 from app.models.entities import AudioAnalysis, AudioAnalysisJob, AudioAsset, ClassroomRecord, LessonPlan, Song, Teacher
 from app.repositories.song_repository import SongRepository
 from app.services.audio_service import _prepare_reference, analyze_singing, assess_note_accuracy, compare_intonation, compare_waveforms, load_waveform, save_upload
+from app.services.object_storage import ObjectStorageError, download_object, is_remote_ref, materialize_file, upload_app_file
 from app.services.classroom_insight_service import build_classroom_model_insight
 
 router = APIRouter(prefix="/audio", tags=["音频"])
@@ -57,14 +58,20 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
         raise ValueError((acoustic.get("suggestions") or ["录音无法分析"])[0])
     if report: report(38, "正在核验录音可用性与分段证据")
 
+    try:
+        recording_storage_ref = upload_app_file(recording_path, teacher_id, "recordings")
+        reference_storage_ref = upload_app_file(reference_path, teacher_id, "references") if reference_path else None
+    except ObjectStorageError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     recording_asset = AudioAsset(teacher_id=teacher_id, song_id=song.id, classroom_record_id=classroom_record_id,
-        asset_type="recording", file_path=str(recording_path), original_filename=recording_name,
+        asset_type="recording", file_path=recording_storage_ref, original_filename=recording_name,
         mime_type=recording_type, duration_seconds=recording_duration, is_reference=False)
     db.add(recording_asset); db.flush()
     reference_asset = None
     if reference_path:
         reference_asset = AudioAsset(teacher_id=teacher_id, song_id=song.id, classroom_record_id=classroom_record_id,
-            asset_type="original", file_path=str(reference_path), original_filename=reference_name or reference_path.name,
+            asset_type="original", file_path=reference_storage_ref, original_filename=reference_name or reference_path.name,
             mime_type=reference_type or "audio/mpeg", is_reference=True)
         db.add(reference_asset); db.flush()
 
@@ -98,7 +105,7 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
     else:
         if report: report(52, "正在准备参考主旋律")
         if reference_path and song.owner_teacher_id == teacher_id:
-            song.original_audio_path = str(reference_path)
+            song.original_audio_path = reference_storage_ref
         if reference_kind == "mixed" and report: report(60, "正在分离混音参考中的人声")
         prepared_reference = _prepare_reference(reference_path, reference_kind)
         if report: report(76, "正在将练唱与参考主旋律逐音对齐")
@@ -219,8 +226,11 @@ def analyze_audio(
     reference_path: Path | None = None
     if original:
         reference_path = save_upload(original, f"originals/{teacher.id}")
-    elif song.original_audio_path and Path(song.original_audio_path).exists():
-        reference_path = Path(song.original_audio_path)
+    elif song.original_audio_path:
+        try:
+            reference_path = materialize_file(song.original_audio_path)
+        except ObjectStorageError:
+            reference_path = None
     analysis, recording_asset, reference_asset = _build_analysis(db, teacher.id, song, lesson_plan_id, classroom_record_id,
         analysis_mode, recording_path, recording.filename or recording_path.name, recording.content_type or "application/octet-stream",
         reference_path, (original.filename if original else reference_path.name) if reference_path else None,
@@ -235,7 +245,15 @@ def create_audio_job(song_id: int = Form(...), lesson_plan_id: int | None = Form
                      db: Session = Depends(get_db), teacher: Teacher = Depends(get_current_teacher)):
     song, classroom_record_id = _check_request(db, teacher, song_id, lesson_plan_id, classroom_record_id, analysis_mode, bool(original))
     recording_path = save_upload(recording, f"recordings/{teacher.id}")
-    reference_path = save_upload(original, f"originals/{teacher.id}") if original else (Path(song.original_audio_path) if song.original_audio_path and Path(song.original_audio_path).exists() else None)
+    if original:
+        reference_path = save_upload(original, f"originals/{teacher.id}")
+    elif song.original_audio_path:
+        try:
+            reference_path = materialize_file(song.original_audio_path)
+        except ObjectStorageError:
+            reference_path = None
+    else:
+        reference_path = None
     job = AudioAnalysisJob(id=str(uuid.uuid4()), teacher_id=teacher.id, status="pending", stage="音频已保存，等待后台分析", progress=3,
         request_json=json.dumps({"song_id": song.id, "lesson_plan_id": lesson_plan_id, "classroom_record_id": classroom_record_id,
           "analysis_mode": analysis_mode, "recording_path": str(recording_path), "recording_name": recording.filename or recording_path.name,
@@ -309,6 +327,13 @@ def get_analysis(analysis_id: int, db: Session = Depends(get_db), teacher: Teach
 @router.get("/assets/{asset_id}/stream")
 def stream_asset(asset_id: int, db: Session = Depends(get_db), teacher: Teacher = Depends(get_current_teacher)):
     asset = db.scalar(select(AudioAsset).where(AudioAsset.id == asset_id, AudioAsset.teacher_id == teacher.id))
-    if not asset or not Path(asset.file_path).exists():
+    if not asset:
+        raise HTTPException(status_code=404, detail="音频文件不存在")
+    if is_remote_ref(asset.file_path):
+        try:
+            return Response(content=download_object(asset.file_path), media_type=asset.mime_type)
+        except ObjectStorageError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not Path(asset.file_path).exists():
         raise HTTPException(status_code=404, detail="音频文件不存在")
     return FileResponse(asset.file_path, media_type=asset.mime_type, filename=asset.original_filename)
