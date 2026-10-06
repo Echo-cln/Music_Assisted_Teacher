@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
+import logging
 from pathlib import Path
+from time import perf_counter
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +27,36 @@ app = FastAPI(
     redoc_url="/api/redoc",
     lifespan=lifespan,
 )
+
+logger = logging.getLogger("app.request_timing")
+
+
+@app.middleware("http")
+async def log_api_request_timing(request, call_next):
+    started = perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed_ms = (perf_counter() - started) * 1000
+        logger.exception(
+            "api_request_failed method=%s path=%s duration_ms=%.1f",
+            request.method,
+            request.url.path,
+            elapsed_ms,
+        )
+        raise
+
+    elapsed_ms = (perf_counter() - started) * 1000
+    if request.url.path.startswith("/api/"):
+        logger.info(
+            "api_request method=%s path=%s status=%s duration_ms=%.1f",
+            request.method,
+            request.url.path,
+            response.status_code,
+            elapsed_ms,
+        )
+        response.headers["Server-Timing"] = f"app;dur={elapsed_ms:.1f}"
+    return response
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
