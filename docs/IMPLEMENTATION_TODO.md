@@ -177,3 +177,19 @@
 - [x] 桌面端练唱录音与参考音频并排呈现，窄屏自动改为纵向排列，减少结果页不必要的纵向占用。
 - [x] `node --check`（工作台、音频结果页）与 `git diff --check` 通过。
 - [ ] 浏览器视觉验收及实际音频播放 / Demucs 重试仍需目标电脑确认；本次未标记为完成。
+
+
+## 2026-10-06 · SQLite → Supabase 数据迁移
+
+### 已完成并核实
+
+- [x] Supabase 项目 `Music Teacher` 的 17 张应用表结构已存在；逐表核对时记录数均为 0，原 SQLite 数据尚未迁入。
+- [x] 新增本机迁移脚本 `backend/scripts/migrate_sqlite_to_supabase.py`：迁移前显示脱敏目标和逐表数量、备份源 SQLite、要求输入确认词、目标非空即停止、单事务导入并逐表核对数量。
+- [x] 新增 `docs/SUPABASE_SQLITE_MIGRATION.md`，记录 Windows PowerShell 操作步骤、源库默认路径和文件迁移边界。
+- [x] 迁移脚本 Python 语法编译通过；代码已推送至 GitHub `main`。
+
+### 仍待目标电脑执行，未标记完成
+
+- [ ] 在保存 `backend/data/zhiban.db` 的电脑拉取最新 `main`，运行迁移脚本并确认终端逐表报告的源/目标行数一致。
+- [ ] 将音频、乐谱、伴奏、SF2 等本机文件放入线上后端可访问的持久化存储；SQLite 只保存路径，不包含这些文件字节。
+- [ ] 确认本地后端和 EdgeOne 后端都使用同一个 Supabase `DATABASE_URL`，完成两端新增/读取同一条记录的互通验收。
