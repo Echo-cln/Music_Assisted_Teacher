@@ -6,7 +6,16 @@
 
 1. 确认旧数据库文件存在，默认位置是 `backend/data/zhiban.db`。如果文件名或目录不同，运行时用 `--source` 指定。
 2. 确认 `backend/.env` 里的 `DATABASE_URL` 是 Supabase PostgreSQL 连接串。迁移脚本只把它作为目标，不会把 SQLite 改成目标或删除源文件。
-3. 确认当前目标 Supabase 项目正确。脚本会显示脱敏后的目标连接地址和各表记录数，并且目标应用表必须全部为空；发现任何已有数据都会停止，不会覆盖或合并。
+3. 在同一个 Supabase 项目的 **Storage** 中创建私有 Bucket，名称为 `teacher-media`（不要开启 Public）。
+4. 在本机 `backend/.env` 和 EdgeOne 后端环境变量中设置以下三项。`SUPABASE_SERVICE_ROLE_KEY` 是服务端密钥，只能留在后端环境变量中，不能放进前端配置、截图或 GitHub：
+
+   ```dotenv
+   SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=你的服务端SecretKey
+   SUPABASE_STORAGE_BUCKET=teacher-media
+   ```
+
+   `SUPABASE_URL` 和服务端 Secret Key 可在 Supabase 项目设置的 API Keys 页面查看。这里的 Key 不是数据库密码，也不是前端 publishable/anon key。迁移脚本显示脱敏后的目标地址和逐表记录数；目标应用表必须全部为空，发现已有数据会停止，不会覆盖或合并。
 
 ## Windows PowerShell 执行
 
@@ -16,7 +25,7 @@
 .\.venv\Scripts\python.exe backend\scripts\migrate_sqlite_to_supabase.py
 ```
 
-检查显示的 SQLite 来源、Supabase 目标和记录数，确认无误后输入 `MIGRATE`。脚本会先在 SQLite 文件旁创建带时间戳的 `.bak` 副本，再将所有匹配到的应用表放进同一个 PostgreSQL 事务。导入有错误时，PostgreSQL 事务整体回滚；成功后会逐表核对行数，并重置整数主键序列。
+检查显示的 SQLite 来源、Supabase 目标和记录数，确认无误后输入 `MIGRATE`。脚本先在 SQLite 文件旁创建带时间戳的 `.bak` 副本，再把旧库中的音频文件、歌曲原唱/伴奏/乐谱文件上传到私有 Bucket，并将数据库里的本机路径替换为云端对象引用；随后将业务表放进同一个 PostgreSQL 事务。遇到引用文件缺失时会在写数据库前停止并列出路径。数据库导入有错误时，PostgreSQL 事务整体回滚；成功后会逐表核对行数并重置整数主键序列。已上传的对象使用内容哈希命名，修复缺失文件后重试不会重复存储相同内容。
 
 如果旧库路径不同：
 
@@ -26,9 +35,9 @@
 
 ## 迁移范围与文件说明
 
-迁移范围包含 SQLite 与当前版本应用模型共同拥有的表及字段，例如教师账号（包括密码哈希和盐值）、班级、歌曲、教案、课堂记录、反馈、音频分析、编曲工程和任务记录。旧 SQLite 缺少的新字段由当前模型默认值补齐。源库中的未知表不会写入 Supabase。
+迁移范围包含 SQLite 与当前版本应用模型共同拥有的表及字段，例如教师账号（包括密码哈希和盐值）、班级、歌曲、教案、课堂记录、反馈、音频分析、编曲工程和任务记录。旧 SQLite 缺少的新字段由当前模型默认值补齐。音频附件以及 `songs` 中的原唱、伴奏、乐谱路径会同时复制到 `teacher-media`，迁移后本地和 EdgeOne 后端通过同一条数据库记录与私有对象存储访问它们。源库中的未知表不会写入 Supabase。
 
-音频、乐谱、伴奏和 SoundFont 文件本体不存放在 SQLite 表里；数据库里只有文件路径。因此这一步迁移的是记录和路径，不会自动把本机文件上传到线上存储。迁移后，本地运行的后端仍能读本机原文件；线上后端若要播放这些资源，还需要把文件放入线上可访问的持久化存储，并更新对应路径。
+`.sf2` 乐器包目前保存在浏览器 IndexedDB，而不是 SQLite，因此这次迁移脚本无法从数据库中找到它们。它们仍只存在导入过音色包的那个浏览器；要让不同电脑/浏览器共用，需要再实现音色包的云端上传与管理功能，不能把 IndexedDB 文件算作已经迁移。
 
 ## 迁移后
 
