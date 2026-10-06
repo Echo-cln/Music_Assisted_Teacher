@@ -91,7 +91,6 @@ def _reset_postgres_sequence(conn, table: Table) -> None:
 
 def migrate(source_path: Path, target_engine: Engine, *, assume_yes: bool = False) -> None:
     from app.db.init_db import init_db  # noqa: PLC0415
-    from app.db.session import settings  # noqa: PLC0415
 
     if not source_path.is_file():
         raise FileNotFoundError(f"找不到 SQLite 数据库：{source_path}")
@@ -127,7 +126,6 @@ def migrate(source_path: Path, target_engine: Engine, *, assume_yes: bool = Fals
             name: _count(source_engine, source_meta.tables[name]) for name in selected_names
         }
 
-        target = settings.database_url
         # URL rendering hides the password.
         print(f"SQLite 来源：{source_path.resolve()}")
         print(f"PostgreSQL 目标：{target_engine.url.render_as_string(hide_password=True)}")
