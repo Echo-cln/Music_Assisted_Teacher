@@ -8,6 +8,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
+def normalize_database_url(database_url: str) -> str:
+    """Use psycopg 3 for PostgreSQL URLs while leaving SQLite and explicit drivers alone."""
+    if database_url.startswith("postgres://"):
+        return "postgresql+psycopg://" + database_url[len("postgres://") :]
+    if database_url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + database_url[len("postgresql://") :]
+    return database_url
+
+
 class Settings(BaseSettings):
     app_name: str = "乡音智谱 · 乡村音乐教室 AI 教学助手"
     app_env: str = "development"
@@ -56,6 +65,9 @@ class Settings(BaseSettings):
             runtime_dir.mkdir(parents=True, exist_ok=True)
             self.database_url = f"sqlite:///{runtime_dir / 'zhiban.db'}"
             self.upload_dir = str(runtime_dir / "uploads")
+        # Supabase and other PostgreSQL providers commonly return postgresql:// or postgres://.
+        # Route those URLs through the psycopg 3 driver installed by requirements.txt.
+        self.database_url = normalize_database_url(self.database_url)
         # .env 中的相对路径统一相对 backend/ 解析，避免从不同工作目录启动时路径漂移。
         prefix = "sqlite:///./"
         if self.database_url.startswith(prefix):

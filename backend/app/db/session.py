@@ -12,7 +12,9 @@ class Base(DeclarativeBase):
 
 settings = get_settings()
 connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-engine = create_engine(settings.database_url, connect_args=connect_args)
+# Check pooled connections before reusing them; remote PostgreSQL services may close
+# idle connections while the API process is running.
+engine = create_engine(settings.database_url, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 

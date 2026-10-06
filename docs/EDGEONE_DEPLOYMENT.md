@@ -18,11 +18,13 @@
 
 ## 1. 部署 Python 后端
 
-在一台可运行 Docker 的云主机或容器服务中克隆本仓库，在仓库根目录创建 `.env`，填入已有的 AI 与邮件环境变量，然后执行：
+在一台可运行 Docker 的云主机或容器服务中克隆本仓库，在仓库根目录创建 `.env`，填入已有的 AI 与邮件环境变量。使用 Supabase 时，再将 Connect 页面中 **SQLAlchemy → Session pooler** 的 URI 设为 `DATABASE_URL`：
 
 ```bash
 docker compose -f docker-compose.edgeone.yml up -d --build
 ```
+
+`DATABASE_URL` 不要提交到仓库。首次连接全新 Supabase 项目时，FastAPI 启动会按现有 SQLAlchemy 模型创建表；这不会把旧 SQLite 用户、教案、分析记录或资源数据复制过去。`runtime/` 仍用于后端本地上传文件，数据库切换不会自动迁移音频文件。
 
 将 HTTPS 域名（例如 `https://api.example.com`）反向代理到服务器的 `8000` 端口。`runtime/` 是数据库和上传音频的持久化目录，不能删除。
 

@@ -8,7 +8,8 @@ services:
       - "8000:8000"
     environment:
       APP_ENV: production
-      DATABASE_URL: sqlite:///./data/zhiban.db
+      # 在仓库根目录的 .env 中设置 Supabase PostgreSQL URI；未设置时保留本地 SQLite 默认值。
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./data/zhiban.db}
       UPLOAD_DIR: data/uploads
       # 改为实际 EdgeOne Pages 域名，多个域名用英文逗号分隔。
       ALLOWED_ORIGINS: https://your-pages-domain.edgeone.app
