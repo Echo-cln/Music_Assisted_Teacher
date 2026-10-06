@@ -191,6 +191,40 @@
 ### 仍待目标电脑执行，未标记完成
 
 - [ ] 在保存 `backend/data/zhiban.db` 的电脑拉取最新 `main`，运行迁移脚本并确认终端逐表报告的源/目标行数一致。
-- [ ] 将音频、乐谱、伴奏、SF2 等本机文件放入线上后端可访问的持久化存储；SQLite 只保存路径，不包含这些文件字节。
+- [ ] 将音频、乐谱、伴奏等本机文件迁入私有 Supabase Storage；数据库迁移只搬记录和路径，脚本会按路径上传这些文件。已有 SF2 包另在工作台点“同步到云端”。
 - [ ] 确认本地后端和 EdgeOne 后端都使用同一个 Supabase `DATABASE_URL`，完成两端新增/读取同一条记录的互通验收。
-\n\n## 2026-10-06 · 本机媒体对象存储接入\n\n### 代码已完成并推送\n\n- [x] 新增私有 Supabase Storage 适配器，服务端使用密钥上传/读取对象；数据库以 `supabase://bucket/key` 保存引用，音频下载仍经过现有教师登录鉴权。\n- [x] 新上传的课堂录音和参考音频在 PostgreSQL 模式下写入私有 Storage；音频记录页面可从对象存储读取并播放。SQLite 本地开发仍保持本地文件模式。\n- [x] SQLite 迁移脚本会将 `audio_assets.file_path` 与歌曲原唱、伴奏、乐谱的已登记文件上传至私有 bucket，再写入 Supabase 行记录；缺失文件会在导入数据库前报出路径。\n- [x] `.env.example` 和迁移说明增加 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`、`SUPABASE_STORAGE_BUCKET` 配置；服务密钥不放入前端。\n- [x] 对象存储、迁移脚本通过 Python 语法编译。\n\n### 仍需环境配置与真实验收，不能标记完成\n\n- [ ] 在 Supabase 创建名称为 `teacher-media` 的私有 bucket，并把 Storage URL 与服务端 Secret Key 配置到本机后端和 EdgeOne 后端环境变量。\n- [ ] 在用户电脑运行 SQLite 数据迁移；核对所有源/目标表行数，抽查录音、原唱、伴奏、乐谱对象能经登录后的音频接口读取。\n- [ ] `.sf2` 包仍保存在浏览器 IndexedDB，不属于 SQLite 数据；需单独开发带教师归属的云端音色包 API 和工作台同步控件。\n- [ ] 用本机及 EdgeOne 两端分别播放同一条 Supabase Storage 音频，确认文件真正互通。\n
+
+
+## 2026-10-06 · 本机媒体对象存储接入
+
+### 代码已完成并推送
+
+- [x] 新增私有 Supabase Storage 适配器，服务端使用密钥上传/读取对象；数据库以 `supabase://bucket/key` 保存引用，音频下载仍经过现有教师登录鉴权。
+- [x] 新上传的课堂录音和参考音频在 PostgreSQL 模式下写入私有 Storage；音频记录页面可从对象存储读取并播放。SQLite 本地开发仍保持本地文件模式。
+- [x] SQLite 迁移脚本会将 `audio_assets.file_path` 与歌曲原唱、伴奏、乐谱的已登记文件上传至私有 bucket，再写入 Supabase 行记录；缺失文件会在导入数据库前报出路径。
+- [x] `.env.example` 和迁移说明增加 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`、`SUPABASE_STORAGE_BUCKET` 配置；服务密钥不放入前端。
+- [x] 对象存储、迁移脚本通过 Python 语法编译。
+
+### 仍需环境配置与真实验收，不能标记完成
+
+- [ ] 在 Supabase 创建名称为 `teacher-media` 的私有 bucket，并把 Storage URL 与服务端 Secret Key 配置到本机后端和 EdgeOne 后端环境变量。
+- [ ] 在用户电脑运行 SQLite 数据迁移；核对所有源/目标表行数，抽查录音、原唱、伴奏、乐谱对象能经登录后的音频接口读取。
+- [ ] 云端音色包功能已写入代码；原浏览器 IndexedDB 中已有的 `.sf2` 包仍需在本机工作台逐个点击“同步到云端”，之后其他设备才能下载。
+- [ ] 用本机及 EdgeOne 两端分别播放同一条 Supabase Storage 音频，确认文件真正互通。
+
+
+## 2026-10-06 · 音色包跨设备同步
+
+### 已完成并通过静态验证
+
+- [x] 增加按教师账号隔离的音色包数据库表与接口：列表、上传、下载、删除均校验当前登录教师。
+- [x] `.sf2` 字节写入 Supabase 私有 Storage；表内只记录对象引用、文件 SHA-256、显示名称、大小和乐器绑定。
+- [x] 重复上传同一文件按 SHA-256 更新现有记录，不重复创建对象。
+- [x] 工作台保留 IndexedDB 本机库，增加“同步到云端”“下载到本机”“删除云端”；下载后再次解析并验证 SF2，再保存至当前浏览器。
+- [x] 本次修改涉及的前端三个 ES 模块通过 `node --check`；三个后端 Python 模块通过 `py_compile`。
+
+### 仍待目标环境完成
+
+- [ ] 新代码部署后，在 Supabase/EdgeOne 后端设置好私有 `teacher-media` Bucket、`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 和 `SUPABASE_STORAGE_BUCKET`；Bucket 单文件上限需覆盖音色包。
+- [ ] 从含有旧 IndexedDB 音色包的浏览器逐个同步，再用同一教师账号在第二台设备下载试听。
+- [ ] 本次没有真实 Supabase 凭证及目标浏览器，云端上传、跨设备下载和音色播放尚未端到端实测；不标记为完成。
