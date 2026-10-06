@@ -48,7 +48,11 @@ def _credentials() -> tuple[str, str, str]:
 
 
 def _headers(key: str, *, content_type: str | None = None) -> dict[str, str]:
-    headers = {"apikey": key, "Authorization": f"Bearer {key}"}
+    # Supabase's new sb_secret_ keys are opaque API keys, not JWTs. Sending one
+    # as a Bearer token causes "Invalid JWT"; legacy service_role keys are JWTs.
+    headers = {"apikey": key}
+    if not key.startswith("sb_secret_"):
+        headers["Authorization"] = f"Bearer {key}"
     if content_type:
         headers["Content-Type"] = content_type
     return headers
