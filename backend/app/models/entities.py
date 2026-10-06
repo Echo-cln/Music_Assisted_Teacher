@@ -244,6 +244,25 @@ class AIModelConfig(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class InstrumentSoundfont(Base):
+    """教师个人的云端 SF2 音色包；音频字节位于私有对象存储。"""
+
+    __tablename__ = "instrument_soundfonts"
+    __table_args__ = (UniqueConstraint("teacher_id", "sha256", name="uq_teacher_soundfont_sha256"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teachers.id"), index=True)
+    display_name: Mapped[str] = mapped_column(String(100))
+    original_filename: Mapped[str] = mapped_column(String(255))
+    file_path: Mapped[str] = mapped_column(String(500))
+    file_size: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    instruments_json: Mapped[str] = mapped_column(Text, default="[]")
+    preset_name: Mapped[str] = mapped_column(String(160), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class ArrangementProject(Base):
     """教师自己的可编辑数字乐器/编曲工程。"""
 
