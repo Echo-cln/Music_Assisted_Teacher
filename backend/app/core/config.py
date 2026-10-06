@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     app_env: str = "development"
     database_url: str = f"sqlite:///{BACKEND_DIR / 'data' / 'zhiban.db'}"
     upload_dir: str = str(BACKEND_DIR / "data" / "uploads")
+    # Private object storage for media shared by local and hosted backends.
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    supabase_storage_bucket: str = "teacher-media"
     frontend_dir: str = str(BACKEND_DIR.parent / "frontend")
     allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     session_cookie_secure: bool = False
