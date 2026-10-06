@@ -112,6 +112,23 @@ def download_object(uri: str) -> bytes:
         raise ObjectStorageError(f"从 Supabase Storage 读取文件失败：{detail[:300] or str(exc)}") from exc
 
 
+
+def delete_object(uri: str) -> None:
+    """Delete an object from the configured private bucket."""
+    base, token, configured_bucket = _credentials()
+    bucket, key = split_object_uri(uri)
+    if bucket != configured_bucket:
+        raise ObjectStorageError("文件所在存储桶与当前后端配置不一致。")
+    endpoint = f"{base}/storage/v1/object/{quote(bucket, safe='')}/{quote(key, safe='/')}"
+    try:
+        response = httpx.delete(endpoint, headers=_headers(token), timeout=httpx.Timeout(60.0, connect=15.0))
+        if response.status_code != 404:
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        detail = getattr(getattr(exc, "response", None), "text", "")
+        raise ObjectStorageError(f"从 Supabase Storage 删除文件失败：{detail[:300] or str(exc)}") from exc
+
+
 def materialize_file(reference: str | Path) -> Path:
     """Return a local path for analysis code, downloading remote refs to a temp cache."""
     value = str(reference)
