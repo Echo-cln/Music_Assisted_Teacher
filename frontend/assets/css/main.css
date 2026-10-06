@@ -462,3 +462,65 @@ td small { color: var(--muted); }
 /* 模型只解释同页可见的录音证据，避免把通用话术伪装成课堂结论。 */
 .model-insight { margin:24px 0; padding:18px; border:1px solid #cbd9dd; border-radius:15px; background:linear-gradient(135deg,#f6faf9,#eef5f4); }.model-insight h3 { margin:4px 0 8px; }.model-insight > p { max-width:850px; margin:0; color:#4b625e; line-height:1.7; }.model-insight > small { display:block; margin:10px 0 0; color:#71817d; }.model-insight-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:11px; margin-top:14px; }.model-insight-list article { padding:13px; border:1px solid #d5e1df; border-radius:12px; background:#fffefd; }.model-insight-list b { color:#315f67; }.model-insight-list p { margin:8px 0; line-height:1.65; color:#536560; }.model-insight-list span { display:block; color:#405854; line-height:1.55; }.muted-insight { border-color:#e5ddd4; background:#fcfaf7; }.muted-insight h3 { color:#746359; }
 .score-import-detail { margin-top:8px; }.score-import-detail summary { color:#8b5c4c; cursor:pointer; font-size:.78rem; }.score-import-detail pre { max-height:160px; overflow:auto; margin:7px 0 0; padding:8px; border-radius:8px; background:#fffdf9; color:#785d54; white-space:pre-wrap; word-break:break-word; font:12px/1.45 ui-monospace,Consolas,monospace; }
+
+
+/* 登录与注册：收紧留白、简化品牌文案，并让请求错误留在表单内。 */
+.auth-mode { min-height: 100vh; background: #f7f2eb; }
+.auth-mode .app-shell { min-height: 100vh; }
+.auth-mode .auth-shell {
+  position: relative;
+  width: min(1180px, 100%);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: clamp(28px, 6vw, 76px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
+  align-items: center;
+  gap: clamp(32px, 7vw, 96px);
+  background:
+    radial-gradient(ellipse at 12% 15%, rgba(229,181,155,.20), transparent 35%),
+    radial-gradient(ellipse at 88% 84%, rgba(217,201,170,.17), transparent 38%),
+    #f7f2eb;
+}
+.auth-brand-panel { min-width: 0; max-width: 560px; padding: 0; }
+.auth-brand-panel .eyebrow { display: inline-flex; align-items: center; gap: 10px; letter-spacing: .04em; }
+.auth-brand-panel .eyebrow::before { content: "乡"; display: grid; width: 36px; height: 36px; place-items: center; border-radius: 12px; background: linear-gradient(145deg,#c96f4e,#9f4b35); color: white; font-size: 1rem; }
+.auth-brand-panel h1 { max-width: 540px; margin: 22px 0 14px; color: #57372d; font: clamp(2.15rem, 4vw, 3.5rem)/1.28 "Microsoft YaHei","PingFang SC",system-ui,sans-serif; font-weight: 750; letter-spacing: -.035em; }
+.auth-brand-panel p { max-width: 440px; margin: 0; color: #78685e; font-size: .98rem; line-height: 1.85; }
+.auth-features { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 0; padding: 0; list-style: none; }
+.auth-features li { padding: 7px 11px; border: 1px solid #e8d8ca; border-radius: 999px; background: rgba(255,253,249,.72); color: #765b4d; font-size: .78rem; }
+.auth-card { align-self: center; justify-self: stretch; width: 100%; padding: 28px; border: 1px solid #e9ded3; border-radius: 20px; background: #fffdfa; box-shadow: 0 18px 48px rgba(75,54,40,.09); }
+.auth-card-heading { display: flex; align-items: center; gap: 11px; margin-bottom: 22px; }
+.auth-card-heading .brand-mark { width: 38px; height: 38px; border-radius: 12px; }
+.auth-card-heading b,.auth-card-heading small { display: block; }
+.auth-card-heading b { font-size: 1.04rem; }
+.auth-card-heading small { margin-top: 2px; color: var(--muted); font-size: .78rem; }
+.auth-tabs { gap: 7px; padding-bottom: 12px; border-bottom: 1px solid #eee5dc; }
+.auth-tabs .tab { min-width: 78px; padding: 8px 14px; border-color: transparent; background: transparent; color: #74675e; }
+.auth-tabs .tab.active { border-color: #e5b7a3; background: #f7e5dc; color: #8f432f; }
+.auth-form { gap: 9px 14px; margin-top: 14px; }
+.auth-form label { margin: 5px 0; color: #51443d; font-size: .82rem; }
+.auth-form input { min-height: 44px; margin-top: 6px; border-color: #e4d9cf; border-radius: 10px; background: #fff; font-size: .92rem; }
+.auth-form input:focus { outline: none; border-color: #c96f4e; box-shadow: 0 0 0 3px rgba(201,111,78,.13); }
+.auth-form input:-webkit-autofill,.auth-form input:-webkit-autofill:hover,.auth-form input:-webkit-autofill:focus { -webkit-text-fill-color: var(--ink); box-shadow: 0 0 0 1000px #fffaf5 inset; transition: background-color 9999s ease-out; }
+.auth-form label small { display: block; margin-top: 6px; color: var(--muted); font-size: .73rem; font-weight: 400; }
+.auth-submit { min-height: 46px; margin-top: 7px; border-radius: 10px; }
+.auth-message { padding: 10px 12px; border: 1px solid #e8c5ba; border-radius: 10px; background: #fff4f0; color: #923d30; font-size: .81rem; line-height: 1.55; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .auth-mode .auth-shell { width: 100%; min-height: 100svh; grid-template-columns: 1fr; gap: 20px; padding: 26px 18px; align-content: center; }
+  .auth-brand-panel { max-width: 480px; margin: 0 auto; text-align: center; }
+  .auth-brand-panel .eyebrow { justify-content: center; }
+  .auth-brand-panel h1 { margin: 13px auto 7px; font-size: clamp(1.7rem, 7vw, 2.35rem); }
+  .auth-brand-panel p { margin: 0 auto; font-size: .87rem; }
+  .auth-features { justify-content: center; margin-top: 13px; }
+  .auth-card { width: min(100%, 460px); justify-self: center; padding: 21px; }
+}
+@media (max-width: 460px) {
+  .auth-mode .auth-shell { gap: 15px; padding: 18px 13px; }
+  .auth-brand-panel h1 { font-size: 1.65rem; }
+  .auth-features { gap: 6px; margin-top: 10px; }
+  .auth-features li { padding: 5px 8px; font-size: .7rem; }
+  .auth-card { padding: 18px 16px; }
+  .auth-form { grid-template-columns: 1fr; gap: 6px; }
+  .auth-form > * { grid-column: 1 / -1; }
+}
