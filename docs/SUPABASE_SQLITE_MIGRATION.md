@@ -21,7 +21,7 @@
 如果旧库路径不同：
 
 ```powershell
-.\.venv\Scripts\python.exe backend\scripts\migrate_sqlite_to_supabase.py --source "E:\\Programs\\musicTearcher\\backend\\data\\zhiban.db"
+.\.venv\Scripts\python.exe backend\scripts\migrate_sqlite_to_supabase.py --source "E:\Programs\musicTearcher\backend\data\zhiban.db"
 ```
 
 ## 迁移范围与文件说明
