@@ -86,6 +86,13 @@ function sourceNameFor(instrument) {
   return pack ? `${pack.displayName || pack.name}（本机 SF2）` : stored ? `${stored.name}（本机 SF2）` : standard[instrument]?.label || `${instrument}（未配置音源）`;
 }
 export const soundSourceLabel = sourceNameFor;
+export async function getLocalSoundfontFile(packId) {
+  const packs = await catalog();
+  const record = packs.find(item => item.id === packId);
+  if (!record?.blob) throw new Error("本机音色包已不存在，请重新导入");
+  return record.blob;
+}
+
 export async function listLocalSoundfonts() {
   const packs = await catalog();
   restoreActive(packs);
