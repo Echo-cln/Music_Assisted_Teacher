@@ -115,7 +115,7 @@ async function streamRequest(path, payload, onEvent) {
   while (true) {
     const { value, done } = await reader.read();
     buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const messages = buffer.split("\\n\\n");
+    const messages = buffer.split("\n\n");
     buffer = messages.pop();
     for (const message of messages) {
       const dataLine = message.split("\\n").find(line => line.startsWith("data: "));
