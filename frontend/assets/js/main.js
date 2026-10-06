@@ -19,9 +19,10 @@ const routeLoaders = {
   admin: () => import("./pages/admin.js").then(m => m.renderAdmin),
 };
 let currentTeacher = null;
+let navigationSequence = 0;
 
-function bindRoutes() {
-  document.querySelectorAll("[data-route]").forEach(button => {
+function bindRoutes(root = document) {
+  root.querySelectorAll("[data-route]").forEach(button => {
     button.onclick = () => {
       if (button.dataset.resourceKind) sessionStorage.setItem("resourceKindToOpen", button.dataset.resourceKind);
       navigate(button.dataset.route);
@@ -48,10 +49,17 @@ async function showLogin() {
   renderAuth(app, async teacher => {
     applyTeacher(teacher);
     document.body.classList.remove("auth-mode");
-    await initGenerationCenter();
-    await initAudioJobCenter();
-    await refreshStats();
     await navigate("home");
+    initializeBackgroundPanels();
+  });
+}
+
+function initializeBackgroundPanels() {
+  // 先显示页面，再初始化任务中心和统计，避免启动阶段串行等待多个接口。
+  Promise.allSettled([initGenerationCenter(), initAudioJobCenter(), refreshStats()]).then(results => {
+    for (const result of results) {
+      if (result.status === "rejected") console.error("后台面板初始化失败", result.reason);
+    }
   });
 }
 
@@ -66,6 +74,7 @@ async function refreshStats() {
 
 async function navigate(route = "home") {
   if (!currentTeacher) return showLogin();
+  const sequence = ++navigationSequence;
   app.innerHTML = loading();
   document.querySelectorAll(".nav-item").forEach(item => item.classList.toggle("active", item.dataset.route === route));
   // 对应功能页已有完整任务面板；全局仅在离开页面后显示紧凑入口。
@@ -74,9 +83,18 @@ async function navigate(route = "home") {
   setAudioJobCenterVisible(route !== "audio");
   try {
     const render = await (routeLoaders[route] || routeLoaders.home)();
-    await render(app);
-    bindRoutes();
+    // 页面模块加载期间用户可能已经切页；过期导航不得启动渲染。
+    if (sequence !== navigationSequence) return;
+    // 独立容器令旧页面的迟到响应只能修改已脱离文档的节点。
+    const page = document.createElement("div");
+    page.style.display = "contents";
+    app.replaceChildren(page);
+    await render(page);
+    if (sequence !== navigationSequence) return;
+    bindRoutes(app);
   } catch (error) {
+    // 旧页面的迟到异常不能覆盖当前页面。
+    if (sequence !== navigationSequence) return;
     if (error.status === 401) return showLogin();
     app.innerHTML = `<div class="card notice"><h2>页面暂时无法加载</h2><p>${esc(error.message)}</p><p>请打开浏览器控制台查看具体错误；此处会区分前端脚本、接口和数据错误。</p></div>`;
   }
@@ -101,10 +119,8 @@ async function boot() {
     const teacher = await api.me();
     applyTeacher(teacher);
     document.body.classList.remove("auth-mode");
-    await initGenerationCenter();
-    await initAudioJobCenter();
-    await refreshStats();
     await navigate("home");
+    initializeBackgroundPanels();
   } catch (error) {
     if (error.status === 401) return showLogin();
     app.innerHTML = `<div class="card notice"><h2>无法连接后端</h2><p>${esc(error.message)}</p></div>`;
