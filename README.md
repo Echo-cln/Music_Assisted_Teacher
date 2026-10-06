@@ -139,13 +139,13 @@
 ```powershell
 git clone https://github.com/Echo-cln/Music_Assisted_Teacher.git
 cd Music_Assisted_Teacher
-.`setup.bat
+ .\\setup.bat
 ```
 
 首次设置完成后启动：
 
 ```powershell
-.`run.bat
+ .\\run.bat
 ```
 
 启动脚本会打开 <http://127.0.0.1:8000>。如果浏览器没有自动打开，手动访问该地址。FastAPI 接口文档在 <http://127.0.0.1:8000/api/docs>。
@@ -153,7 +153,7 @@ cd Music_Assisted_Teacher
 后续每次使用只需在仓库目录运行：
 
 ```powershell
-.`run.bat
+ .\\run.bat
 ```
 
 关闭运行中的 PowerShell 窗口或按 `Ctrl+C` 可停止本地服务。
@@ -178,7 +178,7 @@ bash run.sh
 密码：demo123456
 ```
 
-这是公开写在代码里的本地演示凭据，只用于个人本机体验。不要把使用该账号的实例直接开放给互联网访问。注册新账号需要配置邮件验证码服务；也可通过管理员账号创建或管理账号。
+这是公开写在代码里的本地演示凭据，只用于个人本机体验。不要把使用该账号的实例直接开放给互联网访问。注册新账号需要配置邮件验证码服务。
 
 ### 手动启动（排查脚本问题时）
 
