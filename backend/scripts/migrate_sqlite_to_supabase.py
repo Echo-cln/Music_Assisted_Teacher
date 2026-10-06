@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime
+import hashlib
+import json
+import mimetypes
 from pathlib import Path
 import shutil
 import sys
@@ -64,6 +67,79 @@ def _dependency_order(tables: dict[str, Table]) -> list[str]:
 def _count(engine: Engine, table: Table) -> int:
     with engine.connect() as conn:
         return int(conn.execute(select(func.count()).select_from(table)).scalar_one())
+
+
+MEDIA_COLUMNS = {
+    "audio_assets": ("file_path",),
+    "songs": ("original_audio_path", "accompaniment_path", "score_path"),
+}
+
+
+def _resolve_media_path(value: str, source_path: Path, upload_dir: Path) -> Path | None:
+    if not value or value.startswith("supabase://"):
+        return None
+    raw = Path(value)
+    candidates = [raw] if raw.is_absolute() else [
+        source_path.parent / raw,
+        BACKEND_DIR / raw,
+        upload_dir / raw,
+        upload_dir / raw.name,
+    ]
+    return next((candidate.resolve() for candidate in candidates if candidate.is_file()), None)
+
+
+def _prepare_rows(source_engine: Engine, source_meta: MetaData, names: list[str],
+                  source_counts: dict[str, int], source_path: Path) -> dict[str, list[dict]]:
+    """Read rows and upload referenced local media before touching PostgreSQL."""
+    from app.core.config import get_settings  # noqa: PLC0415
+    from app.services.object_storage import upload_local_file  # noqa: PLC0415
+
+    upload_dir = Path(get_settings().upload_dir)
+    prepared: dict[str, list[dict]] = {}
+    media_cells: list[tuple[str, dict, str, Path]] = []
+    missing: list[str] = []
+    with source_engine.connect() as source:
+        for name in names:
+            table = source_meta.tables[name]
+            rows = [dict(row) for row in source.execute(select(table)).mappings()]
+            if len(rows) != source_counts[name]:
+                raise RuntimeError(f"{name} 读取数量不一致，源库可能仍在写入")
+            prepared[name] = rows
+            for row in rows:
+                for column in MEDIA_COLUMNS.get(name, ()):
+                    value = row.get(column)
+                    if not value or str(value).startswith("supabase://"):
+                        continue
+                    local_path = _resolve_media_path(str(value), source_path, upload_dir)
+                    if local_path is None:
+                        missing.append(f"{name}.{column}: {value}")
+                    else:
+                        media_cells.append((name, row, column, local_path))
+
+    if missing:
+        details = "\n  ".join(missing[:30])
+        more = f"\n  ……另有 {len(missing) - 30} 个" if len(missing) > 30 else ""
+        raise FileNotFoundError(
+            "以下数据库记录引用的本地媒体文件找不到。数据库尚未写入；请先恢复这些文件，或修正源库路径后重试：\n  "
+            f"{details}{more}"
+        )
+
+    # Content-hash keys deduplicate repeated references and make retries safe.
+    uploaded: dict[Path, str] = {}
+    for name, row, column, path in media_cells:
+        if path not in uploaded:
+            hasher = hashlib.sha256()
+            with path.open("rb") as source_file:
+                for chunk in iter(lambda: source_file.read(1024 * 1024), b""):
+                    hasher.update(chunk)
+            digest = hasher.hexdigest()
+            suffix = path.suffix.lower()
+            key = f"legacy/{digest[:2]}/{digest}{suffix}"
+            mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            uploaded[path] = upload_local_file(path, key, content_type=mime)
+        row[column] = uploaded[path]
+    print(f"已上传并替换数据库中的本地文件路径：{len(media_cells)} 条引用，{len(uploaded)} 个不同文件")
+    return prepared
 
 
 def _reset_postgres_sequence(conn, table: Table) -> None:
@@ -126,7 +202,6 @@ def migrate(source_path: Path, target_engine: Engine, *, assume_yes: bool = Fals
             name: _count(source_engine, source_meta.tables[name]) for name in selected_names
         }
 
-        # URL rendering hides the password.
         print(f"SQLite 来源：{source_path.resolve()}")
         print(f"PostgreSQL 目标：{target_engine.url.render_as_string(hide_password=True)}")
         print("将迁移的记录数：")
@@ -144,6 +219,7 @@ def migrate(source_path: Path, target_engine: Engine, *, assume_yes: bool = Fals
         )
         shutil.copy2(source_path, backup_path)
         print(f"已备份 SQLite：{backup_path}")
+        prepared_rows = _prepare_rows(source_engine, source_meta, selected_names, source_counts, source_path)
 
         # One PostgreSQL transaction: a failed insert rolls the whole import back.
         with target_engine.begin() as destination, source_engine.connect() as source:
@@ -155,18 +231,16 @@ def migrate(source_path: Path, target_engine: Engine, *, assume_yes: bool = Fals
                     for column in target_table.columns
                     if column.name in source_table.c
                 ]
-                result = source.execute(select(source_table)).mappings()
-                batch: list[dict] = []
                 inserted = 0
-                for row in result:
-                    batch.append({column: row[column] for column in common_columns})
-                    if len(batch) >= 500:
+                rows = prepared_rows[name]
+                for offset in range(0, len(rows), 500):
+                    batch = [
+                        {column: row[column] for column in common_columns}
+                        for row in rows[offset : offset + 500]
+                    ]
+                    if batch:
                         destination.execute(target_table.insert(), batch)
                         inserted += len(batch)
-                        batch.clear()
-                if batch:
-                    destination.execute(target_table.insert(), batch)
-                    inserted += len(batch)
                 if inserted != source_counts[name]:
                     raise RuntimeError(
                         f"{name} 读取数量不一致：预期 {source_counts[name]}，实际 {inserted}"
