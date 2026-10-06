@@ -139,13 +139,13 @@
 ```powershell
 git clone https://github.com/Echo-cln/Music_Assisted_Teacher.git
 cd Music_Assisted_Teacher
- .\\setup.bat
+.\setup.bat
 ```
 
 首次设置完成后启动：
 
 ```powershell
- .\\run.bat
+.\run.bat
 ```
 
 启动脚本会打开 <http://127.0.0.1:8000>。如果浏览器没有自动打开，手动访问该地址。FastAPI 接口文档在 <http://127.0.0.1:8000/api/docs>。
@@ -153,7 +153,7 @@ cd Music_Assisted_Teacher
 后续每次使用只需在仓库目录运行：
 
 ```powershell
- .\\run.bat
+.\run.bat
 ```
 
 关闭运行中的 PowerShell 窗口或按 `Ctrl+C` 可停止本地服务。
