@@ -237,14 +237,15 @@
 - [x] Docker Compose 不再在生产配置缺失时静默回退 SQLite；缺少 `DATABASE_URL` 会直接提示。
 - [x] Docker Compose 传入 `SUPABASE_URL`、服务端 `SUPABASE_SERVICE_ROLE_KEY` 和 Storage bucket，缺少必需对象存储配置时提前报错。
 - [x] EdgeOne 预览站点默认跨域来源设为 `https://music-assisted-teacher-qiszkhgt.edgeone.cool`，同时允许在部署环境覆盖。
-- [x] 新增根目录 `.env.edgeone.example`，包含 Supabase、跨域 Cookie、模型与 SMTP 环境变量模板；未包含任何真实密钥。
+- [x] 新增根目录 `.env.edgeone.example`，包含 Supabase、登录 Cookie、模型与 SMTP 环境变量模板；未包含任何真实密钥。
+- [x] 部署方案优先使用 EdgeOne `/api/*` 反向代理到后端 HTTPS 地址，保持浏览器同源调用；代理目标待后端服务创建后填写，不提交占位地址。
 - [x] 重写 EdgeOne 部署说明，明确静态前端、Supabase 和 FastAPI 的职责边界，并列出 API 地址接入与验收步骤。
 
 ### 仍需部署者操作，尚未标记完成
 
 - [ ] 创建/选择一个可持续运行 Docker 的后端服务，并获得浏览器可访问的 HTTPS API 地址。
 - [ ] 在该服务设置根目录 `.env.edgeone.example` 对应的真实环境值，特别是 Supabase Session Pooler URI、Supabase URL、Storage 服务密钥和模型 Key。
-- [ ] 确认 `https://<API地址>/api/health` 返回正常后，将 `frontend/config.js` 的 `apiBaseUrl` 改成 `https://<API地址>/api`，再触发 EdgeOne 前端部署。
+- [ ] 确认后端 `/api/health` 正常后，在 `edgeone.json` 配置 `/api/*` 到真实后端 HTTPS 地址的反向代理，再触发 EdgeOne Pages 部署；前端 `apiBaseUrl` 保持 `/api`。
 - [ ] 验证 EdgeOne 登录 Cookie、教案保存、Supabase 文件访问、音频分析及快速/深度生成的端到端流程。
 
 ### 本次验证边界

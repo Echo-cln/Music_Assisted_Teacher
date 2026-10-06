@@ -31,24 +31,33 @@ Compose 会在启动前检查 `DATABASE_URL`、`SUPABASE_URL` 和 `SUPABASE_SERV
 
 EdgeOne Makers 支持 Python/FastAPI 函数，但平台单函数包上限为 128 MB、请求/响应体上限为 6 MB、单次执行上限为 120 秒。当前应用还有音频上传与 CPU 密集分析，以及可能持续超过函数时限的模型任务和进程内后台线程。因此，本项目的完整 API 暂按持久运行的 Docker 服务部署，避免登录能用而音频或长任务中断。若未来改为函数架构，需要另做任务队列/工作进程和大文件直传存储改造。
 
-## 2. 绑定前端与 API
+## 2. 将 EdgeOne API 请求代理到后端
 
-后端 HTTPS 地址准备好后，编辑 `frontend/config.js`，将默认同源地址替换为实际 API 根地址：
+获得后端服务商分配的 HTTPS 地址后，在仓库根目录 `edgeone.json` 的现有配置中加入反向代理规则。将示例主机替换成真实后端地址：
 
-```js
-window.__APP_CONFIG__ = { apiBaseUrl: "https://你的后端HTTPS地址/api" };
+```json
+{
+  "rewrites": [
+    {
+      "source": "/api/*",
+      "destination": "https://你的后端服务商域名/api/:splat"
+    }
+  ]
+}
 ```
 
-例如后端地址若是 `https://api.example.net`，这里填写 `https://api.example.net/api`。只改成真实可访问的地址后再部署前端；占位域名不能工作。
+这会让浏览器继续请求 EdgeOne 预览站点的同源 `/api`，EdgeOne 再把请求转发给 FastAPI。前端 `frontend/config.js` 保持 `apiBaseUrl: "/api"`，Cookie 也由 EdgeOne 同源响应写入，避免前端直连另一个域名造成的跨站 Cookie 问题。EdgeOne 的 `edgeone.json` 支持 rewrite 路由；不要在后端地址确定前提交占位域名。
 
-同时确认根目录 `.env` 中：
+后端容器的 `8000` 端口必须能被 EdgeOne 源站请求访问；优先使用云服务商分配的 HTTPS 主机名。修改代理规则后，EdgeOne Pages 需要重新部署，才能让 `/api/auth/me` 命中 FastAPI。
+
+后端 `.env` 保持：
 
 ```dotenv
 ALLOWED_ORIGINS=https://music-assisted-teacher-qiszkhgt.edgeone.cool
 SESSION_COOKIE_SECURE=true
 ```
 
-EdgeOne 预览 URL 的查询参数不属于 Origin，不要放进 `ALLOWED_ORIGINS`。
+预览 URL 的查询参数不属于 Origin，不要放进 `ALLOWED_ORIGINS`。若以后改成浏览器直连后端，才需要把 `frontend/config.js` 改为后端 HTTPS 地址并保留 CORS/Cookie 设置。
 
 ## 3. 验收顺序
 
