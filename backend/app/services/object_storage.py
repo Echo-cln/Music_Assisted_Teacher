@@ -73,7 +73,7 @@ def upload_local_file(path: Path, key: str, *, content_type: str | None = None) 
     endpoint = f"{base}/storage/v1/object/{quote(bucket, safe='')}/{quote(key, safe='/')}"
     try:
         with path.open("rb") as source:
-            response = httpx.put(
+            response = httpx.post(
                 endpoint,
                 headers={**_headers(token, content_type=mime), "x-upsert": "true"},
                 content=source,
