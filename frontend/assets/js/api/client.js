@@ -95,6 +95,14 @@ function uploadRequest(path, form, onProgress) {
   });
 }
 
+async function binaryRequest(path, options = {}) {
+  let response;
+  try { response = await fetch(apiUrl(path), { credentials: "include", ...options }); }
+  catch (cause) { throw networkError(cause, path); }
+  if (!response.ok) throw await responseError(response, path);
+  return response.blob();
+}
+
 async function streamRequest(path, payload, onEvent) {
   let response;
   try {
@@ -174,6 +182,10 @@ export const api = {
   importScore: (form, onProgress) => uploadRequest("/workbench/import", form, onProgress),
   parseNotes: payload => request("/workbench/parse-notes", { method: "POST", body: JSON.stringify(payload) }),
   deleteWorkbenchProject: id => request(`/workbench/projects/${id}`, { method: "DELETE" }),
+  cloudSoundfonts: () => request("/workbench/soundfonts"),
+  uploadCloudSoundfont: form => request("/workbench/soundfonts", { method: "POST", body: form }),
+  downloadCloudSoundfont: id => binaryRequest(`/workbench/soundfonts/${id}/file`),
+  deleteCloudSoundfont: id => request(`/workbench/soundfonts/${id}`, { method: "DELETE" }),
   adminUsers: () => request("/admin/users"),
   updateAdminUser: (id, payload) => request(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
 };
