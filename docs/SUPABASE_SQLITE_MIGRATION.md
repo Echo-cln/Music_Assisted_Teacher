@@ -7,7 +7,7 @@
 1. 确认旧数据库文件存在，默认位置是 `backend/data/zhiban.db`。如果文件名或目录不同，运行时用 `--source` 指定。
 2. 确认 `backend/.env` 里的 `DATABASE_URL` 是 Supabase PostgreSQL 连接串。迁移脚本只把它作为目标，不会把 SQLite 改成目标或删除源文件。
 3. 在同一个 Supabase 项目的 **Storage** 中创建私有 Bucket，名称为 `teacher-media`（不要开启 Public）。
-4. 在本机 `backend/.env` 和 EdgeOne 后端环境变量中设置以下三项。`SUPABASE_SERVICE_ROLE_KEY` 是服务端密钥，只能留在后端环境变量中，不能放进前端配置、截图或 GitHub：
+4. 在本机 `backend/.env` 和 EdgeOne 后端环境变量中设置以下三项。`SUPABASE_SERVICE_ROLE_KEY` 是服务端密钥，只能留在后端环境变量中，不能放进前端配置、截图或 GitHub。可以填旧版 `service_role` JWT 或新版 `sb_secret_...`；新版 Secret 只通过 `apikey` 请求头发送，后端已针对两种格式分别处理：
 
    ```dotenv
    SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
