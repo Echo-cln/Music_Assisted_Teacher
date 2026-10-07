@@ -19,7 +19,7 @@ export async function renderAudio(container) {
         <label class="full">对应歌曲<div class="song-picker"><label class="search-field"><span>⌕</span><input id="songSearch" type="search" placeholder="搜索歌曲名称、地区或省份"></label><select id="songId"></select><div class="list-filters"><select id="songGradeFilter"><option value="">全部适用年级</option><option value="1">含 1 年级</option><option value="2">含 2 年级</option><option value="3">含 3 年级</option><option value="4">含 4 年级</option><option value="5">含 5 年级</option><option value="6">含 6 年级</option></select><select id="songRegionFilter"><option value="">全部地区</option></select></div><small id="songSearchCount"></small></div></label>
         <label class="full audio-file-field"><span>课堂录音 <b>必填</b></span><input id="recording" class="file-input" type="file" accept="audio/*" required><span class="upload-control"><span class="upload-button">选择课堂录音</span><span class="file-name" id="recordingName">尚未选择文件</span></span><small>支持 WAV、MP3、M4A 等常见格式。</small></label>
       </div></div>
-      <section class="reference-source-card" id="referenceSection"><div class="reference-source-head"><div><span class="eyebrow">REFERENCE MELODY</span><h3 id="referenceTitle">参考旋律 <em>可选</em></h3><p id="referenceCaption">课堂整体分析可不上传参考旋律；上传后可补充整体轮廓对比。</p></div><label class="reference-kind-field" id="referenceKindField"><span>参考素材类型</span><select id="referenceKind"><option value="mixed">原唱 / 伴奏混音（先分离人声）</option><option value="vocal">清晰单人参考人声（推荐）</option></select></label></div>
+      <section class="reference-source-card" id="referenceSection"><div class="reference-source-head"><div><span class="eyebrow">REFERENCE MELODY</span><h3 id="referenceTitle">参考旋律 <em>可选</em></h3><p id="referenceCaption">课堂整体分析可不上传参考旋律；上传后可补充整体轮廓对比。</p></div><label class="reference-kind-field" id="referenceKindField"><span>参考素材类型</span><select id="referenceKind"><option value="vocal">清晰单人参考人声（推荐）</option><option value="mixed">原唱 / 伴奏混音（先分离人声）</option></select></label></div>
         <label class="audio-file-field"><span>参考音频文件</span><input id="original" class="file-input" type="file" accept="audio/*"><span class="upload-control"><span class="upload-button secondary">选择参考旋律</span><span class="file-name" id="originalName">不上传也可分析</span></span><small id="referenceHint">参考音频文件与“参考素材类型”是两个独立选项。</small></label>
       </section>
       <div class="actions"><button class="btn primary" id="analyze">开始分析录音</button></div>
@@ -156,7 +156,7 @@ function bindResultActions(root, result) {
   const recordingWave = root.querySelector("#recordingWave");
   if (recordingWave) drawWaveform(recordingWave, result.recording_waveform, "#547785");
   const referenceWave = root.querySelector("#referenceWave");
-  if (referenceWave && result.has_reference_comparison) drawWaveform(referenceWave, result.reference_waveform, "#9f4b35");
+  if (referenceWave && (result.has_reference_comparison || result.reference_waveform_preview_only)) drawWaveform(referenceWave, result.reference_waveform, "#9f4b35");
   root.querySelector("#toFeedback")?.addEventListener("click", () => {
     localStorage.setItem("audioAnalysisForFeedback", JSON.stringify({ id: result.id }));
     root.innerHTML = "";
@@ -217,9 +217,9 @@ function soloResultView(result, player, method) {
 }
 
 function referenceView(result) {
-  if (!result.has_reference_comparison) return "";
+  if (!result.has_reference_comparison && !result.reference_waveform_preview_only) return "";
   const solo = result.analysis_mode === "solo";
   const title = solo ? "参考旋律与我的练唱" : "参考音频与课堂录音";
-  const note = solo ? "红色为可用于逐音评测的人声参考，蓝色为我的练唱；整体轮廓仅辅助查看，音准以逐音对齐结果为准。" : "仅反映整体能量轮廓相似度，不等同音准评分。";
+  const note = result.reference_waveform_preview_only ? "红色是尚未分离的原始参考音频，仅用于确认上传内容；它不参与逐音评分。蓝色是本次练唱录音。" : solo ? "红色为可用于逐音评测的人声参考，蓝色为我的练唱；整体轮廓仅辅助查看，音准以逐音对齐结果为准。" : "仅反映整体能量轮廓相似度，不等同音准评分。";
   return `<section class="card reference-panel"><div class="card-head"><div><h3>${title}</h3><small>${note}</small></div><b class="reference-score">${result.reference_similarity ?? "—"}</b></div><div class="wave"><b>${esc(result.reference_waveform_label || "参考音频（红）")}</b><div id="referenceWave"></div></div><div class="wave"><b>${esc(result.recording_waveform_label || (solo ? "我的练唱（蓝）" : "课堂录音（蓝）"))}</b><div id="recordingWave"></div></div></section>`;
 }
