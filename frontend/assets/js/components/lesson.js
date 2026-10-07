@@ -190,7 +190,7 @@ async function loadRunHistory(lesson) {
     listNode.innerHTML = `<p class="error-text">授课记录读取失败：${esc(error.message)}</p>`;
   }
 }
-async async function beginRun(lesson, mode = null) {
+async function beginRun(lesson, mode = null) {
   const panel = lesson.querySelector("[data-run-launch]");
   if (mode == null) {
     const runs = await api.lessonRuns(Number(lesson.dataset.planId));
@@ -239,7 +239,12 @@ if (!window.__lessonTeachingControlsBound) {
     const start = event.target.closest("[data-teaching-start]");
     if (start) {
       const lesson = start.closest(".lesson");
-      if (lesson) await beginRun(lesson);
+      if (lesson) {
+        start.disabled = true;
+        try { await beginRun(lesson); }
+        catch (error) { notify(`无法打开授课记录：${error.message}`, "error"); }
+        finally { start.disabled = false; }
+      }
       return;
     }
     const mode = event.target.closest("[data-run-mode]");
