@@ -1,4 +1,4 @@
-import { api } from "../api/client.js?v=20261007-5";
+import { api } from "../api/client.js?v=20261007-6";
 import { esc, notify } from "../utils/dom.js";
 
 function lines(value) {
@@ -394,5 +394,13 @@ if (!window.__lessonTeachingControlsBound) {
       catch (error) { notify(`授课计时未能暂停：${error.message}`, "error"); }
       clearRunTimers();
     }
+  });
+
+  // 浏览器刷新或关闭时用 keepalive 请求暂停；服务器不会把离线时间记进课堂时长。
+  window.addEventListener("pagehide", () => {
+    const runtime = currentRuntime;
+    if (runtime?.run.status !== "running") return;
+    api.pauseLessonRunOnExit(runtime.run.id);
+    clearRunTimers();
   });
 }
