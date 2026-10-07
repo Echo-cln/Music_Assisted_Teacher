@@ -1,4 +1,4 @@
-from app.services.lesson_service import _extract_classroom_setup, _low_device_option, _validate_saved_preview, _validated_content
+from app.services.lesson_service import _extract_classroom_setup, _low_device_option, _sync_objective_evidence, _validate_saved_preview, _validated_content
 
 
 def _base():
@@ -82,3 +82,13 @@ def test_lesson_contract_preserves_local_evidence_and_device_alternatives():
     assert result["timeline"][0]["look_for"] == base["timeline"][0]["look_for"]
     assert result["timeline"][0]["low_device_option"] == base["timeline"][0]["low_device_option"]
     assert result["objective_evidence"][0]["objective"] == result["objectives"][0]
+
+
+
+def test_observation_evidence_stays_aligned_when_model_changes_objective_count():
+    content = {"objectives": ["目标一", "目标二", "目标三", "目标四"]}
+    base = {"objective_evidence": [{"objective": "旧目标", "evidence": "旧观察依据"}]}
+    _sync_objective_evidence(content, base)
+    assert [item["objective"] for item in content["objective_evidence"]] == content["objectives"]
+    assert len(content["objective_evidence"]) == len(content["objectives"])
+    assert all(item["evidence"] for item in content["objective_evidence"])

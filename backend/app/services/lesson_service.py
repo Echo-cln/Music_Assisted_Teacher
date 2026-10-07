@@ -357,6 +357,25 @@ def _normalize_generated(generated: dict, base: dict) -> dict:
         ]
     return normalized
 
+def _sync_objective_evidence(content: dict, base: dict) -> None:
+    """让反馈观察项与最终教案目标一一对应，避免模型改目标后错位或遗漏。"""
+    base_items = base.get("objective_evidence") or []
+    evidence_by_objective = {
+        str(item.get("objective", "")).strip(): str(item.get("evidence", "")).strip()
+        for item in base_items
+        if isinstance(item, dict) and item.get("objective")
+    }
+    objectives = [str(item).strip() for item in content.get("objectives", []) if str(item).strip()]
+    content["objective_evidence"] = [
+        {
+            "objective": objective,
+            "evidence": evidence_by_objective.get(objective)
+            or f"在对应课堂任务中，观察学生能否通过演唱、律动或口述具体展示“{objective}”。",
+        }
+        for objective in objectives
+    ]
+
+
 def _validated_content(raw: str, base: dict) -> dict:
     # 兼容少数模型仍包裹 Markdown 代码围栏或附带一句前言，提取完整对象后再校验。
     normalized = raw.strip()
@@ -440,10 +459,7 @@ def _validated_content(raw: str, base: dict) -> dict:
         if isinstance(value, type(content.get(field))) and value:
             content[field] = value
 
-    if content.get("objective_evidence"):
-        for index, item in enumerate(content["objective_evidence"]):
-            if isinstance(item, dict) and index < len(content.get("objectives", [])):
-                item["objective"] = content["objectives"][index]
+    _sync_objective_evidence(content, base)
 
     # 课堂流程的阶段、时长由规则层根据课时生成，不能被模型删减或改写。
     # 模型只可增强同一位置的教师、学生活动；若个别项生成不完整，则保留骨架内容。
