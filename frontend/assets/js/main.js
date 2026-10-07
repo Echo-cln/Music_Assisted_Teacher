@@ -1,5 +1,5 @@
 import { api } from "./api/client.js";
-import { renderAuth } from "./pages/auth.js";
+import { renderAuth } from "./pages/auth.js?v=20261007-login1";
 import { initGenerationCenter, setGenerationCenterVisible } from "./state/generation.js";
 import { initAudioJobCenter, setAudioJobCenterVisible } from "./state/audio_jobs.js";
 import { esc, loading, notify } from "./utils/dom.js";
