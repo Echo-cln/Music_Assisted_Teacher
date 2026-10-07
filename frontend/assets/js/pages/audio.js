@@ -1,6 +1,7 @@
-import { api, apiUrl } from "../api/client.js";
+import { api, apiUrl } from "../api/client.js?v=20261007-1";
 import { esc, loading, notify, pageHeader } from "../utils/dom.js";
 import { drawWaveform } from "../utils/waveform.js";
+import { showModal } from "../components/modal.js";
 import { cancelActiveAudioJob, refreshAudioJob, startAudioJob } from "../state/audio_jobs.js";
 
 const scoreNames = { pitch_stability: "主音高轨迹稳定度估算", rhythm_regularness: "起音间隔规律估算", dynamics: "力度变化估算", clarity: "录音清晰度估算" };
@@ -126,13 +127,7 @@ export async function renderAudio(container) {
     const area = document.getElementById("analysis");
     if (!area) return;
     area.innerHTML = resultView(result);
-    const recordingWave = document.getElementById("recordingWave");
-    if (recordingWave) drawWaveform(recordingWave, result.recording_waveform, "#547785");
-    if (result.has_reference_comparison) drawWaveform(document.getElementById("referenceWave"), result.reference_waveform, "#9f4b35");
-    document.getElementById("toFeedback")?.addEventListener("click", () => {
-      localStorage.setItem("audioAnalysisForFeedback", JSON.stringify({ id: result.id }));
-      window.dispatchEvent(new CustomEvent("app:navigate", { detail: "feedback" }));
-    });
+    bindResultActions(area, result);
   }
 }
 
@@ -148,6 +143,25 @@ function audioStepView(task) {
 
 function analysisProgress(message, progress) {
   return `<section class="card analysis-progress" aria-live="polite"><div><span class="eyebrow">BACKGROUND ANALYSIS</span><h3>音频分析正在后台运行</h3><p>${esc(message)}</p></div><div class="generation-progress"><i style="width:${progress}%"></i></div><small>进度来自后端实际阶段：保存音频 → 提取音高/节拍 → 计算指标 → 保存结果。</small></section>`;
+}
+
+export async function openSavedAudioAnalysis(analysisId) {
+  const result = await api.audioAnalysis(Number(analysisId));
+  const root = showModal(`<div class="modal-head"><div><span class="eyebrow">教学档案 · 音频分析记录</span><h2>《${esc(result.song_name)}》分析详情</h2><p>${esc(result.created_at || "")} · 记录 #${result.id}</p></div><button class="close" data-close aria-label="关闭">×</button></div>${resultView(result)}`);
+  bindResultActions(root, result);
+  return result;
+}
+
+function bindResultActions(root, result) {
+  const recordingWave = root.querySelector("#recordingWave");
+  if (recordingWave) drawWaveform(recordingWave, result.recording_waveform, "#547785");
+  const referenceWave = root.querySelector("#referenceWave");
+  if (referenceWave && result.has_reference_comparison) drawWaveform(referenceWave, result.reference_waveform, "#9f4b35");
+  root.querySelector("#toFeedback")?.addEventListener("click", () => {
+    localStorage.setItem("audioAnalysisForFeedback", JSON.stringify({ id: result.id }));
+    root.innerHTML = "";
+    window.dispatchEvent(new CustomEvent("app:navigate", { detail: "feedback" }));
+  });
 }
 
 function resultView(result) {
@@ -175,7 +189,7 @@ function readableReferenceFailure(message) {
   // Older saved records may contain Demucs/tqdm's raw model-download output.
   // Keep it out of the teacher-facing card while preserving the concise cause.
   if (text.length > 320 || /(?:\d+%\|.*(?:kB\/s|MB\/s)|urlopen error|https?:\/\/|\d+\.\d+\/\d+\.\d+M)/i.test(text)) {
-    return "混音参考的人声分离未完成，因此本次不生成逐音分数。请上传清晰单人参考人声，或检查后端 Demucs 模型下载日志后重试。";
+    return "混音参考的人声分离未完成，因此本次不生成逐音分数。请上传清晰单人参考人声，或检查后端音源分离模型日志后重试。";
   }
   return text || "参考旋律不可用；请检查参考类型和录音质量。";
 }
@@ -189,16 +203,16 @@ function soloResultView(result, player, method) {
   const alignment = diagnostics.alignment || {};
   const hasPitchScore = Boolean(comparison.available || note.available);
   const recordingQuality = quality == null ? "—" : `${Math.round(quality * 100)}%`;
-  const referenceLabel = reference.source === "demucs_vocals" ? "已分离出参考人声" : reference.source === "clean_vocal" ? "清晰单人参考人声" : reference.available === false ? "混音分离失败" : "待确认";
+  const referenceLabel = reference.source === "audio_separator_vocals" ? "RoFormer/UVR 已分离参考人声" : reference.source === "demucs_vocals" ? "Demucs 已分离参考人声" : reference.source === "clean_vocal" ? "清晰单人参考人声" : reference.available === false ? "混音分离失败" : "待确认";
   const separationFailed = reference.available === false || referenceLabel === "混音分离失败";
   const diagnosticsPanel = `<section class="solo-check-panel"><div class="solo-check-heading"><span class="eyebrow">ASSESSMENT CHECK</span><h3>本次逐音评测条件</h3></div><div class="solo-check-grid"><div><small>练唱人声可用度 <span>（不是得分）</span></small><b>${recordingQuality}</b></div><div><small>参考主旋律来源</small><b>${esc(referenceLabel)}</b></div>${alignment.reference_voiced_ratio != null ? `<div><small>参考音频可用人声</small><b>${Math.round(alignment.reference_voiced_ratio * 100)}%</b></div><div><small>练唱对齐可用人声</small><b>${alignment.recording_voiced_ratio == null ? "—" : `${Math.round(alignment.recording_voiced_ratio * 100)}%`}</b></div>` : ""}</div></section>`;
   const noScoreCopy = separationFailed
-    ? `练唱人声可用度 ${recordingQuality} 不是得分。参考文件是混音，但没有分离出可用的人声音轨，因此系统没有进行逐音对齐。可先上传清晰的单人参考人声；若要继续用混音，请检查后端 Demucs 分离日志后重试。`
+    ? `练唱人声可用度 ${recordingQuality} 不是得分。参考文件是混音，但没有分离出可用的人声音轨，因此系统没有进行逐音对齐。可先上传清晰的单人参考人声；若要继续用混音，请检查后端音源分离日志后重试。`
     : readableReferenceFailure(note.message || comparison.message || reference.message);
   const referenceStatus = !hasPitchScore ? `<section class="solo-no-score"><div><span class="eyebrow">PITCH ASSESSMENT</span><h3>本次未生成逐音分数</h3></div><p>${esc(noScoreCopy)}</p></section>` : "";
   const comparisonCard = comparison.available ? `<section class="intonation-card"><div><span class="eyebrow">PITCH ALIGNMENT</span><h3>参考主旋律对齐</h3><p>${esc(comparison.message)}</p></div><div class="intonation-score"><b>${comparison.intonation_score}</b><span>${esc(comparison.status)}</span></div><div class="analysis-summary"><span>中位偏差 <b>${comparison.median_deviation_cents} cents</b></span><span>偏差帧 <b>${comparison.off_pitch_ratio}%</b></span></div></section>` : "";
   const noteAssessment = note.available ? `<section class="note-assessment"><div class="card-head"><div><span class="eyebrow">NOTE-BY-NOTE ASSESSMENT</span><h3>逐音结果</h3><p>${esc(note.message)}</p></div><div class="intonation-score"><b>${note.score}</b><span>逐音得分</span></div></div><div class="analysis-summary"><span>匹配音符 <b>${note.matched_notes}</b></span><span>±50 cents 命中 <b>${note.accurate_note_ratio}%</b></span><span>中位偏差 <b>${note.median_deviation_cents} cents</b></span></div><div class="note-table"><table><thead><tr><th>#</th><th>目标音</th><th>时间</th><th>偏差</th><th>判定</th></tr></thead><tbody>${(note.events || []).map(item => `<tr><td>${item.index}</td><td>${esc(item.expected_note)}</td><td>${item.start_seconds}–${item.end_seconds}s</td><td class="${Math.abs(item.deviation_cents) > 50 ? "off-pitch" : ""}">${item.deviation_cents > 0 ? "+" : ""}${item.deviation_cents} cents</td><td>${esc(item.status)}</td></tr>`).join("")}</tbody></table></div></section>` : "";
-  return `<section class="analysis-result solo-analysis-result"><div class="card"><div class="card-head"><div><span class="eyebrow">SOLO VOICE ASSESSMENT</span><h2>《${esc(result.song_name)}》单人练唱逐音评测</h2><p class="muted">录音已保存 · ${hasPitchScore ? "逐音评测已完成" : "逐音评测未完成"} · 时长 ${result.duration_seconds} 秒 · 不使用课堂整体分数</p></div><span class="status ok">录音 #${result.id} 已保存</span></div><p class="analysis-scope">${esc(result.analysis_scope)}</p>${player}${diagnosticsPanel}${comparisonCard}${referenceStatus}${noteAssessment}${method}</div></section>`;
+  return `<section class="analysis-result solo-analysis-result"><div class="card"><div class="card-head"><div><span class="eyebrow">SOLO VOICE ASSESSMENT</span><h2>《${esc(result.song_name)}》单人练唱逐音评测</h2><p class="muted">录音已保存 · ${hasPitchScore ? "逐音评测已完成" : "逐音评测未完成"} · 时长 ${result.duration_seconds} 秒 · 不使用课堂整体分数</p></div><span class="status ok">录音 #${result.id} 已保存</span></div><p class="analysis-scope">${esc(result.analysis_scope)}</p>${player}${diagnosticsPanel}${comparisonCard}${referenceView(result)}${referenceStatus}${noteAssessment}${method}</div></section>`;
 }
 
 function referenceView(result) {

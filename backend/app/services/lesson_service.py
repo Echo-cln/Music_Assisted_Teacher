@@ -115,6 +115,43 @@ def _extract_classroom_setup(requirements: str) -> tuple[str, str]:
     return setup, clean
 
 
+def _device_action(stage: str, setup: str) -> str:
+    """把所选设备变成每个课堂环节里可直接执行的教学动作。"""
+    stage_actions = {
+        "情境导入": {
+            "无电子设备（教师清唱与身体声势）": "教师清唱或哼唱歌曲开头，学生用动作表达情绪并说出听到的线索。",
+            "手机与手机扬声器": "手机提前缓存歌曲开头，播放后立即暂停，请学生用动作表达情绪并说出听到的线索。",
+            "电脑、投影与音箱": "投影歌曲名称或歌词，音箱播放开头片段；播放后暂停，请学生指出听到的情绪线索。",
+            "电脑与音箱": "电脑本地播放歌曲开头，音箱放声；播放后暂停，请学生指出听到的情绪线索。",
+        },
+        "节奏游戏": {
+            "无电子设备（教师清唱与身体声势）": "教师口读节奏并拍手给拍，学生分组用拍手、跺脚完成节奏接龙。",
+            "手机与手机扬声器": "手机播放短节奏片段，学生跟随手机扬声器拍手接龙；播放失效时由教师口读节奏。",
+            "电脑、投影与音箱": "投影节奏卡并播放节拍片段，学生依照卡片分组接龙。",
+            "电脑与音箱": "电脑播放节拍片段，学生听到约定起拍后分组接龙。",
+        },
+        "分句学唱": {
+            "无电子设备（教师清唱与身体声势）": "教师逐句范唱，学生先哼鸣回声模唱，再轻声填词。",
+            "手机与手机扬声器": "手机按乐句播放并在句尾暂停，学生跟随模唱；没有清晰音频时改用教师范唱。",
+            "电脑、投影与音箱": "投影当前歌词句，电脑播放对应乐句，音箱停止后由学生回声模唱。",
+            "电脑与音箱": "电脑分句播放对应乐句，音箱停止后由学生回声模唱。",
+        },
+        "难点练习": {
+            "无电子设备（教师清唱与身体声势）": "教师把难句拆成两拍口令和身体声势，逐步放慢后恢复原速。",
+            "手机与手机扬声器": "手机循环播放难句，学生边听边标记起拍；设备不可用时用拍手和口令替代。",
+            "电脑、投影与音箱": "投影难句歌词或节奏标记，电脑循环播放难句，学生逐次跟唱。",
+            "电脑与音箱": "电脑循环播放难句，学生逐次跟唱；节奏偏差处暂停，用拍手确认起拍。",
+        },
+        "展示评价": {
+            "无电子设备（教师清唱与身体声势）": "小组无伴奏演唱或声势展示，同伴根据本课观察点说出一条证据。",
+            "手机与手机扬声器": "小组跟随手机播放完成展示，另一组记录起拍和长音表现。",
+            "电脑、投影与音箱": "投影本课评价观察点，音箱播放伴奏供小组展示，同伴按观察点反馈。",
+            "电脑与音箱": "电脑播放伴奏供小组展示，同伴根据本课观察点说出一条证据。",
+        },
+    }
+    return stage_actions.get(stage, {}).get(setup.strip()) or "先确认设备能播放本课歌曲，再让学生完成本环节的听、唱或节奏任务。"
+
+
 def _low_device_option(stage: str, setup: str) -> str:
     """为同一教学目标提供不依赖乐器/投影的课堂替代做法。"""
     if "无电子设备" in setup:
@@ -171,6 +208,7 @@ def _local_content(
                 "teacher": f"先播放或范唱片段，引导学生捕捉《{song.name}》“{song.mood}”的声音感受；再补充{song.province}相关线索，避免只讲地区介绍。",
                 "students": f"用一个动作或两个关键词回应歌曲的{song.mood}情绪，并说出听到的一个节奏、旋律或音色线索。",
                 "look_for": "至少说出或做出一个与歌曲情绪相符的声音/动作线索。",
+                "device_action": _device_action("情境导入", classroom_setup),
                 "low_device_option": _low_device_option("情境导入", classroom_setup),
             },
             {
@@ -179,6 +217,7 @@ def _local_content(
                 "teacher": knowledge["game"]["instructions"],
                 "students": "以小组形式完成节奏或声音模仿。",
                 "look_for": "小组能连续完成两轮节奏接龙，并在约定拍点同时开始。",
+                "device_action": _device_action("节奏游戏", classroom_setup),
                 "low_device_option": _low_device_option("节奏游戏", classroom_setup),
             },
             {
@@ -187,6 +226,7 @@ def _local_content(
                 "teacher": f"{basis['practice']}；每两句停一次，重点观察学生能否在{song.range_note}内保持稳定起音与换气。",
                 "students": "先用 lu 回声模唱，再填词；基础较弱者先唱骨干音，同伴用“首拍、长音、情绪”三个词互听。",
                 "look_for": "随机抽一组回唱同一句，记录起音和长音是否能跟随示范。",
+                "device_action": _device_action("分句学唱", classroom_setup),
                 "low_device_option": _low_device_option("分句学唱", classroom_setup),
             },
             {
@@ -195,6 +235,7 @@ def _local_content(
                 "teacher": f"先回到本曲最需要处理的{basis['primary']}，再使用：{knowledge['mistake']['correction']}",
                 "students": "轮换练习并记录最容易出错的一句；能说清是首拍、音高、换气还是情绪表达需要再练。",
                 "look_for": "学生能指出本组反复练习的具体乐句，并说出一个改进前后的差异。",
+                "device_action": _device_action("难点练习", classroom_setup),
                 "low_device_option": _low_device_option("难点练习", classroom_setup),
             },
             {
@@ -203,6 +244,7 @@ def _local_content(
                 "teacher": f"按“{basis['primary']}、声音是否表现{song.mood}、合作完成”三项标准评价，并记录下一节需要回看的乐句。",
                 "students": "小组展示，并用证据说出一个优点和一个下次目标。",
                 "look_for": "每组完成一次展示，并引用节拍、长音或情绪中的一项证据自评。",
+                "device_action": _device_action("展示评价", classroom_setup),
                 "low_device_option": _low_device_option("展示评价", classroom_setup),
             },
         ],
@@ -509,6 +551,8 @@ def stream_preview(
     if not raw:
         raise ValueError("模型未返回可解析的教案正文，请检查模型服务配置后重试")
     content = _validated_content(raw, base)
+    content["generation_strategy"] = generation_strategy
+    content["generation_source"] = mode
     yield "complete", {"content": content, "generation_mode": mode}
 
 

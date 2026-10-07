@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     # 不会把图片误报为已经识别的乐谱。
     audiveris_command: str = ""
     omr_timeout_seconds: int = 180
+    # Optional isolated python-audio-separator executable; blank uses the repo-local optional venv if installed.
+    audio_separator_command: str = ""
+    audio_separator_model: str = "model_bs_roformer_ep_317_sdr_12.9755.ckpt"
 
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",

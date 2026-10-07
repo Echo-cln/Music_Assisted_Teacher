@@ -15,6 +15,7 @@ function stageCard(item, index) {
       <section><span>教师这样组织</span>${textBlocks(item.teacher)}</section>
       <section><span>学生要完成</span>${textBlocks(item.students)}</section>
     </div>
+    ${item.device_action ? `<div class="lesson-stage-device"><b>本设备安排</b><p>${esc(item.device_action)}</p></div>` : ""}
     ${item.look_for ? `<div class="lesson-stage-evidence"><b>本段观察</b><p>${esc(item.look_for)}</p></div>` : ""}
     ${item.low_device_option ? `<div class="lesson-stage-alternative"><b>设备不足时</b><p>${esc(item.low_device_option)}</p></div>` : ""}
   </div>
@@ -28,8 +29,11 @@ export function lessonView(plan) {
   const basis = song.design_basis || {};
   const changes = plan.adjustment_changes || [];
   const requirement = String(content.teacher_requirements || plan.teacher_requirements || "").trim();
+  const strategy = content.generation_strategy || plan.generation_strategy;
+  const strategyLabel = strategy === "fast" ? "快速模式" : strategy === "deep" ? "深度模式" : "历史教案";
+  const sourceLabel = content.generation_source === "ai" ? "模型生成" : content.generation_source === "rules" ? "基础生成" : "";
   return `<article class="lesson" id="lessonDocument">
-    <header class="lesson-hero"><div><span>课堂设计</span><h2>${esc(content.title || plan.title || "音乐教案")}</h2><p>${esc(summary.class_name || plan.class_name || "通用班级")} · ${esc(summary.duration || plan.duration_minutes || "—")} 分钟 · ${esc(summary.region || "—")}</p><button class="btn soft lesson-start-teaching" type="button" data-teaching-start>进入授课视图</button></div><div class="lesson-hero-badge"><b>${esc(song.mood || "音乐课")}</b><small>${esc(song.song_type || "课堂设计")}</small></div></header>
+    <header class="lesson-hero"><div><span>课堂设计 · ${esc(strategyLabel)}${sourceLabel ? ` · ${esc(sourceLabel)}` : ""}</span><h2>${esc(content.title || plan.title || "音乐教案")}</h2><p>${esc(summary.class_name || plan.class_name || "通用班级")} · ${esc(summary.duration || plan.duration_minutes || "—")} 分钟 · ${esc(summary.region || "—")}</p><button class="btn soft lesson-start-teaching" type="button" data-teaching-start>进入授课视图</button></div><div class="lesson-hero-badge"><b>${esc(song.mood || "音乐课")}</b><small>${esc(song.song_type || "课堂设计")}</small></div></header>
     <div class="lesson-summary"><div><small>建议音域</small><b>${esc(summary.range_note || song.range_note || "—")}</b></div><div><small>歌曲难度</small><b>${esc(summary.difficulty || song.difficulty || "—")}</b></div><div><small>课堂重点</small><b>${esc(basis.primary || "听唱与表达")}</b></div><div><small>适用班级</small><b>${esc(summary.class_name || plan.class_name || "—")}</b></div></div>
     ${changes.length ? `<section class="lesson-change-summary"><div><span class="eyebrow">THIS REVISION</span><h3>本次调整重点</h3></div><ul>${changes.map(change => `<li><b>${esc(change.label)}</b><span>${esc(change.detail)}</span></li>`).join("")}</ul></section>` : ""}
     ${requirement ? `<section class="lesson-requirement"><span>教师补充要求</span><p>${esc(requirement)}</p></section>` : ""}

@@ -1,8 +1,8 @@
 """音频分析服务。
 
 不能可靠判断，就明确说明不能判断，绝不把混音伴奏的错误转写伪装成学生
-“跑调 0 分”。逐音评测只接受可用的单人参考人声；混音原唱先尝试 Demucs
-人声分离，分离组件不可用时保留整体课堂分析而不输出假分数。
+“跑调 0 分”。逐音评测只接受可用的单人参考人声；混音原唱优先尝试独立环境中的
+Audio Separator / BS-RoFormer，未安装时使用现有 Demucs 路径。
 """
 
 from __future__ import annotations
@@ -118,6 +118,45 @@ def _filled(values: np.ndarray) -> np.ndarray:
     return np.interp(np.arange(len(values)), np.flatnonzero(valid), values[valid])
 
 
+def _audio_separator_executable() -> list[str] | None:
+    """Return the optional audio-separator CLI without importing its heavy ML stack."""
+    settings = get_settings()
+    configured = str(getattr(settings, "audio_separator_command", "") or "").strip()
+    if configured:
+        candidate = Path(configured.strip('"'))
+        if candidate.is_file():
+            return [str(candidate)]
+        found = shutil.which(configured)
+        return [found] if found else None
+    root = Path(__file__).resolve().parents[3]
+    candidate = root / ".audio-separator-venv" / ("Scripts/audio-separator.exe" if sys.platform == "win32" else "bin/audio-separator")
+    return [str(candidate)] if candidate.is_file() else None
+
+
+def _separate_with_audio_separator(path: Path, output_root: Path) -> tuple[Path | None, str]:
+    command = _audio_separator_executable()
+    if not command:
+        return None, "audio-separator 未安装"
+    output_root.mkdir(parents=True, exist_ok=True)
+    model = str(getattr(get_settings(), "audio_separator_model", "") or "model_bs_roformer_ep_317_sdr_12.9755.ckpt").strip()
+    args = [
+        *command, str(path), "--model_filename", model, "--single_stem", "Vocals",
+        "--output_format", "WAV", "--output_dir", str(output_root),
+    ]
+    result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=900, check=False)
+    raw_detail = (result.stderr or "") + ("\n" if result.stderr and result.stdout else "") + (result.stdout or "")
+    detail = " ".join(raw_detail.split())
+    candidates = sorted(
+        (item for item in output_root.rglob("*.wav") if "vocal" in item.name.lower() and item.stat().st_size > 4096),
+        key=lambda item: item.stat().st_mtime,
+        reverse=True,
+    )
+    if result.returncode == 0 and candidates:
+        return candidates[0], detail[-1200:]
+    logger.warning("audio_separator_failed returncode=%s model=%s detail=%s", result.returncode, model, detail[-1600:])
+    return None, detail[-1200:] or f"audio-separator exited with code {result.returncode}"
+
+
 def _prepare_reference(path: Path | None, reference_kind: str) -> dict:
     """将参考音频变为可用于主旋律比较的人声；混音不允许直接拿来打分。"""
     if not path:
@@ -126,6 +165,21 @@ def _prepare_reference(path: Path | None, reference_kind: str) -> dict:
         return {"available": True, "path": path, "source": "clean_vocal", "message": "使用上传的清晰单人参考人声进行对齐。"}
     if reference_kind not in {"mixed", "auto"}:
         return {"available": False, "code": "reference_unsupported", "message": "参考类型无效。请选“清晰人声”或“原唱/伴奏混音”。"}
+    separator_command = _audio_separator_executable()
+    if separator_command:
+        try:
+            output_root = Path(tempfile.gettempdir()) / "xiangyin-audio-separator" / uuid.uuid4().hex
+            stem, detail = _separate_with_audio_separator(path, output_root)
+            if stem:
+                model = str(getattr(get_settings(), "audio_separator_model", "BS-RoFormer"))
+                return {"available": True, "path": stem, "source": "audio_separator_vocals", "message": f"已使用 Audio Separator 分离参考人声（{model}），再用于主旋律对齐。"}
+            logger.warning("reference_vocal_separation_unavailable engine=audio-separator detail=%s", detail[-1200:])
+            return {"available": False, "code": "vocal_separation_failed", "message": "Audio Separator / BS-RoFormer 未能生成可用人声音轨，本次不输出逐音分数。请查看后端分离日志中的模型下载、内存或设备错误；也可上传清晰单人参考人声。"}
+        except subprocess.TimeoutExpired:
+            return {"available": False, "code": "vocal_separation_timeout", "message": "Audio Separator 人声分离超过 15 分钟仍未完成，本次不输出逐音分数。请使用较短的参考片段或清晰单人参考人声。"}
+        except Exception as exc:
+            logger.exception("audio_separator_reference_failed error=%s", exc)
+            return {"available": False, "code": "vocal_separation_failed", "message": "Audio Separator 人声分离执行失败，本次不输出逐音分数。请查看后端日志中的具体模型或设备错误，或改用清晰单人参考人声。"}
     try:
         output_root = Path(tempfile.gettempdir()) / "xiangyin-demucs" / uuid.uuid4().hex
         command = [sys.executable, "-m", "demucs.separate", "--two-stems=vocals", "-n", "htdemucs", "-o", str(output_root), str(path)]

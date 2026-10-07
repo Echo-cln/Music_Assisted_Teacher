@@ -1,12 +1,12 @@
-import { api, apiUrl } from "../api/client.js";
+import { api, apiUrl } from "../api/client.js?v=20261007-1";
 import { esc, notify, pageHeader } from "../utils/dom.js";
 
 const scoreLabels = { pitch_stability: "主音高轨迹稳定度", rhythm_regularness: "起音间隔规律", dynamics: "力度变化", clarity: "录音清晰度" };
 
 function openAudioAnalysis(id) {
   if (!id) return notify("这条课堂反馈没有可打开的音频分析记录", "error");
-  localStorage.setItem("lastAudioAnalysisId", String(id));
-  window.dispatchEvent(new CustomEvent("app:navigate", { detail: "audio" }));
+  localStorage.setItem("audioArchiveDeepLink", JSON.stringify({ id: Number(id) }));
+  window.dispatchEvent(new CustomEvent("app:navigate", { detail: "lessons" }));
 }
 
 export async function renderFeedback(container) {
@@ -22,7 +22,7 @@ export async function renderFeedback(container) {
       <section class="card"><span class="eyebrow">TEACHER REFLECTION</span><h2>本课观察与改进</h2>
         <label>对应教案<select id="lessonId"><option value="">请选择已保存教案</option>${lessons.map(plan => `<option value="${plan.id}" ${imported?.lesson_plan_id === plan.id ? "selected" : ""}>${esc(plan.title)} · ${esc(plan.class_name)}</option>`).join("")}</select></label>
         <label>关联音频分析（选填）<select id="audioAnalysisId"><option value="">不带入音频分析</option></select><small>只显示已绑定当前教案的分析；选择后会把摘要写入下方可编辑文本。</small></label>
-        <section class="goal-observation-module hidden" id="goalObservations"><div class="module-head"><div><span class="eyebrow">LEARNING EVIDENCE</span><h3>本课目标观察</h3></div><span class="status info">课后记录</span></div><p class="muted">根据学生实际表现记录进展；未观察到的目标可以留空。</p><div id="goalObservationRows"></div></section>
+        <section class="goal-observation-module" id="goalObservations"><div class="module-head"><div><span class="eyebrow">LEARNING EVIDENCE</span><h3>本课目标观察</h3></div><span class="status info">课后记录</span></div><p class="muted">根据学生实际表现记录进展；未观察到的目标可以留空。</p><div id="goalObservationRows"></div></section>
         <label>整体效果<select id="effect"><option>很好</option><option selected>较好</option><option>一般</option><option>较差</option></select></label>
         <section class="feedback-audio-module"><div class="module-head"><div><span class="eyebrow">AUDIO EVIDENCE</span><h3>音频分析总结</h3></div>${imported ? '<span class="status ok">已带入</span>' : '<span class="status info">可选</span>'}</div><textarea id="audioSummary" placeholder="可从音频分析带入，也可手动填写本节课的音准、节拍或声音表现总结。">${esc(imported ? buildSummary(imported) : "")}</textarea><small>该部分会随课堂反馈一起归档，之后仍可编辑查看。</small></section>
         <label>课堂亮点<textarea id="highlights" placeholder="例如：小组声势合作积极，学生能够主动描述歌曲情绪。"></textarea></label>
@@ -40,8 +40,8 @@ export async function renderFeedback(container) {
     const rows = document.getElementById("goalObservationRows");
     const objectives = plan?.content?.objective_evidence || (plan?.content?.objectives || []).map(objective => ({ objective, evidence: "" }));
     if (!module || !rows) return;
-    module.classList.toggle("hidden", !objectives.length);
-    rows.innerHTML = objectives.map((item, index) => `<label class="goal-observation-row"><span><b>目标 ${index + 1}</b><strong>${esc(item.objective)}</strong>${item.evidence ? `<small>观察依据：${esc(item.evidence)}</small>` : ""}</span><select data-goal-observation="${index}" aria-label="目标 ${index + 1}进展"><option value="">暂未记录</option><option value="achieved">已达到</option><option value="developing">正在形成</option><option value="not_observed">本次未观察到</option></select></label>`).join("");
+    module.classList.remove("hidden");
+    rows.innerHTML = objectives.length ? objectives.map((item, index) => `<label class="goal-observation-row"><span><b>目标 ${index + 1}</b><strong>${esc(item.objective)}</strong>${item.evidence ? `<small>观察依据：${esc(item.evidence)}</small>` : ""}</span><select data-goal-observation="${index}" aria-label="目标 ${index + 1}进展"><option value="">暂未记录</option><option value="achieved">已达到</option><option value="developing">正在形成</option><option value="not_observed">本次未观察到</option></select></label>`).join("") : '<p class="muted">先选择一份已保存教案，这里会列出本课目标、观察依据和课后记录状态。</p>';
   };
   const bindLinkedRecord = () => document.querySelector("[data-open-audio-analysis]")?.addEventListener("click", () => openAudioAnalysis(Number(document.querySelector("[data-open-audio-analysis]").dataset.openAudioAnalysis)));
   bindLinkedRecord();
@@ -70,7 +70,7 @@ export async function renderFeedback(container) {
       const plan = lessons.find(item => item.id === lessonId);
       const goals = plan?.content?.objective_evidence || (plan?.content?.objectives || []).map(objective => ({ objective, evidence: "" }));
       const goal = goals[Number(select.dataset.goalObservation)];
-      return goal && select.value ? { objective: goal.objective, evidence: goal.evidence || "", status: select.value } : null;
+      return goal ? { objective: goal.objective, evidence: goal.evidence || "", status: select.value || "" } : null;
     }).filter(Boolean);
     await api.feedback({
       lesson_plan_id: lessonId, overall_effect: document.getElementById("effect").value,
@@ -97,5 +97,5 @@ function summaryView(result) {
   const scores = Object.entries(result.scores || {}).map(([key, value]) => `<span>${scoreLabels[key] || key} <b>${value}</b></span>`).join("");
   const comparison = result.intonation_comparison;
   const detail = comparison?.available ? `${comparison.status} · 偏差 ${comparison.median_deviation_cents} cents` : comparison?.message || "已带入录音分析";
-  return `<p class="linked-record-title"><b>《${esc(result.song_name)}》</b><small>${esc(result.analysis_mode_label || "课堂音频分析")} · ${esc(result.created_at || "")}</small></p><div class="analysis-summary">${scores}</div><p class="muted">${esc(detail)}</p><audio controls preload="metadata" src="${esc(apiUrl(result.recording_url))}"></audio><button class="btn soft block linked-record-button" data-open-audio-analysis="${result.id}">查看完整音频分析</button><small class="linked-record-help">将打开这一次录音的完整指标、分段证据、练习建议与音频回听。</small>`;
+  return `<p class="linked-record-title"><b>《${esc(result.song_name)}》</b><small>${esc(result.analysis_mode_label || "课堂音频分析")} · ${esc(result.created_at || "")}</small></p><div class="analysis-summary">${scores}</div><p class="muted">${esc(detail)}</p><audio controls preload="metadata" src="${esc(apiUrl(result.recording_url))}"></audio><button class="btn soft block linked-record-button" data-open-audio-analysis="${result.id}">查看完整音频分析</button><small class="linked-record-help">将进入教学档案的音频分析记录，并打开本条完整结果与录音回听。</small>`;
 }

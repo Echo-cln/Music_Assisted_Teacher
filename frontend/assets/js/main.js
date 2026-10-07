@@ -9,13 +9,13 @@ const app = document.getElementById("app");
 // 首页和其余功能在模块图阶段一起白屏。
 const routeLoaders = {
   home: () => import("./pages/home.js").then(m => m.renderHome),
-  assistant: () => import("./pages/assistant.js").then(m => m.renderAssistant),
+  assistant: () => import("./pages/assistant.js?v=20261007-1").then(m => m.renderAssistant),
   classes: () => import("./pages/classes.js").then(m => m.renderClasses),
   resources: () => import("./pages/resources.js").then(m => m.renderResources),
   workbench: () => import("./pages/workbench.js").then(m => m.renderWorkbench),
-  lessons: () => import("./pages/lessons.js").then(m => m.renderLessons),
-  feedback: () => import("./pages/feedback.js").then(m => m.renderFeedback),
-  audio: () => import("./pages/audio.js").then(m => m.renderAudio),
+  lessons: () => import("./pages/lessons.js?v=20261007-1").then(m => m.renderLessons),
+  feedback: () => import("./pages/feedback.js?v=20261007-1").then(m => m.renderFeedback),
+  audio: () => import("./pages/audio.js?v=20261007-1").then(m => m.renderAudio),
   admin: () => import("./pages/admin.js").then(m => m.renderAdmin),
 };
 let currentTeacher = null;
@@ -66,9 +66,9 @@ function initializeBackgroundPanels() {
 async function refreshStats() {
   try {
     const stats = await api.stats();
-    document.getElementById("serviceStatus").textContent = `${stats.songs} 首歌曲 · ${stats.games + stats.theory + stats.mistakes} 条教学知识`;
+    document.getElementById("serviceStatus").textContent = `${stats.songs} 首歌曲 · ${stats.games + stats.theory + stats.mistakes} 条教学知识 · 前端 2026.10.07`;
   } catch (error) {
-    document.getElementById("serviceStatus").textContent = error.status === 401 ? "等待登录" : "后端未启动";
+    document.getElementById("serviceStatus").textContent = error.status === 401 ? "等待登录" : "后端未启动 · 前端 2026.10.07";
   }
 }
 
@@ -101,6 +101,7 @@ async function navigate(route = "home") {
 }
 
 async function boot() {
+  localStorage.removeItem("lastAudioAnalysisId");
   bindRoutes();
   window.addEventListener("app:navigate", event => navigate(event.detail));
   window.addEventListener("generation:expired", () => notify("上一条生成任务已不在当前数据中，已清除旧进度记录。"));
@@ -123,7 +124,12 @@ async function boot() {
     initializeBackgroundPanels();
   } catch (error) {
     if (error.status === 401) return showLogin();
-    app.innerHTML = `<div class="card notice"><h2>无法连接后端</h2><p>${esc(error.message)}</p></div>`;
+    console.error("后端连接失败", error);
+    const staticEdge = location.hostname.endsWith(".edgeone.cool");
+    const nextStep = staticEdge
+      ? "当前地址只提供静态网页；登录、教案、音频和保存功能还需要 FastAPI 后端。你之前选择本机运行时，请使用项目根目录的 .\\run.bat 打开的 http://127.0.0.1:8000。"
+      : "如要本机使用，请在项目根目录运行 .\\run.bat，再打开 http://127.0.0.1:8000。";
+    app.innerHTML = `<div class="card notice"><span class="eyebrow">连接诊断 · 前端 2026.10.07</span><h2>暂时连不上后端</h2><p>${esc(error.message)}</p><p>${esc(nextStep)}</p></div>`;
   }
 }
 

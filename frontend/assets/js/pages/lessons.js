@@ -1,15 +1,19 @@
-import { api, apiUrl } from "../api/client.js";
-import { lessonView } from "../components/lesson.js";
+import { api, apiUrl } from "../api/client.js?v=20261007-1";
+import { lessonView } from "../components/lesson.js?v=20261007-1";
+import { openSavedAudioAnalysis } from "./audio.js?v=20261007-1";
 import { showModal } from "../components/modal.js";
 import { esc, notify, pageHeader } from "../utils/dom.js";
-import { exportLessonPdf, exportLessonWord } from "../utils/lesson-export.js";
+import { exportLessonPdf, exportLessonWord } from "../utils/lesson-export.js?v=20261007-1";
 
 export async function renderLessons(container) {
   container.innerHTML = pageHeader("教学档案与课堂记录", "统一保存、检索和回看教案、课堂音频分析与课后反馈。", '<button class="btn primary" data-route="assistant">新建教案</button>') + `
     <nav class="archive-tabs"><button class="active" data-archive="lessons">教学档案</button><button data-archive="audio">音频分析记录</button><button data-archive="feedback">课堂反馈记录</button></nav>
     <div id="archiveContent"></div>`;
   container.querySelectorAll("[data-archive]").forEach(button => button.onclick = () => openArchive(button.dataset.archive));
-  await openArchive("lessons");
+  let startupDeepLink = null;
+  try { startupDeepLink = JSON.parse(localStorage.getItem("audioArchiveDeepLink") || "null"); }
+  catch (_) { localStorage.removeItem("audioArchiveDeepLink"); }
+  await openArchive(startupDeepLink?.id ? "audio" : "lessons");
 
   async function openArchive(kind) {
     container.querySelectorAll("[data-archive]").forEach(button => button.classList.toggle("active", button.dataset.archive === kind));
@@ -47,9 +51,32 @@ async function renderArchive(container, kind) {
     container.innerHTML = `<section class="list-search"><div class="list-filters"><select id="archiveSort" aria-label="音频分析排序"><option value="newest">最新分析</option><option value="oldest">最早分析</option><option value="song">歌曲名称</option><option value="score">音高稳定分</option></select></div></section><section class="archive-list" id="archiveRows"></section>`;
     const paint = () => { const sorted = [...rows]; const sort = document.getElementById("archiveSort").value; if (sort === "oldest") sorted.reverse(); if (sort === "song") sorted.sort((a,b) => a.song_name.localeCompare(b.song_name, "zh-CN")); if (sort === "score") sorted.sort((a,b) => (b.scores?.pitch_stability || 0) - (a.scores?.pitch_stability || 0)); document.getElementById("archiveRows").innerHTML = `${sorted.length ? sorted.map(item => {
       const compare = item.intonation_comparison;
-      return `<article class="card archive-item"><div><span class="eyebrow">AUDIO ANALYSIS</span><h3>《${esc(item.song_name)}》</h3><p>${esc(item.created_at)} · ${item.duration_seconds || "—"} 秒</p><div class="analysis-summary">${Object.entries(item.scores || {}).map(([key, value]) => `<span>${({ pitch_stability: "音高", rhythm_regularness: "节拍", dynamics: "力度", clarity: "清晰" })[key]} <b>${value}</b></span>`).join("")}</div><p class="muted">${esc(compare?.available ? `${compare.status} · 中位偏差 ${compare.median_deviation_cents} cents` : "无参考音频：仅保存稳定性分析")}</p></div><div class="archive-actions"><audio controls preload="metadata" src="${esc(apiUrl(item.recording_url))}"></audio><button class="link" data-import-analysis="${item.id}">带入课堂反馈</button></div></article>`;
+      return `<article class="card archive-item"><div><span class="eyebrow">AUDIO ANALYSIS</span><h3>《${esc(item.song_name)}》</h3><p>${esc(item.created_at)} · ${item.duration_seconds || "—"} 秒</p><div class="analysis-summary">${Object.entries(item.scores || {}).map(([key, value]) => `<span>${({ pitch_stability: "音高", rhythm_regularness: "节拍", dynamics: "力度", clarity: "清晰" })[key]} <b>${value}</b></span>`).join("")}</div><p class="muted">${esc(compare?.available ? `${compare.status} · 中位偏差 ${compare.median_deviation_cents} cents` : "无参考音频：仅保存稳定性分析")}</p></div><div class="archive-actions"><audio controls preload="metadata" src="${esc(apiUrl(item.recording_url))}"></audio><button class="btn soft" data-view-analysis="${item.id}">查看详情</button><button class="link" data-import-analysis="${item.id}">带入课堂反馈</button></div></article>`;
     }).join("") : '<section class="card empty">暂无音频分析记录。完成一次分析后，录音和结果会自动保存在这里。</section>'}`; container.querySelectorAll("[data-import-analysis]").forEach(button => button.onclick = () => { localStorage.setItem("audioAnalysisForFeedback", JSON.stringify({ id: Number(button.dataset.importAnalysis) })); window.dispatchEvent(new CustomEvent("app:navigate", { detail: "feedback" })); }); };
-    document.getElementById("archiveSort").onchange = paint; paint();
+    const bindAudioDetails = async () => {
+       container.querySelectorAll("[data-view-analysis]").forEach(button => button.onclick = async () => {
+         button.disabled = true;
+         try { await openSavedAudioAnalysis(Number(button.dataset.viewAnalysis)); }
+         catch (error) { notify(`读取音频分析详情失败：${error.message}`, "error"); }
+         finally { button.disabled = false; }
+       });
+       let deepLink = null;
+       try { deepLink = JSON.parse(localStorage.getItem("audioArchiveDeepLink") || "null"); }
+       catch (_) { localStorage.removeItem("audioArchiveDeepLink"); }
+       if (deepLink?.id) {
+         localStorage.removeItem("audioArchiveDeepLink");
+         const linked = rows.find(item => Number(item.id) === Number(deepLink.id));
+         if (linked) {
+           const rowButton = container.querySelector(`[data-view-analysis="${Number(linked.id)}"]`);
+           rowButton?.focus();
+           try { await openSavedAudioAnalysis(linked.id); }
+           catch (error) { notify(`读取音频分析详情失败：${error.message}`, "error"); }
+         } else notify("这条音频分析记录不在当前账号的教学档案中", "error");
+       }
+     };
+     document.getElementById("archiveSort").onchange = () => { paint(); bindAudioDetails(); };
+     paint();
+     bindAudioDetails();
     return;
   }
   const rows = await api.feedbackRecords();
@@ -64,7 +91,7 @@ async function renderArchive(container, kind) {
       const goalLabel = status => status === "achieved" ? "已达到" : status === "developing" ? "正在形成" : status === "not_observed" ? "本次未观察到" : "暂未记录";
       return `<article class="card archive-item feedback-archive-item"><div><span class="eyebrow">CLASSROOM FEEDBACK</span><h3>${esc(item.lesson_title)}</h3><p>${esc(item.song_name)} · ${esc(item.created_at)} · 整体效果：${esc(item.overall_effect)}</p><dl><dt>音频分析总结</dt><dd>${esc(item.audio_summary || "未带入音频分析")}</dd><dt>课堂亮点</dt><dd>${esc(item.highlights || "—")}</dd><dt>存在问题</dt><dd>${esc(item.problems || "—")}</dd><dt>下次改进</dt><dd>${esc(item.improvement || "—")}</dd></dl>${goals.length ? `<section class="archived-goal-observations"><b>本课目标观察</b><ul>${goals.map(goal => `<li><span>${esc(goal.objective)}</span><small>${goalLabel(goal.status)}</small></li>`).join("")}</ul></section>` : ""}<details class="feedback-inline-edit"><summary>编辑这条反馈</summary><div class="feedback-edit-grid"><label>整体效果<select data-edit-field="overall_effect"><option ${item.overall_effect === "很好" ? "selected" : ""}>很好</option><option ${item.overall_effect === "较好" ? "selected" : ""}>较好</option><option ${item.overall_effect === "一般" ? "selected" : ""}>一般</option><option ${item.overall_effect === "较差" ? "selected" : ""}>较差</option></select></label><label>音频分析总结<textarea data-edit-field="audio_summary">${esc(item.audio_summary || "")}</textarea></label><label>课堂亮点<textarea data-edit-field="highlights">${esc(item.highlights || "")}</textarea></label><label>存在问题<textarea data-edit-field="problems">${esc(item.problems || "")}</textarea></label><label>下次改进<textarea data-edit-field="improvement">${esc(item.improvement || "")}</textarea></label></div>${goals.length ? `<div class="feedback-edit-goals"><b>目标观察</b>${goals.map((goal, index) => `<label><span>${esc(goal.objective)}</span><select data-edit-goal="${index}"><option value="" ${!goal.status ? "selected" : ""}>暂未记录</option><option value="achieved" ${goal.status === "achieved" ? "selected" : ""}>已达到</option><option value="developing" ${goal.status === "developing" ? "selected" : ""}>正在形成</option><option value="not_observed" ${goal.status === "not_observed" ? "selected" : ""}>本次未观察到</option></select></label>`).join("")}</div>` : ""}<button class="btn primary" type="button" data-save-feedback-edit="${item.id}">保存反馈修改</button></details></div>${item.audio_analysis_id ? `<aside class="feedback-audio-link"><b>已关联音频记录</b><span>${esc(item.analysis?.analysis_mode_label || "课堂音频分析")}</span><button class="btn soft" data-open-feedback-audio="${item.audio_analysis_id}">查看完整分析</button><small>包含分段证据、建议与录音回听</small></aside>` : ""}</article>`;
     }).join("") : '<section class="card empty">暂无课堂反馈记录。保存反馈后会完整归档在这里。</section>';
-    container.querySelectorAll("[data-open-feedback-audio]").forEach(button => button.onclick = () => { localStorage.setItem("lastAudioAnalysisId", button.dataset.openFeedbackAudio); window.dispatchEvent(new CustomEvent("app:navigate", { detail: "audio" })); });
+    container.querySelectorAll("[data-open-feedback-audio]").forEach(button => button.onclick = () => { localStorage.setItem("audioArchiveDeepLink", JSON.stringify({ id: Number(button.dataset.openFeedbackAudio) })); window.dispatchEvent(new CustomEvent("app:navigate", { detail: "lessons" })); });
     container.querySelectorAll("[data-save-feedback-edit]").forEach(button => button.onclick = async () => {
       const item = rows.find(record => record.id === Number(button.dataset.saveFeedbackEdit));
       const card = button.closest(".feedback-archive-item");
@@ -72,7 +99,7 @@ async function renderArchive(container, kind) {
       const value = field => card.querySelector(`[data-edit-field="${field}"]`)?.value || "";
       const goal_observations = goalsForItem(item).map((goal, index) => {
         const status = card.querySelector(`[data-edit-goal="${index}"]`)?.value || "";
-        return status ? { ...goal, status } : null;
+        return { ...goal, status };
       }).filter(Boolean);
       button.disabled = true;
       try {

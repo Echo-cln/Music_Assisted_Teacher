@@ -63,13 +63,23 @@ def list_feedback(db: Session = Depends(get_db), teacher: Teacher = Depends(get_
         record = db.get(ClassroomRecord, item.classroom_record_id)
         plan = db.get(LessonPlan, record.lesson_plan_id) if record else None
         song = db.get(Song, plan.song_id) if plan else None
+        analysis = json.loads(item.analysis_json or "{}")
+        if plan and not analysis.get("goal_observations"):
+            content = json.loads(plan.content_json or "{}")
+            objectives = content.get("objective_evidence") or [
+                {"objective": objective, "evidence": ""} for objective in content.get("objectives", [])
+            ]
+            analysis["goal_observations"] = [
+                {"objective": entry.get("objective", ""), "evidence": entry.get("evidence", ""), "status": ""}
+                for entry in objectives if entry.get("objective")
+            ]
         output.append({
             "id": item.id, "lesson_plan_id": plan.id if plan else None,
             "lesson_title": plan.title if plan else "已删除教案",
             "song_name": song.name if song else "—",
             "overall_effect": item.overall_effect, "highlights": item.highlights,
             "problems": item.problems, "improvement": item.improvement,
-            "audio_summary": item.audio_summary, "analysis": json.loads(item.analysis_json or "{}"),
+            "audio_summary": item.audio_summary, "analysis": analysis,
             "audio_analysis_id": item.audio_analysis_id,
             "created_at": item.created_at.isoformat(timespec="seconds"),
         })

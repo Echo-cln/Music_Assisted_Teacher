@@ -46,7 +46,7 @@
 | AI 教案助手 | 按班级画像和歌曲准备可编辑教案；选择课时、课堂偏好、快速/深度模式与课堂设备条件；生成预览、调整并保存 | 需要配置模型 API。两种模式生成同一完整内容，差别在生成速度；实际耗时取决于模型服务、网络和账户配额。教案流程包含分段观察依据和设备不足时的替代做法 |
 | 教学档案 | 搜索、查看和编辑已保存教案；导出 Word 或 PDF；同时查看音频分析记录和课堂反馈记录 | 教案只有点击“保存教案”后才进入档案 |
 | 音频分析 | 上传课堂录音，选择歌曲和分析方式；查看波形、音高稳定、节拍规律、力度和清晰度等声学观察与分段建议 | 课堂整体分析适用于合唱或带环境声的课堂录音；参考旋律可选 |
-| 单人练唱 | 将个人演唱与参考主旋律对齐，查看逐音偏差 | 建议使用清晰、单人、无伴奏参考人声；若参考是原唱伴奏混音，需要额外安装 Demucs 做人声分离 |
+| 单人练唱 | 将个人演唱与参考主旋律对齐，查看逐音偏差和红/蓝对比波形 | 清晰单人参考人声最可靠；混音参考可安装 Audio Separator / BS-RoFormer，未安装时保留 Demucs 路径；分离失败不输出逐音分数 |
 | 课堂反馈 | 记录整体效果、亮点、问题和改进；按本课目标记录“已达到 / 正在形成 / 本次未观察到”；可关联音频分析 | 目标进展与音频记录保存在反馈档案中；音频记录可从链接打开查看完整内容 |
 | 数字乐器与编曲 | 输入音名旋律或在键盘/钢琴卷帘编辑；调整速度、拍号、格数和小节；生成多轨伴奏；试听、保存或删除编曲工程 | 可试听旋律与声部。真实音色取决于可用采样；古筝、二胡、非洲鼓等可导入有授权的 SF2 音色包 |
 | 乐谱导入 | 将 MusicXML 或 MIDI 导入钢琴卷帘；支持用 Audiveris 识别清晰的乐谱图片或 PDF | 图片/PDF 识谱需要在运行后端的电脑上安装并配置 Audiveris；所有识别结果都应人工核对 |
@@ -57,7 +57,7 @@
 
 **课堂整体分析**关注一段课堂录音的整体声学表现，例如音高稳定性、节拍规律、力度变化和声音清晰度，并按时间片段呈现观察。它不是逐个学生的独立评分。配置模型后，模型可根据已提取的声学依据整理教学建议；模型不负责从录音中凭空判定学生表现。
 
-**单人练唱逐音评测**需要一段主旋律参考和一段学生练唱录音。系统尝试做旋律对齐，再呈现音高/时值差异。参考旋律为清晰独唱时更适合比较；参考为原唱伴奏混音时需要 Demucs。参考旋律缺失、声部无法分离或录音不清晰时，不应把结果当作可靠跑调评分。
+**单人练唱逐音评测**需要一段主旋律参考和一段学生练唱录音。系统尝试做旋律对齐，再呈现音高/时值差异，并显示红色参考人声与蓝色练唱波形。参考为原唱伴奏混音时，首选 Audio Separator / BS-RoFormer 分离人声；如未安装可用旧 Demucs 路径。参考旋律缺失、声部无法分离或录音不清晰时，不生成逐音评分。
 
 ### 数字乐器与音色
 
@@ -110,7 +110,7 @@
 打开 **音频分析**，先选分析方式，再选歌曲和录音：
 
 - 课堂整体分析：上传课堂录音；参考旋律可选。
-- 单人练唱逐音评测：选择练唱录音和参考旋律；混音参考需要 Demucs 支持人声分离。
+- 单人练唱逐音评测：选择练唱录音和参考旋律；清晰独唱可直接使用，混音参考可使用可选分离器。
 
 分析以后台任务执行，页面会显示步骤与进度。完成后可打开完整结果，并将记录绑定到教案。输入的录音质量和参考素材与当前歌曲的匹配程度会直接影响结果。
 
@@ -231,19 +231,11 @@ SMTP_FROM=
 
 ### 混音参考的人声分离（可选）
 
-Windows：先完成 `setup.bat`，再运行：
+Windows：先完成主项目 `setup.bat`，再从项目根目录运行 `setup_audio_separator.bat`。分离器安装在独立的 `.audio-separator-venv`，不会修改主项目依赖环境。
 
-```powershell
-.`setup_audio_pro.bat
-```
+默认使用 BS-RoFormer 权重。首次混音分析时会联网下载模型，耗时取决于网络和本机 CPU/GPU；可在 `backend/.env` 用 `AUDIO_SEPARATOR_MODEL` 选择受支持模型。必要时通过 `AUDIO_SEPARATOR_COMMAND` 指定分离器可执行文件。完整说明见 [本机混音人声分离](docs/AUDIO_SEPARATION_SETUP.md)。
 
-macOS / Linux：
-
-```bash
-.venv/bin/python -m pip install -r backend/requirements-audio-pro.txt
-```
-
-Demucs 首次使用需要下载模型权重，速度受网络影响。课堂整体分析不要求安装 Demucs；单人练唱使用原唱/伴奏混音时才需要它。
+分离模型的质量受歌曲混音、混响和伴唱影响。分离失败时，本次逐音评测会明确显示不可评分；日志保留在 FastAPI 后端终端。课堂整体分析不依赖人声分离。
 
 ### 五线谱图片/PDF 识别（可选）
 
@@ -277,7 +269,7 @@ OMR_TIMEOUT_SECONDS=180
 | API | Python 3.11、FastAPI、Uvicorn、Pydantic |
 | 数据访问 | SQLAlchemy；本地默认 SQLite，可配置 PostgreSQL |
 | 教案生成 | OpenAI 兼容接口适配；可分别配置快速与深度模型 |
-| 音频处理 | librosa、NumPy、SciPy、Basic Pitch；Demucs 为可选人声分离 |
+| 音频处理 | librosa、NumPy、SciPy、Basic Pitch；Audio Separator / BS-RoFormer 与 Demucs 为可选人声分离 |
 | 乐谱 | MusicXML / MIDI 导入；图片/PDF 识谱通过可选 Audiveris |
 | 音色播放 | 浏览器 Web Audio、采样播放与用户导入的 SF2 |
 
@@ -329,7 +321,7 @@ macOS / Linux：
 .venv/bin/python -m pytest -q
 ```
 
-测试代码位于 `backend/tests/`。自动测试不能替代真实服务验收：模型调用需要有效 API 密钥；Demucs 需要额外安装；图片/PDF 识谱需要本机 Audiveris；真实 SF2 音色需要拥有并导入相应音源文件。
+测试代码位于 `backend/tests/`。自动测试不能替代真实服务验收：模型调用需要有效 API 密钥；混音人声分离器需要额外安装；图片/PDF 识谱需要本机 Audiveris；真实 SF2 音色需要拥有并导入相应音源文件。
 
 工作台的手工验收步骤和测试旋律见 [WORKBENCH_ACCEPTANCE.md](docs/WORKBENCH_ACCEPTANCE.md)，音频计算说明见 [AUDIO_ANALYSIS_METHOD.md](docs/AUDIO_ANALYSIS_METHOD.md)。
 
@@ -351,3 +343,5 @@ macOS / Linux：
 - [数字乐器与编曲工作台验收](docs/WORKBENCH_ACCEPTANCE.md)
 - [模型与音频可靠性说明](docs/LLM_AND_AUDIO_RELIABILITY.md)
 - [SQLite 数据迁移说明](docs/SUPABASE_SQLITE_MIGRATION.md)
+
+- [本机混音人声分离安装与验收](docs/AUDIO_SEPARATION_SETUP.md)

@@ -639,3 +639,5 @@ td small { color: var(--muted); }
 .feedback-edit-goals label span{line-height:1.5}
 .feedback-edit-goals select{margin:0}
 @media(max-width:640px){.feedback-edit-grid{grid-template-columns:1fr}.feedback-edit-grid label:nth-child(2){grid-column:auto}.feedback-edit-goals label{grid-template-columns:1fr}}
+
+.lesson-stage-device{margin-top:14px;padding:11px 14px;border:1px solid #d8e2e5;border-radius:11px;background:#f0f6f7}.lesson-stage-device>b{display:block;margin-bottom:4px;color:#547785;font-size:.78rem}.lesson-stage-device p{margin:0;color:var(--ink);line-height:1.6}.archive-actions [data-view-analysis]{justify-self:start}

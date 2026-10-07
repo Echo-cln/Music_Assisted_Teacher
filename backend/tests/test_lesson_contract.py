@@ -1,4 +1,4 @@
-from app.services.lesson_service import _extract_classroom_setup, _low_device_option, _sync_objective_evidence, _validate_saved_preview, _validated_content
+from app.services.lesson_service import _device_action, _extract_classroom_setup, _low_device_option, _sync_objective_evidence, _validate_saved_preview, _validated_content
 
 
 def _base():
@@ -92,3 +92,16 @@ def test_observation_evidence_stays_aligned_when_model_changes_objective_count()
     assert [item["objective"] for item in content["objective_evidence"]] == content["objectives"]
     assert len(content["objective_evidence"]) == len(content["objectives"])
     assert all(item["evidence"] for item in content["objective_evidence"])
+
+
+def test_device_selection_changes_visible_stage_instruction():
+    stage = "分句学唱"
+    no_device = _device_action(stage, "无电子设备（教师清唱与身体声势）")
+    phone = _device_action(stage, "手机与手机扬声器")
+    projector = _device_action(stage, "电脑、投影与音箱")
+    computer = _device_action(stage, "电脑与音箱")
+    assert len({no_device, phone, projector, computer}) == 4
+    assert "教师逐句范唱" in no_device
+    assert "手机按乐句播放" in phone
+    assert "投影当前歌词句" in projector
+    assert "电脑分句播放" in computer
