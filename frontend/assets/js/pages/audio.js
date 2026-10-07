@@ -22,6 +22,7 @@ export async function renderAudio(container) {
       <section class="reference-source-card" id="referenceSection"><div class="reference-source-head"><div><span class="eyebrow">REFERENCE MELODY</span><h3 id="referenceTitle">参考旋律 <em>可选</em></h3><p id="referenceCaption">课堂整体分析可不上传参考旋律；上传后可补充整体轮廓对比。</p></div><label class="reference-kind-field" id="referenceKindField"><span>参考素材类型</span><select id="referenceKind"><option value="vocal">清晰单人参考人声（推荐）</option><option value="mixed">原唱 / 伴奏混音（先分离人声）</option></select></label></div>
         <label class="audio-file-field"><span>参考音频文件</span><input id="original" class="file-input" type="file" accept="audio/*"><span class="upload-control"><span class="upload-button secondary">选择参考旋律</span><span class="file-name" id="originalName">不上传也可分析</span></span><small id="referenceHint">参考音频文件与“参考素材类型”是两个独立选项。</small></label>
       </section>
+      <div class="audio-consent-notice"><label><input id="recordingConsent" type="checkbox"><span>我已按学校要求完成录音告知与处理授权，并会妥善保管、按需删除录音及分析记录。</span></label><small>请避免上传学生姓名等不必要身份信息；录音仅用于本次教学分析。</small></div>
       <div class="actions"><button class="btn primary" id="analyze">开始分析录音</button></div>
     </section>
     <div id="analysis"></div>`;
@@ -84,6 +85,7 @@ export async function renderAudio(container) {
   document.getElementById("analyze").onclick = async () => {
     const recording = document.getElementById("recording").files[0];
     if (!recording) return notify("请先选择课堂录音");
+    if (!document.getElementById("recordingConsent").checked) return notify("请先确认已完成录音告知与处理授权");
     const songId = document.getElementById("songId").value;
     if (!songId) return notify("请先搜索并选择一首对应歌曲");
     const form = new FormData();
@@ -91,6 +93,7 @@ export async function renderAudio(container) {
     if (document.getElementById("lessonPlanId").value) form.append("lesson_plan_id", document.getElementById("lessonPlanId").value);
     const analysisMode = document.getElementById("analysisMode").value;
     form.append("analysis_mode", analysisMode);
+    form.append("consent_confirmed", "true");
     form.append("reference_kind", document.getElementById("referenceKind").value);
     form.append("recording", recording);
     const original = document.getElementById("original").files[0];
