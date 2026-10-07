@@ -1,9 +1,9 @@
-import { api, apiUrl } from "../api/client.js?v=20261007-1";
-import { lessonView } from "../components/lesson.js?v=20261007-1";
-import { openSavedAudioAnalysis } from "./audio.js?v=20261007-1";
+import { api, apiUrl } from "../api/client.js?v=20261007-2";
+import { lessonView } from "../components/lesson.js?v=20261007-2";
+import { openSavedAudioAnalysis } from "./audio.js?v=20261007-2";
 import { showModal } from "../components/modal.js";
 import { esc, notify, pageHeader } from "../utils/dom.js";
-import { exportLessonPdf, exportLessonWord } from "../utils/lesson-export.js?v=20261007-1";
+import { exportLessonPdf, exportLessonWord } from "../utils/lesson-export.js?v=20261007-2";
 
 export async function renderLessons(container) {
   container.innerHTML = pageHeader("教学档案与课堂记录", "统一保存、检索和回看教案、课堂音频分析与课后反馈。", '<button class="btn primary" data-route="assistant">新建教案</button>') + `
