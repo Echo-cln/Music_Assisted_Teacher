@@ -40,7 +40,7 @@ function classOptions(classes, includeGeneral = false) {
 
 export async function renderAssistant(container) {
   const classes = await api.classes();
-  container.innerHTML = pageHeader("AI 教案助手", "支持“智能推荐”和“手动指定”双模式；AI 生成任务离开页面后仍会继续。") + `
+  container.innerHTML = pageHeader("教案助手", "按班级推荐歌曲，或手动选择歌曲生成教案。") + `
     <div class="grid two">
       <div class="grid">
         <section class="card">
@@ -50,8 +50,8 @@ export async function renderAssistant(container) {
             <label>授课班级<select id="classId">${classOptions(classes)}</select></label>
             <label>课时长度<select id="duration"><option value="40">40 分钟</option><option value="45">45 分钟</option><option value="30">30 分钟</option></select></label>
             <label>课堂偏好<select id="activity"><option>互动与分组合作</option><option>唱游与律动</option><option>地方文化体验</option><option>基础演唱训练</option></select></label>
-            <label>生成模式<select id="strategy"><option value="fast">快速模式 · 更快得到完整教案</option><option value="deep" selected>深度模式 · 深入生成完整教案</option></select></label>
-            <label class="full">补充要求<textarea id="requirements" placeholder="例如：教室只有音响和黑板；学生不太敢开口……"></textarea></label>
+            <label>生成模式<select id="strategy"><option value="fast">快速模式 · 更快生成完整教案</option><option value="deep" selected>深度模式 · 生成时间较长</option></select></label>
+            <label class="full">本课要求（选填）<textarea id="requirements" placeholder="填写设备条件、学生基础或课堂重点"></textarea></label>
             <button class="btn primary" id="recommend">从数据库推荐歌曲</button>
           </div>
           <div id="manualForm" class="form-grid hidden">
@@ -59,8 +59,8 @@ export async function renderAssistant(container) {
             <label>授课班级<select id="manualClassId">${classOptions(classes, true)}</select></label>
             <label>课时长度<select id="manualDuration"><option value="40">40 分钟</option><option value="45">45 分钟</option></select></label>
             <label>课堂偏好<select id="manualActivity"><option>互动与分组合作</option><option>唱游与律动</option><option>地方文化体验</option></select></label>
-            <label>生成模式<select id="manualStrategy"><option value="fast">快速模式 · 更快得到完整教案</option><option value="deep" selected>深度模式 · 深入生成完整教案</option></select></label>
-            <label class="full">补充要求<textarea id="manualRequirements"></textarea></label>
+            <label>生成模式<select id="manualStrategy"><option value="fast">快速模式 · 更快生成完整教案</option><option value="deep" selected>深度模式 · 生成时间较长</option></select></label>
+            <label class="full">本课要求（选填）<textarea id="manualRequirements" placeholder="填写设备条件、学生基础或课堂重点"></textarea></label>
             <button class="btn primary" id="manualGenerate">检索并生成教案</button>
           </div>
           <div id="recommendations"></div>
@@ -68,7 +68,7 @@ export async function renderAssistant(container) {
         <div id="lessonArea"></div>
       </div>
       <aside class="side-stack">
-        <section class="card"><h3>调整与保存</h3><p class="muted">生成任务在后端持续运行。右下角可随时查看“读取画像→知识检索→AI优化→校验”的可解释进度。</p><label>修改要求<textarea id="adjustment" placeholder="例如：缩短游戏时间，增加分层任务……"></textarea></label><button class="btn block" id="adjustPlan" disabled>按要求调整预览</button><button class="btn primary block" id="savePlan" disabled>保存教案</button><button class="btn block" id="printPlan" disabled>打印 / 导出 PDF</button></section>
+        <section class="card"><h3>调整与保存</h3><p class="muted">生成期间可在右下角查看进度，也可以切换到其他页面。</p><label>调整要求<textarea id="adjustment" placeholder="写下希望修改的部分"></textarea></label><button class="btn block" id="adjustPlan" disabled>按要求调整预览</button><button class="btn primary block" id="savePlan" disabled>保存教案</button><button class="btn block" id="printPlan" disabled>打印 / 导出 PDF</button></section>
       </aside>
     </div>`;
 
@@ -179,7 +179,7 @@ async function generate(manual) {
     });
     currentPlan = job.preview;
     renderPreview(document.getElementById("lessonArea"), true, job);
-    notify(strategyElement.value === "fast" ? "快速模型正在生成完整教案" : "深度模型正在生成完整教案");
+    notify(strategyElement.value === "fast" ? "正在快速生成完整教案" : "正在生成完整教案（深度模式）");
   } catch (error) {
     disableActions(false);
     document.getElementById("lessonArea").innerHTML = `<div class="notice">${esc(error.message)}</div>`;
@@ -202,7 +202,7 @@ function restoreJob(job) {
   if (job.status === "failed") {
     currentPlan = job.preview || null;
     if (currentPlan) renderPreview(area, false, job);
-    area.insertAdjacentHTML("afterbegin", `<div class="notice">AI 深度优化失败：${esc(job.error_message || "请稍后重试")}。下方仍保留规则生成的可用教案骨架。</div>`);
+    area.insertAdjacentHTML("afterbegin", `<div class="notice">教案完善未完成：${esc(job.error_message || "请稍后重试")}。下方仍保留规则生成的可用教案骨架。</div>`);
     disableActions(false);
     return;
   }
@@ -221,15 +221,15 @@ function disableActions(generating) {
   adjust.disabled = generating || !currentPlan;
   save.disabled = generating || !currentPlan || currentPlan.is_saved;
   print.disabled = !currentPlan;
-  save.textContent = currentPlan?.is_saved ? "已保存到教案与课堂记录" : generating ? "AI 优化完成后可保存" : "保存教案";
+  save.textContent = currentPlan?.is_saved ? "已保存到教案与课堂记录" : generating ? "完善完成后可保存" : "保存教案";
 }
 
 function renderPreview(area, generating = false, job = null) {
   if (!currentPlan) return;
   const status = generating
-    ? `<div class="ai-preview-banner"><div><b>AI 正在后台优化</b><span>${esc(job?.stage || "你可以切换到其他页面，生成不会中断")}</span></div><button class="btn soft" id="cancelGenerationInPage">取消本次生成</button></div><div class="generation-progress"><i style="width:${Math.min(100, Math.max(0, Number(job?.progress || 0)))}%"></i></div>${generationStepView(job)}`
+    ? `<div class="ai-preview-banner"><div><b>正在完善教案</b><span>${esc(job?.stage || "切换页面后任务仍会继续")}</span></div><button class="btn soft" id="cancelGenerationInPage">取消本次生成</button></div><div class="generation-progress"><i style="width:${Math.min(100, Math.max(0, Number(job?.progress || 0)))}%"></i></div>${generationStepView(job)}`
     : "";
-  area.innerHTML = `${status}<section class="card lesson-preview-card"><div class="card-head"><div><h3>教案预览</h3><p class="muted">${currentPlan.is_saved ? "已保存到教案与课堂记录" : generating ? "已先展示规则骨架，AI完成后会自动替换为增强版" : "未保存：可继续调整，满意后点击右侧“保存教案”"}</p></div></div><div class="lesson-preview-scroll">${lessonView(currentPlan)}</div></section>`;
+  area.innerHTML = `${status}<section class="card lesson-preview-card"><div class="card-head"><div><h3>教案预览</h3><p class="muted">${currentPlan.is_saved ? "已保存到教案与课堂记录" : generating ? "当前显示教案初稿，完善完成后会自动更新" : "未保存：可继续调整，满意后点击右侧“保存教案”"}</p></div></div><div class="lesson-preview-scroll">${lessonView(currentPlan)}</div></section>`;
   area.querySelector("#cancelGenerationInPage")?.addEventListener("click", async () => {
     try { await cancelActiveGeneration(); } catch (error) { notify(error.message); }
   });
@@ -246,7 +246,7 @@ async function streamPreviewAdjustment(area, instruction) {
   document.getElementById("adjustPlan").disabled = true;
   document.getElementById("savePlan").disabled = true;
   try {
-    area.innerHTML = `<section class="card lesson-stream-panel"><h3>正在调整教案</h3><p class="muted">这里显示处理状态，不展示模型内部思维链。</p><div class="loading">AI 正在根据你的要求重新组织教案<i></i><i></i><i></i></div></section>`;
+    area.innerHTML = `<section class="card lesson-stream-panel"><h3>正在调整教案</h3><p class="muted">正在根据你的要求调整教案。</p><div class="loading">正在根据你的要求调整教案<i></i><i></i><i></i></div></section>`;
     await api.adjustPreviewStream({ content: currentPlan.content, instruction }, event => {
       if (event.type === "complete") {
         const nextPlan = { ...metadata, ...event.preview, is_saved: false };
