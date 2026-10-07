@@ -1,4 +1,4 @@
-import { api, apiUrl } from "../api/client.js?v=20261007-1";
+import { api, apiUrl } from "../api/client.js?v=20261007-4";
 import { esc, notify, pageHeader } from "../utils/dom.js";
 
 const scoreLabels = { pitch_stability: "主音高轨迹稳定度", rhythm_regularness: "起音间隔规律", dynamics: "力度变化", clarity: "录音清晰度" };
@@ -21,7 +21,7 @@ export async function renderFeedback(container) {
     <div class="feedback-layout">
       <section class="card"><span class="eyebrow">TEACHER REFLECTION</span><h2>本课观察与改进</h2>
         <label>对应教案<select id="lessonId"><option value="">请选择已保存教案</option>${lessons.map(plan => `<option value="${plan.id}" ${imported?.lesson_plan_id === plan.id ? "selected" : ""}>${esc(plan.title)} · ${esc(plan.class_name)}</option>`).join("")}</select></label>
-        <label>关联音频分析（选填）<select id="audioAnalysisId"><option value="">不带入音频分析</option></select><small>只显示已绑定当前教案的分析；选择后会把摘要写入下方可编辑文本。</small></label>
+        <label>关联音频分析（选填）<select id="audioAnalysisId"><option value="">不带入音频分析</option></select><small>显示已关联本教案或尚未关联教案的分析；保存后会自动关联，摘要仍可编辑。</small></label>
         <section class="goal-observation-module" id="goalObservations"><div class="module-head"><div><span class="eyebrow">LEARNING EVIDENCE</span><h3>本课目标观察</h3></div><span class="status info">课后记录</span></div><p class="muted">根据学生实际表现记录进展；未观察到的目标可以留空。</p><div id="goalObservationRows"></div></section>
         <label>整体效果<select id="effect"><option>很好</option><option selected>较好</option><option>一般</option><option>较差</option></select></label>
         <section class="feedback-audio-module"><div class="module-head"><div><span class="eyebrow">AUDIO EVIDENCE</span><h3>音频分析总结</h3></div>${imported ? '<span class="status ok">已带入</span>' : '<span class="status info">可选</span>'}</div><textarea id="audioSummary" placeholder="可从音频分析带入，也可手动填写本节课的音准、节拍或声音表现总结。">${esc(imported ? buildSummary(imported) : "")}</textarea><small>该部分会随课堂反馈一起归档，之后仍可编辑查看。</small></section>
@@ -47,20 +47,33 @@ export async function renderFeedback(container) {
   bindLinkedRecord();
   function refreshAudioChoices() {
     const lessonId = Number(lessonSelect.value);
-    const allowed = analyses.filter(item => item.lesson_plan_id === lessonId);
-    audioSelect.innerHTML = '<option value="">不带入音频分析</option>' + allowed.map(item => `<option value="${item.id}" ${item.id === imported?.id ? "selected" : ""}>《${esc(item.song_name)}》· ${esc(item.analysis_mode_label)} · ${esc(item.created_at)}</option>`).join("");
-    if (imported && !allowed.some(item => item.id === imported.id)) imported = null;
+    const allowed = lessonId ? analyses.filter(item => item.lesson_plan_id === lessonId || !item.lesson_plan_id) : [];
+    audioSelect.innerHTML = '<option value="">不带入音频分析</option>' + allowed.map(item => `<option value="${item.id}" ${item.id === imported?.id ? "selected" : ""}>《${esc(item.song_name)}》· ${esc(item.analysis_mode_label)} · ${esc(item.created_at)} · ${item.lesson_plan_id ? "已关联本教案" : "可关联"}</option>`).join("");
+    if (imported && lessonId && !allowed.some(item => item.id === imported.id)) imported = null;
   }
   refreshAudioChoices();
   renderGoalObservations();
-  lessonSelect.onchange = () => { imported = null; refreshAudioChoices(); renderGoalObservations(); document.getElementById("audioSummary").value = ""; const card = document.querySelector(".feedback-record-card"); if (card) card.innerHTML = '<div class="module-head"><div><span class="eyebrow">LINKED RECORD</span><h3>已带入的音频记录</h3></div><span class="status info">待选择</span></div><p class="muted">请选择一条已绑定本教案的分析记录。保存后，课堂反馈会保留它的完整跳转入口。</p>'; };
+  lessonSelect.onchange = () => {
+    const selectedLessonId = Number(lessonSelect.value);
+    const keepImported = imported && (!imported.lesson_plan_id || imported.lesson_plan_id === selectedLessonId);
+    if (!keepImported) imported = null;
+    refreshAudioChoices();
+    renderGoalObservations();
+    document.getElementById("audioSummary").value = imported ? buildSummary(imported) : "";
+    const card = document.querySelector(".feedback-record-card");
+    if (card) card.innerHTML = imported ? `<div class="module-head"><div><span class="eyebrow">LINKED RECORD</span><h3>已带入的音频记录</h3></div><span class="status ok">已关联</span></div>${summaryView(imported)}` : '<div class="module-head"><div><span class="eyebrow">LINKED RECORD</span><h3>已带入的音频记录</h3></div><span class="status info">待选择</span></div><p class="muted">可选择已关联本教案或尚未关联教案的分析记录。保存反馈时，会自动关联本课教案。</p>';
+    bindLinkedRecord();
+  };
   audioSelect.onchange = async () => {
     const id = Number(audioSelect.value);
     imported = id ? analyses.find(item => item.id === id) : null;
+    const card = document.querySelector(".feedback-record-card");
     if (imported) {
       document.getElementById("audioSummary").value = buildSummary(imported);
-      const card = document.querySelector(".feedback-record-card");
       if (card) { card.innerHTML = `<div class="module-head"><div><span class="eyebrow">LINKED RECORD</span><h3>已带入的音频记录</h3></div><span class="status ok">已关联</span></div>${summaryView(imported)}`; bindLinkedRecord(); }
+    } else {
+      document.getElementById("audioSummary").value = "";
+      if (card) card.innerHTML = '<div class="module-head"><div><span class="eyebrow">LINKED RECORD</span><h3>已带入的音频记录</h3></div><span class="status info">待选择</span></div><p class="muted">可选择已关联本教案或尚未关联教案的分析记录。保存反馈时，会自动关联本课教案。</p>';
     }
   };
   document.getElementById("saveFeedback").onclick = async () => {
