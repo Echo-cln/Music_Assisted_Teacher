@@ -1,5 +1,5 @@
-import { api, apiUrl } from "../api/client.js?v=20261007-5";
-import { lessonView } from "../components/lesson.js?v=20261007-3";
+import { api, apiUrl } from "../api/client.js?v=20261007-6";
+import { lessonView } from "../components/lesson.js?v=20261007-4";
 import { openSavedAudioAnalysis } from "./audio.js?v=20261007-4";
 import { showModal } from "../components/modal.js";
 import { esc, notify, pageHeader } from "../utils/dom.js";
