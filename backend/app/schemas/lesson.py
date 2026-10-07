@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -53,3 +53,19 @@ class LessonPreviewAdjustRequest(BaseModel):
 
 class LessonAdjustRequest(BaseModel):
     instruction: str = Field(min_length=2, max_length=1000)
+
+
+
+class LessonRunStart(BaseModel):
+    mode: Literal["actual", "simulation"] = "simulation"
+
+
+class LessonRunEvent(BaseModel):
+    action: Literal["pause", "resume", "previous", "next", "finish", "heartbeat", "note", "reflection"]
+    stage_index: int | None = Field(default=None, ge=0, le=30)
+    note: str | None = Field(default=None, max_length=3000)
+    reflection: str | None = Field(default=None, max_length=5000)
+
+
+class LessonRunRevisionRequest(BaseModel):
+    content: dict[str, Any]
