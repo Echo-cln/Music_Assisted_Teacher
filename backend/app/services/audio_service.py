@@ -128,13 +128,6 @@ def _voiced_sequence(track: PitchTrack, minimum_confidence: float = 0.25) -> tup
     return _midi(values[valid]), frame_indices, confidence[valid]
 
 
-def _midi(values: np.ndarray) -> np.ndarray:
-    output = np.full(len(values), np.nan, dtype=float)
-    valid = np.isfinite(values) & (values > 0)
-    output[valid] = 69 + 12 * np.log2(values[valid] / 440.0)
-    return output
-
-
 def _pitch_quality(track: PitchTrack) -> dict:
     confidence = np.asarray(track.confidence, dtype=float)
     values = np.asarray(track.values, dtype=float)
