@@ -3,6 +3,7 @@ from pathlib import Path
 import json
 import logging
 import uuid
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -48,7 +49,7 @@ def _check_request(db: Session, teacher: Teacher, song_id: int, lesson_plan_id: 
 def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: int | None, classroom_record_id: int | None,
                     analysis_mode: str, recording_path: Path, recording_name: str, recording_type: str,
                     reference_path: Path | None, reference_name: str | None, reference_type: str | None, reference_kind: str,
-                    report=None):
+                    report=None, consent_confirmed_at: str | None = None):
     # 两个模式共享解码和录音质量检测；结果模型和页面输出完全分开。
     if report: report(10, "正在解码录音并校验时长")
     recording_waveform, recording_duration = load_waveform(recording_path)
@@ -156,6 +157,12 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
             "intonation_comparison": intonation, "note_assessment": note_assessment,
         }
     if report: report(94, "正在保存分析记录")
+    if consent_confirmed_at:
+        result["recording_consent"] = {
+            "confirmed": True,
+            "confirmed_at": consent_confirmed_at,
+            "notice_version": "pilot-2026-10-07",
+        }
     analysis = AudioAnalysis(teacher_id=teacher_id, song_id=song.id, lesson_plan_id=lesson_plan_id,
         classroom_record_id=classroom_record_id, recording_asset_id=recording_asset.id,
         reference_asset_id=reference_asset.id if reference_asset else None, result_json=json.dumps(result, ensure_ascii=False))
@@ -195,7 +202,8 @@ def _run_job(job_id: str):
         analysis, recording, reference = _build_analysis(db, job.teacher_id, song, payload.get("lesson_plan_id"),
             payload.get("classroom_record_id"), payload["analysis_mode"], Path(payload["recording_path"]),
             payload["recording_name"], payload["recording_type"], Path(payload["reference_path"]) if payload.get("reference_path") else None,
-            payload.get("reference_name"), payload.get("reference_type"), payload.get("reference_kind", "mixed"), report)
+            payload.get("reference_name"), payload.get("reference_type"), payload.get("reference_kind", "mixed"), report,
+            payload.get("consent_confirmed_at"))
         db.refresh(job)
         if job.status == "cancelled":
             db.rollback()
@@ -234,11 +242,18 @@ def analyze_audio(
     classroom_record_id: int | None = Form(default=None),
     analysis_mode: str = Form(default="classroom"),
     reference_kind: str = Form(default="mixed"),
+    consent_confirmed: bool = Form(...),
     recording: UploadFile = File(...),
     original: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     teacher: Teacher = Depends(get_current_teacher),
 ):
+    if not consent_confirmed:
+        raise HTTPException(status_code=422, detail="分析课堂录音前，请确认已完成录音告知与处理授权")
+    consent_confirmed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if not consent_confirmed:
+        raise HTTPException(status_code=422, detail="分析课堂录音前，请确认已完成录音告知与处理授权")
+    consent_confirmed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     song, classroom_record_id = _check_request(db, teacher, song_id, lesson_plan_id, classroom_record_id, analysis_mode, bool(original))
     recording_path = save_upload(recording, f"recordings/{teacher.id}")
     reference_path: Path | None = None
@@ -252,14 +267,15 @@ def analyze_audio(
     analysis, recording_asset, reference_asset = _build_analysis(db, teacher.id, song, lesson_plan_id, classroom_record_id,
         analysis_mode, recording_path, recording.filename or recording_path.name, recording.content_type or "application/octet-stream",
         reference_path, (original.filename if original else reference_path.name) if reference_path else None,
-        (original.content_type if original else "audio/mpeg") if reference_path else None, reference_kind)
+        (original.content_type if original else "audio/mpeg") if reference_path else None, reference_kind,
+        consent_confirmed_at=consent_confirmed_at)
     db.commit()
     return _serialize_analysis(analysis, song, recording_asset, reference_asset)
 
 
 @router.post("/jobs", status_code=202)
 def create_audio_job(song_id: int = Form(...), lesson_plan_id: int | None = Form(default=None), classroom_record_id: int | None = Form(default=None),
-                     analysis_mode: str = Form(default="classroom"), reference_kind: str = Form(default="mixed"), recording: UploadFile = File(...), original: UploadFile | None = File(default=None),
+                     analysis_mode: str = Form(default="classroom"), reference_kind: str = Form(default="mixed"), consent_confirmed: bool = Form(...), recording: UploadFile = File(...), original: UploadFile | None = File(default=None),
                      db: Session = Depends(get_db), teacher: Teacher = Depends(get_current_teacher)):
     song, classroom_record_id = _check_request(db, teacher, song_id, lesson_plan_id, classroom_record_id, analysis_mode, bool(original))
     recording_path = save_upload(recording, f"recordings/{teacher.id}")
@@ -278,7 +294,7 @@ def create_audio_job(song_id: int = Form(...), lesson_plan_id: int | None = Form
           "recording_type": recording.content_type or "application/octet-stream", "reference_path": str(reference_path) if reference_path else None,
           "reference_name": (original.filename if original else reference_path.name) if reference_path else None,
           "reference_type": (original.content_type if original else "audio/mpeg") if reference_path else None,
-          "reference_kind": reference_kind}, ensure_ascii=False))
+          "reference_kind": reference_kind, "consent_confirmed_at": consent_confirmed_at}, ensure_ascii=False))
     db.add(job); db.commit()
     audio_executor.submit(_run_job, job.id)
     return _serialize_job(job, db)
