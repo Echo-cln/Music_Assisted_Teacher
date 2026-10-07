@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 
 
 def build_run_stages(timeline: list[dict]) -> list[dict]:
@@ -171,6 +171,14 @@ def interrupt_stale_lesson_run(run, now: datetime, stale_seconds: int = 120) -> 
     return True
 
 
+def _utc_iso(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.isoformat() + "Z"
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def serialize_lesson_run(run, now: datetime | None = None) -> dict:
     now = now or datetime.utcnow()
     stages = _stages(run)
@@ -201,9 +209,9 @@ def serialize_lesson_run(run, now: datetime | None = None) -> dict:
         "total_active_seconds": total_active,
         "total_paused_seconds": total_paused,
         "reflection": run.reflection or "",
-        "started_at": run.started_at.isoformat() if run.started_at else None,
-        "ended_at": run.ended_at.isoformat() if run.ended_at else None,
-        "active_since": active_since.isoformat() if active_since else None,
-        "paused_since": run.paused_since.isoformat() if run.paused_since else None,
-        "snapshot_at": now.isoformat(),
+        "started_at": _utc_iso(run.started_at),
+        "ended_at": _utc_iso(run.ended_at),
+        "active_since": _utc_iso(active_since),
+        "paused_since": _utc_iso(run.paused_since),
+        "snapshot_at": _utc_iso(now),
     }
