@@ -13,7 +13,7 @@ const routeLoaders = {
   classes: () => import("./pages/classes.js").then(m => m.renderClasses),
   resources: () => import("./pages/resources.js").then(m => m.renderResources),
   workbench: () => import("./pages/workbench.js").then(m => m.renderWorkbench),
-  lessons: () => import("./pages/lessons.js?v=20261007-4").then(m => m.renderLessons),
+  lessons: () => import("./pages/lessons.js?v=20261007-5").then(m => m.renderLessons),
   feedback: () => import("./pages/feedback.js?v=20261007-5").then(m => m.renderFeedback),
   audio: () => import("./pages/audio.js?v=20261007-6").then(m => m.renderAudio),
   admin: () => import("./pages/admin.js").then(m => m.renderAdmin),
