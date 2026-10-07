@@ -166,6 +166,7 @@ export const api = {
   adjustPreviewStream: (payload, onEvent) => streamRequest("/lessons/preview/adjust/stream", payload, onEvent),
   saveLesson: payload => request("/lessons/save", { method: "POST", body: JSON.stringify(payload) }),
   updateLesson: (id, payload) => request(`/lessons/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteLesson: id => request(`/lessons/${id}`, { method: "DELETE" }),
   adjustLesson: (id, instruction) => request(`/lessons/${id}/adjust`, { method: "POST", body: JSON.stringify({ instruction }) }),
   analyzeAudio: form => request("/audio/analyze", { method: "POST", body: form }),
   createAudioJob: form => request("/audio/jobs", { method: "POST", body: form }),
