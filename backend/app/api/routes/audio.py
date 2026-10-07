@@ -7,15 +7,15 @@ from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_teacher
 from app.db.session import SessionLocal, get_db
-from app.models.entities import AudioAnalysis, AudioAnalysisJob, AudioAsset, ClassroomRecord, LessonPlan, Song, Teacher
+from app.models.entities import AudioAnalysis, AudioAnalysisJob, AudioAsset, ClassroomRecord, Feedback, LessonPlan, Song, Teacher
 from app.repositories.song_repository import SongRepository
-from app.services.audio_service import _prepare_reference, _same_audio_content, analyze_singing, assess_note_accuracy, compare_intonation, compare_waveforms, load_waveform, save_upload
-from app.services.object_storage import ObjectStorageError, download_object, is_remote_ref, materialize_file, upload_app_file
+from app.services.audio_service import _prepare_reference, analyze_singing, assess_note_accuracy, compare_intonation, compare_waveforms, load_waveform, save_upload
+from app.services.object_storage import ObjectStorageError, delete_object, download_object, is_remote_ref, materialize_file, upload_app_file
 from app.services.classroom_insight_service import build_classroom_model_insight
 
 router = APIRouter(prefix="/audio", tags=["音频"])
@@ -106,11 +106,8 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
         if report: report(52, "正在准备参考主旋律")
         if reference_path and song.owner_teacher_id == teacher_id:
             song.original_audio_path = reference_storage_ref
-        identical_pair = _same_audio_content(recording_path, reference_path)
-        effective_reference_kind = "identical" if identical_pair else reference_kind
-        if effective_reference_kind == "mixed" and report: report(60, "正在分离混音参考中的人声")
-        elif identical_pair and report: report(60, "检测到两份音频完全一致，跳过分离并进行对齐")
-        prepared_reference = _prepare_reference(reference_path, effective_reference_kind)
+        if reference_kind == "mixed" and report: report(60, "正在分离混音参考中的人声")
+        prepared_reference = _prepare_reference(reference_path, reference_kind)
         if report: report(76, "正在将练唱与参考主旋律逐音对齐")
         intonation = compare_intonation(recording_path, prepared_reference)
         aligned = intonation.pop("_aligned", None)
@@ -145,7 +142,6 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
             "analysis_method": ["先检查练唱录音可用人声比例。", "清晰人声直接使用；原唱/伴奏混音先用 Audio Separator / BS-RoFormer，未安装时再尝试 Demucs。", "以 DTW 对齐主旋律，再按稳定音符片段计算 cents 偏差。"],
             "solo_diagnostics": {
                 "recording_voiced_ratio": quality.get("voiced_ratio"),
-                "identical_uploads": identical_pair,
                 "reference": {k: prepared_reference.get(k) for k in ("available", "source", "code", "message")},
                 "alignment": intonation.get("diagnostics", {}),
             },
@@ -153,7 +149,6 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
             **waveform_comparison,
             "reference_waveform_label": (
                 "原始参考音频（红 · 仅预览，未参与评分）" if reference_preview_only else
-                "相同参考音频（红）" if prepared_reference.get("source") == "identical_audio_pair" else
                 "已分离人声参考（红）" if prepared_reference.get("source") in {"demucs_vocals", "audio_separator_vocals"} else
                 "参考旋律（红）"
             ),
@@ -360,3 +355,96 @@ def stream_asset(asset_id: int, db: Session = Depends(get_db), teacher: Teacher 
     if not Path(asset.file_path).exists():
         raise HTTPException(status_code=404, detail="音频文件不存在")
     return FileResponse(asset.file_path, media_type=asset.mime_type, filename=asset.original_filename)
+
+
+@router.delete("/analyses/{analysis_id}")
+def delete_audio_analysis(
+    analysis_id: int,
+    db: Session = Depends(get_db),
+    teacher: Teacher = Depends(get_current_teacher),
+):
+    """删除一条音频分析；解除反馈里的详情关联，但保留反馈文字。"""
+    analysis = db.scalar(select(AudioAnalysis).where(
+        AudioAnalysis.id == analysis_id,
+        AudioAnalysis.teacher_id == teacher.id,
+    ))
+    if not analysis:
+        raise HTTPException(status_code=404, detail="音频分析记录不存在")
+
+    linked_feedback = list(db.scalars(select(Feedback).where(
+        Feedback.audio_analysis_id == analysis_id,
+        Feedback.teacher_id == teacher.id,
+    )).all())
+    asset_ids = {asset_id for asset_id in (
+        analysis.recording_asset_id, analysis.reference_asset_id
+    ) if asset_id}
+    assets = list(db.scalars(select(AudioAsset).where(
+        AudioAsset.id.in_(asset_ids)
+    )).all()) if asset_ids else []
+
+    other_assets = set()
+    if asset_ids:
+        for recording_id, reference_id in db.execute(
+            select(AudioAnalysis.recording_asset_id, AudioAnalysis.reference_asset_id).where(
+                AudioAnalysis.teacher_id == teacher.id,
+                AudioAnalysis.id != analysis_id,
+            )
+        ).all():
+            if recording_id:
+                other_assets.add(recording_id)
+            if reference_id:
+                other_assets.add(reference_id)
+
+    song = db.get(Song, analysis.song_id)
+    song_paths = {song.original_audio_path} if song and song.original_audio_path else set()
+    removable_assets = [
+        item for item in assets
+        if item.id not in other_assets
+        and item.classroom_record_id is None
+        and item.file_path not in song_paths
+    ]
+    asset_paths = {item.file_path for item in removable_assets}
+
+    try:
+        for feedback in linked_feedback:
+            # 保留教师填写的音频总结和目标观察，只移除已删除分析的详情快照。
+            try:
+                previous = json.loads(feedback.analysis_json or "{}")
+            except (TypeError, json.JSONDecodeError):
+                previous = {}
+            feedback.analysis_json = json.dumps(
+                {"goal_observations": previous.get("goal_observations", [])},
+                ensure_ascii=False,
+            )
+            feedback.audio_analysis_id = None
+        db.execute(delete(AudioAnalysisJob).where(AudioAnalysisJob.analysis_id == analysis_id))
+        db.delete(analysis)
+        for asset in removable_assets:
+            db.delete(asset)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.exception("audio_analysis_delete_failed analysis_id=%s teacher_id=%s", analysis_id, teacher.id)
+        raise HTTPException(status_code=500, detail="删除音频分析失败，数据库已回滚。") from exc
+
+    if asset_paths:
+        paths_still_referenced = set(db.scalars(select(AudioAsset.file_path).where(
+            AudioAsset.file_path.in_(asset_paths)
+        )).all())
+        song_paths_still_referenced = set(db.scalars(select(Song.original_audio_path).where(
+            Song.original_audio_path.in_(asset_paths)
+        )).all())
+        for stored_path in asset_paths - paths_still_referenced - song_paths_still_referenced:
+            try:
+                if is_remote_ref(stored_path):
+                    delete_object(stored_path)
+                else:
+                    Path(stored_path).unlink(missing_ok=True)
+            except (OSError, ObjectStorageError):
+                logger.exception("audio_asset_cleanup_failed analysis_id=%s path=%s", analysis_id, stored_path)
+
+    return {
+        "ok": True,
+        "unlinked_feedback_records": len(linked_feedback),
+        "message": "音频分析记录已删除；关联反馈与总结文字已保留。",
+    }
