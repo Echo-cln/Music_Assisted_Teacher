@@ -71,6 +71,7 @@ def apply_lesson_run_event(run, action: str, now: datetime, stage_index: int | N
         if run.status != "running":
             raise ValueError("只有计时中的授课可以暂停")
         settle_lesson_run(run, now)
+        stages = _stages(run)
         run.status = "paused"
         run.paused_since = now
         run.active_since = None
@@ -99,6 +100,7 @@ def apply_lesson_run_event(run, action: str, now: datetime, stage_index: int | N
         if not stages:
             raise ValueError("教案没有可计时的课堂环节")
         settle_lesson_run(run, now)
+        stages = _stages(run)
         old_index = run.current_stage_index
         new_index = min(len(stages) - 1, old_index + 1) if action == "next" else max(0, old_index - 1)
         if new_index == old_index and action == "previous":
@@ -129,6 +131,7 @@ def apply_lesson_run_event(run, action: str, now: datetime, stage_index: int | N
             settle_lesson_run(run, now)
         elif run.status == "paused" and run.paused_since:
             run.total_paused_seconds = int(run.total_paused_seconds or 0) + max(0, int((now - run.paused_since).total_seconds()))
+        stages = _stages(run)
         if 0 <= run.current_stage_index < len(stages):
             stages[run.current_stage_index]["status"] = "completed"
             stages[run.current_stage_index]["ended_at"] = now.isoformat()
