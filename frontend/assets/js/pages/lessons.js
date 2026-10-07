@@ -36,11 +36,26 @@ export async function renderLessons(container) {
     if (sort === "title") plans.sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
     document.getElementById("lessonSearchCount").textContent = `共 ${plans.length} 份${q ? "匹配教案" : "教案记录"}`;
     const rows = document.getElementById("lessonRows");
-    rows.innerHTML = plans.length ? plans.map(plan => `<tr><td><b>${esc(plan.title)}</b><br><small>${esc(plan.song_name)}</small></td><td>${esc(plan.class_name)}</td><td>${plan.duration_minutes} 分钟</td><td><span class="status ${plan.generation_mode === "ai" ? "ok" : "info"}">${plan.generation_mode === "ai" ? "已完善" : "基础教案"}</span></td><td>${esc(plan.created_at)}</td><td class="lesson-actions"><button class="link" data-view="${plan.id}">查看</button><button class="link" data-edit="${plan.id}">编辑</button><button class="link" data-pdf="${plan.id}">PDF</button><button class="link" data-word="${plan.id}">Word</button></td></tr>`).join("") : '<tr><td colspan="6" class="empty">没有找到匹配的教案记录</td></tr>';
+    rows.innerHTML = plans.length ? plans.map(plan => `<tr><td><b>${esc(plan.title)}</b><br><small>${esc(plan.song_name)}</small></td><td>${esc(plan.class_name)}</td><td>${plan.duration_minutes} 分钟</td><td><span class="status ${plan.generation_mode === "ai" ? "ok" : "info"}">${plan.generation_mode === "ai" ? "已完善" : "基础教案"}</span></td><td>${esc(plan.created_at)}</td><td class="lesson-actions"><button class="link" data-view="${plan.id}">查看</button><button class="link" data-edit="${plan.id}">编辑</button><button class="link" data-pdf="${plan.id}">PDF</button><button class="link danger-link" data-delete-lesson="${plan.id}">删除</button><button class="link" data-word="${plan.id}">Word</button></td></tr>`).join("") : '<tr><td colspan="6" class="empty">没有找到匹配的教案记录</td></tr>';
     rows.querySelectorAll("button[data-view]").forEach(button => button.onclick = () => viewPlan(plans.find(p => p.id === Number(button.dataset.view))));
     rows.querySelectorAll("button[data-edit]").forEach(button => button.onclick = () => editPlan(plans.find(p => p.id === Number(button.dataset.edit)), container));
     rows.querySelectorAll("button[data-pdf]").forEach(button => button.onclick = () => exportLessonPdf(plans.find(p => p.id === Number(button.dataset.pdf))));
     rows.querySelectorAll("button[data-word]").forEach(button => button.onclick = () => exportLessonWord(plans.find(p => p.id === Number(button.dataset.word))));
+    rows.querySelectorAll("button[data-delete-lesson]").forEach(button => button.onclick = async () => {
+      const plan = plans.find(item => item.id === Number(button.dataset.deleteLesson));
+      if (!plan) return;
+      const confirmed = window.confirm("确定删除《" + plan.title + "》？此操作也会删除关联的课堂反馈、课堂记录及音频分析记录，不能撤销。");
+      if (!confirmed) return;
+      button.disabled = true;
+      try {
+        await api.deleteLesson(plan.id);
+        notify("教案及关联课堂记录已删除");
+        await loadLessons();
+      } catch (error) {
+        notify("删除失败：" + error.message, "error");
+        button.disabled = false;
+      }
+    });
   }
 }
 
@@ -51,7 +66,7 @@ async function renderArchive(container, kind) {
     container.innerHTML = `<section class="list-search"><div class="list-filters"><select id="archiveSort" aria-label="音频分析排序"><option value="newest">最新分析</option><option value="oldest">最早分析</option><option value="song">歌曲名称</option><option value="score">音高稳定分</option></select></div></section><section class="archive-list" id="archiveRows"></section>`;
     const paint = () => { const sorted = [...rows]; const sort = document.getElementById("archiveSort").value; if (sort === "oldest") sorted.reverse(); if (sort === "song") sorted.sort((a,b) => a.song_name.localeCompare(b.song_name, "zh-CN")); if (sort === "score") sorted.sort((a,b) => (b.scores?.pitch_stability || 0) - (a.scores?.pitch_stability || 0)); document.getElementById("archiveRows").innerHTML = `${sorted.length ? sorted.map(item => {
       const compare = item.intonation_comparison;
-      return `<article class="card archive-item"><div><span class="eyebrow">AUDIO ANALYSIS</span><h3>《${esc(item.song_name)}》</h3><p>${esc(item.created_at)} · ${item.duration_seconds || "—"} 秒</p><div class="analysis-summary">${Object.entries(item.scores || {}).map(([key, value]) => `<span>${({ pitch_stability: "音高", rhythm_regularness: "节拍", dynamics: "力度", clarity: "清晰" })[key]} <b>${value}</b></span>`).join("")}</div><p class="muted">${esc(compare?.available ? `${compare.status} · 中位偏差 ${compare.median_deviation_cents} cents` : "无参考音频：仅保存稳定性分析")}</p></div><div class="archive-actions"><audio controls preload="metadata" src="${esc(apiUrl(item.recording_url))}"></audio><button class="btn soft" data-view-analysis="${item.id}">查看详情</button><button class="link" data-import-analysis="${item.id}">带入课堂反馈</button></div></article>`;
+      return `<article class="card archive-item"><div><span class="eyebrow">AUDIO ANALYSIS</span><h3>《${esc(item.song_name)}》</h3><p>${esc(item.created_at)} · ${item.duration_seconds || "—"} 秒</p><div class="analysis-summary">${Object.entries(item.scores || {}).map(([key, value]) => `<span>${({ pitch_stability: "音高", rhythm_regularness: "节拍", dynamics: "力度", clarity: "清晰" })[key]} <b>${value}</b></span>`).join("")}</div><p class="muted">${esc(compare?.available ? `${compare.status} · 中位偏差 ${compare.median_deviation_cents} cents` : "无参考音频：仅保存稳定性分析")}</p></div><div class="archive-actions"><audio controls preload="metadata" src="${esc(apiUrl(item.recording_url))}"></audio><div class="archive-action-buttons"><button class="btn soft" data-view-analysis="${item.id}">查看详情</button><button class="btn soft" data-import-analysis="${item.id}">带入课堂反馈</button></div></div></article>`;
     }).join("") : '<section class="card empty">暂无音频分析记录。完成一次分析后，录音和结果会自动保存在这里。</section>'}`; container.querySelectorAll("[data-import-analysis]").forEach(button => button.onclick = () => { localStorage.setItem("audioAnalysisForFeedback", JSON.stringify({ id: Number(button.dataset.importAnalysis) })); window.dispatchEvent(new CustomEvent("app:navigate", { detail: "feedback" })); }); };
     const bindAudioDetails = async () => {
        container.querySelectorAll("[data-view-analysis]").forEach(button => button.onclick = async () => {
