@@ -52,6 +52,7 @@ class LessonRunServiceTests(unittest.TestCase):
         self.assertEqual(result["total_paused_seconds"], 2 * 60)
         self.assertEqual(result["stages"][0]["active_seconds"], 8 * 60)
         self.assertEqual(result["status"], "completed")
+        self.assertTrue(result["snapshot_at"].endswith("Z"))
 
     def test_next_stage_closes_previous_and_starts_next(self):
         start = datetime(2026, 10, 7, 10, 0, 0)
