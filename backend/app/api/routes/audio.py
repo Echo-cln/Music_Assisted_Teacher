@@ -125,7 +125,7 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
             "has_original": reference_path is not None,
             "analysis_available": True, "duration_seconds": acoustic.get("duration_seconds", recording_duration), "tempo_bpm": acoustic.get("tempo_bpm"),
             "analysis_scope": "单人练唱只在参考主旋律和练唱人声均有足够可信音高时输出逐音偏差；无法可靠对齐时明确不给分。",
-            "analysis_method": ["先检查练唱录音可用人声比例。", "清晰人声直接使用；原唱/伴奏混音先用 Demucs 分离人声。", "以 DTW 对齐主旋律，再按稳定音符片段计算 cents 偏差。"],
+            "analysis_method": ["先检查练唱录音可用人声比例。", "清晰人声直接使用；原唱/伴奏混音先用 Audio Separator / BS-RoFormer，未安装时再尝试 Demucs。", "以 DTW 对齐主旋律，再按稳定音符片段计算 cents 偏差。"],
             "solo_diagnostics": {
                 "recording_voiced_ratio": quality.get("voiced_ratio"),
                 "reference": {k: prepared_reference.get(k) for k in ("available", "source", "code", "message")},
@@ -133,7 +133,7 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
             },
             "scores": {}, "segment_feedback": [], "findings": [], "suggestions": [], "classroom_evidence": {},
             **waveform_comparison,
-            "reference_waveform_label": "已分离人声参考（红）" if prepared_reference.get("source") == "demucs_vocals" else "参考旋律（红）",
+            "reference_waveform_label": "已分离人声参考（红）" if prepared_reference.get("source") in {"demucs_vocals", "audio_separator_vocals"} else "参考旋律（红）",
             "recording_waveform_label": "我的练唱（蓝）",
             "intonation_comparison": intonation, "note_assessment": note_assessment,
         }
