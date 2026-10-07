@@ -205,7 +205,15 @@ function soloResultView(result, player, method) {
   const recordingQuality = quality == null ? "—" : `${Math.round(quality * 100)}%`;
   const referenceLabel = reference.source === "audio_separator_vocals" ? "RoFormer/UVR 已分离参考人声" : reference.source === "demucs_vocals" ? "Demucs 已分离参考人声" : reference.source === "audio_separator_failed" ? "BS-RoFormer 分离失败" : reference.source === "demucs_failed" ? "Demucs 分离失败" : reference.source === "clean_vocal" ? "清晰单人参考人声" : reference.available === false ? "混音分离失败" : "待确认";
   const separationFailed = reference.available === false || referenceLabel === "混音分离失败";
-  const diagnosticsPanel = `<section class="solo-check-panel"><div class="solo-check-heading"><span class="eyebrow">ASSESSMENT CHECK</span><h3>本次逐音评测条件</h3></div><div class="solo-check-grid"><div><small>练唱人声可用度 <span>（不是得分）</span></small><b>${recordingQuality}</b></div><div><small>参考主旋律来源</small><b>${esc(referenceLabel)}</b></div>${alignment.reference_voiced_ratio != null ? `<div><small>参考音频可用人声</small><b>${Math.round(alignment.reference_voiced_ratio * 100)}%</b></div><div><small>练唱对齐可用人声</small><b>${alignment.recording_voiced_ratio == null ? "—" : `${Math.round(alignment.recording_voiced_ratio * 100)}%`}</b></div>` : ""}</div></section>`;
+  const alignmentModeLabel = alignment.alignment_mode === "recording_subsequence"
+    ? "练唱片段在参考曲中定位"
+    : alignment.alignment_mode === "reference_subsequence"
+      ? "参考乐句在练唱中定位"
+      : alignment.alignment_mode === "full" ? "全段对齐" : "";
+  const alignmentDetails = alignment.recording_usable_frames != null || alignment.trusted_aligned_frames != null
+    ? `<div><small>可信音高帧</small><b>${alignment.recording_usable_frames ?? "—"} 练唱 · ${alignment.reference_usable_frames ?? "—"} 参考</b></div><div><small>有效对齐帧</small><b>${alignment.trusted_aligned_frames ?? "—"}${alignment.trusted_pair_ratio == null ? "" : ` · 可信 ${Math.round(alignment.trusted_pair_ratio * 100)}%`}</b></div><div><small>中位音高置信度</small><b>${alignment.recording_median_confidence == null ? "—" : Math.round(alignment.recording_median_confidence * 100) + "%"} 练唱 · ${alignment.reference_median_confidence == null ? "—" : Math.round(alignment.reference_median_confidence * 100) + "%"} 参考</b></div>${alignmentModeLabel ? `<div><small>对齐策略</small><b>${esc(alignmentModeLabel)}</b></div>` : ""}`
+    : "";
+  const diagnosticsPanel = `<section class="solo-check-panel"><div class="solo-check-heading"><span class="eyebrow">ASSESSMENT CHECK</span><h3>本次逐音评测条件</h3></div><div class="solo-check-grid"><div><small>练唱人声可用度 <span>（不是得分）</span></small><b>${recordingQuality}</b></div><div><small>参考主旋律来源</small><b>${esc(referenceLabel)}</b></div>${alignment.reference_voiced_ratio != null ? `<div><small>参考音频可用人声</small><b>${Math.round(alignment.reference_voiced_ratio * 100)}%</b></div><div><small>练唱对齐可用人声</small><b>${alignment.recording_voiced_ratio == null ? "—" : `${Math.round(alignment.recording_voiced_ratio * 100)}%`}</b></div>` : ""}${alignmentDetails}</div></section>`;
   const separationReason = readableReferenceFailure(reference.message);
   const noScoreCopy = separationFailed
     ? `练唱人声可用度 ${recordingQuality} 不是得分。参考文件是混音，但没有分离出可用的人声音轨，因此系统没有进行逐音对齐。${separationReason ? `本次诊断：${separationReason}` : "请上传清晰单人参考人声，或查看后端分离日志后重试。"}`
