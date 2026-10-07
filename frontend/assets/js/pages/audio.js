@@ -203,7 +203,7 @@ function soloResultView(result, player, method) {
   const alignment = diagnostics.alignment || {};
   const hasPitchScore = Boolean(comparison.available || note.available);
   const recordingQuality = quality == null ? "—" : `${Math.round(quality * 100)}%`;
-  const referenceLabel = reference.source === "audio_separator_vocals" ? "RoFormer/UVR 已分离参考人声" : reference.source === "demucs_vocals" ? "Demucs 已分离参考人声" : reference.source === "audio_separator_failed" ? "BS-RoFormer 分离失败" : reference.source === "demucs_failed" ? "Demucs 分离失败" : reference.source === "clean_vocal" ? "清晰单人参考人声" : reference.available === false ? "混音分离失败" : "待确认";
+  const referenceLabel = reference.source === "vocal_separation_failed" && reference.engine === "audio_separator_then_demucs" ? "RoFormer / Demucs 均未分离出人声" : reference.source === "audio_separator_vocals" ? "RoFormer/UVR 已分离参考人声" : reference.source === "demucs_vocals" ? "Demucs 已分离参考人声" : reference.source === "audio_separator_failed" ? "BS-RoFormer 分离失败" : reference.source === "demucs_failed" ? "Demucs 分离失败" : reference.source === "clean_vocal" ? "清晰单人参考人声" : reference.available === false ? "混音分离失败" : "待确认";
   const separationFailed = reference.available === false || referenceLabel === "混音分离失败";
   const alignmentModeLabel = alignment.alignment_mode === "recording_subsequence"
     ? "练唱片段在参考曲中定位"
