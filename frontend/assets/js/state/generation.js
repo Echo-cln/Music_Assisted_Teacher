@@ -34,7 +34,7 @@ function showCompletionToast() {
   toast.id = "generationCompletionToast";
   toast.className = "generation-completion-toast";
   toast.setAttribute("role", "status");
-  toast.innerHTML = `<div><b>教案已生成完成</b><small>${currentJob.strategy_used === "fast" ? "快速生成" : "深度思考"} · 用时 ${elapsedText(currentJob.elapsed_seconds || 0)}</small></div><button class="icon-close" aria-label="关闭完成提醒">×</button>`;
+  toast.innerHTML = `<div><b>教案已生成完成</b><small>${currentJob.strategy_used === "fast" ? "快速模式" : "深度模式"} · 用时 ${elapsedText(currentJob.elapsed_seconds || 0)}</small></div><button class="icon-close" aria-label="关闭完成提醒">×</button>`;
   toast.querySelector("button").onclick = removeCompletionToast;
   document.body.appendChild(toast);
   completionToastTimer = setTimeout(removeCompletionToast, 12000);
