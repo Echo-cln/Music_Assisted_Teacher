@@ -7,7 +7,6 @@ Audio Separator / BS-RoFormer，未安装时使用现有 Demucs 路径。
 
 from __future__ import annotations
 
-import hashlib
 import math
 import logging
 import shutil
@@ -119,26 +118,6 @@ def _filled(values: np.ndarray) -> np.ndarray:
     return np.interp(np.arange(len(values)), np.flatnonzero(valid), values[valid])
 
 
-def _same_audio_content(left: Path | None, right: Path | None) -> bool:
-    """Return true only when two uploaded files contain the exact same bytes."""
-    if not left or not right:
-        return False
-    try:
-        if left.stat().st_size != right.stat().st_size:
-            return False
-        if left.resolve() == right.resolve():
-            return True
-        def digest(path: Path) -> bytes:
-            hasher = hashlib.sha256()
-            with path.open("rb") as stream:
-                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                    hasher.update(chunk)
-            return hasher.digest()
-        return digest(left) == digest(right)
-    except OSError:
-        return False
-
-
 def _audio_separator_executable() -> list[str] | None:
     """Return the optional audio-separator CLI without importing its heavy ML stack."""
     settings = get_settings()
@@ -206,8 +185,6 @@ def _prepare_reference(path: Path | None, reference_kind: str) -> dict:
     """将参考音频变为可用于主旋律比较的人声；混音不允许直接拿来打分。"""
     if not path:
         return {"available": False, "code": "reference_missing", "message": "未提供参考旋律：只能做课堂整体声学分析，不能判定是否唱准。"}
-    if reference_kind == "identical":
-        return {"available": True, "path": path, "source": "identical_audio_pair", "message": "两份上传文件内容完全一致；已跳过分离，直接用同一音源完成对齐。"}
     if reference_kind == "vocal":
         return {"available": True, "path": path, "source": "clean_vocal", "message": "使用上传的清晰单人参考人声进行对齐。"}
     if reference_kind not in {"mixed", "auto"}:
