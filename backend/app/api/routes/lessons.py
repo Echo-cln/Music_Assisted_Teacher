@@ -4,12 +4,12 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.security import get_current_teacher
 from app.db.session import get_db
-from app.models.entities import ClassProfile, LessonPlan, Song, Teacher
+from app.models.entities import AudioAnalysis, ClassroomRecord, ClassProfile, LessonPlan, Song, Teacher
 from app.repositories.song_repository import SongRepository
 from app.schemas.lesson import (
     LessonAdjustRequest,
@@ -252,3 +252,43 @@ def update_lesson(
     db.commit()
     db.refresh(plan)
     return serialize_plan(plan)
+
+
+@router.delete("/{lesson_id}")
+def delete_lesson(
+    lesson_id: int,
+    db: Session = Depends(get_db),
+    teacher: Teacher = Depends(get_current_teacher),
+):
+    """删除单条教案档案；保留音频分析，并拒绝删除仍有课堂记录的教案。"""
+    plan = db.scalar(select(LessonPlan).where(
+        LessonPlan.id == lesson_id,
+        LessonPlan.teacher_id == teacher.id,
+    ))
+    if not plan:
+        raise HTTPException(status_code=404, detail="教案不存在")
+
+    has_classroom_record = db.scalar(select(ClassroomRecord.id).where(
+        ClassroomRecord.lesson_plan_id == lesson_id,
+        ClassroomRecord.teacher_id == teacher.id,
+    ).limit(1))
+    if has_classroom_record:
+        raise HTTPException(
+            status_code=409,
+            detail="该教案已有课堂记录或反馈。为保留这些记录，请先在教学档案中处理关联课堂记录后再删除。",
+        )
+
+    try:
+        # 音频分析是独立档案：解除教案关联后保留分析结果和音频文件。
+        db.execute(update(AudioAnalysis).where(
+            AudioAnalysis.lesson_plan_id == lesson_id,
+            AudioAnalysis.teacher_id == teacher.id,
+        ).values(lesson_plan_id=None))
+        db.delete(plan)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.exception("lesson_delete_failed lesson_id=%s teacher_id=%s", lesson_id, teacher.id)
+        raise HTTPException(status_code=500, detail="删除教案档案失败，数据库已回滚。") from exc
+
+    return {"ok": True, "message": "教案档案已删除；关联的音频分析记录与文件已保留。"}
