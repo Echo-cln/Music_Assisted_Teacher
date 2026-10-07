@@ -251,9 +251,6 @@ def analyze_audio(
     if not consent_confirmed:
         raise HTTPException(status_code=422, detail="分析课堂录音前，请确认已完成录音告知与处理授权")
     consent_confirmed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    if not consent_confirmed:
-        raise HTTPException(status_code=422, detail="分析课堂录音前，请确认已完成录音告知与处理授权")
-    consent_confirmed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     song, classroom_record_id = _check_request(db, teacher, song_id, lesson_plan_id, classroom_record_id, analysis_mode, bool(original))
     recording_path = save_upload(recording, f"recordings/{teacher.id}")
     reference_path: Path | None = None
@@ -277,6 +274,9 @@ def analyze_audio(
 def create_audio_job(song_id: int = Form(...), lesson_plan_id: int | None = Form(default=None), classroom_record_id: int | None = Form(default=None),
                      analysis_mode: str = Form(default="classroom"), reference_kind: str = Form(default="mixed"), consent_confirmed: bool = Form(...), recording: UploadFile = File(...), original: UploadFile | None = File(default=None),
                      db: Session = Depends(get_db), teacher: Teacher = Depends(get_current_teacher)):
+    if not consent_confirmed:
+        raise HTTPException(status_code=422, detail="分析课堂录音前，请确认已完成录音告知与处理授权")
+    consent_confirmed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     song, classroom_record_id = _check_request(db, teacher, song_id, lesson_plan_id, classroom_record_id, analysis_mode, bool(original))
     recording_path = save_upload(recording, f"recordings/{teacher.id}")
     if original:
