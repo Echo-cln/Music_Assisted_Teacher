@@ -33,8 +33,10 @@ def create_feedback(
         analysis = db.scalar(select(AudioAnalysis).where(AudioAnalysis.id == payload.audio_analysis_id, AudioAnalysis.teacher_id == teacher.id))
         if not analysis:
             raise HTTPException(status_code=404, detail="音频分析记录不存在")
-        if analysis.lesson_plan_id != plan.id:
-            raise HTTPException(status_code=422, detail="所选音频分析未绑定当前教案，不能写入本课反馈")
+        if analysis.lesson_plan_id not in (None, plan.id):
+            raise HTTPException(status_code=422, detail="这条音频分析已关联另一份教案，请先解除原关联") 
+        if analysis.lesson_plan_id is None:
+            analysis.lesson_plan_id = plan.id
     item = Feedback(
         teacher_id=teacher.id,
         classroom_record_id=record.id,
@@ -95,11 +97,38 @@ def update_feedback(feedback_id: int, payload: FeedbackCreate, db: Session = Dep
     if not record or not plan or record.lesson_plan_id != plan.id:
         raise HTTPException(status_code=422, detail="反馈所属教案无效")
     if payload.audio_analysis_id:
-        analysis = db.scalar(select(AudioAnalysis).where(AudioAnalysis.id == payload.audio_analysis_id, AudioAnalysis.teacher_id == teacher.id, AudioAnalysis.lesson_plan_id == plan.id))
-        if not analysis:
-            raise HTTPException(status_code=422, detail="音频分析记录未绑定当前教案")
+        analysis = db.scalar(select(AudioAnalysis).where(
+            AudioAnalysis.id == payload.audio_analysis_id,
+            AudioAnalysis.teacher_id == teacher.id,
+        ))
+        if not analysis or analysis.lesson_plan_id not in (None, plan.id):
+            raise HTTPException(status_code=422, detail="音频分析记录不存在，或已关联另一份教案")
+        if analysis.lesson_plan_id is None:
+            analysis.lesson_plan_id = plan.id
     for key in ("overall_effect", "highlights", "problems", "improvement", "audio_summary", "audio_analysis_id"):
         setattr(item, key, getattr(payload, key))
     item.analysis_json = json.dumps(payload.analysis, ensure_ascii=False)
     db.commit()
     return {"id": item.id, "message": "反馈已更新"}
+
+
+@router.delete("/{feedback_id}")
+def delete_feedback(
+    feedback_id: int,
+    db: Session = Depends(get_db),
+    teacher: Teacher = Depends(get_current_teacher),
+):
+    """仅删除选中的课堂反馈，保留课堂记录、教案和关联的音频分析。"""
+    item = db.scalar(select(Feedback).where(
+        Feedback.id == feedback_id,
+        Feedback.teacher_id == teacher.id,
+    ))
+    if not item:
+        raise HTTPException(status_code=404, detail="课堂反馈记录不存在")
+    try:
+        db.delete(item)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="删除课堂反馈失败，数据库已回滚。") from exc
+    return {"ok": True, "message": "课堂反馈已删除；音频分析与教案记录已保留。"}
