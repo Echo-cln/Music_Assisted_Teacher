@@ -339,6 +339,7 @@
 
 - [x] audio_service.py Python 语法编译通过。
 - [x] 3 项有声帧筛选回归用例通过。
+- [x] 单人结果页 ES module 通过 node --check；入口及动态导入缓存版本同步更新。
 - [ ] 当前执行环境未安装 librosa，无法在这里运行 DTW 数值对齐或整套后端 pytest。
 - [ ] 目标 Windows .venv 仍需运行 python -m pytest backend/tests/test_audio_pitch_alignment.py -q，并用同一段清晰人声/原唱混音实际复测。
 - [ ] 未下载你的 BS-RoFormer/Demucs 权重与录音样本，因此真实分离质量和实际逐音准确度尚未验收。
