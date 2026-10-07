@@ -1,5 +1,5 @@
 import { api } from "../api/client.js";
-import { lessonView } from "../components/lesson.js?v=20261007-1";
+import { lessonView } from "../components/lesson.js?v=20261007-2";
 import { cancelActiveGeneration, getGenerationJob, refreshGeneration, startGeneration } from "../state/generation.js";
 import { esc, notify, pageHeader } from "../utils/dom.js";
 
