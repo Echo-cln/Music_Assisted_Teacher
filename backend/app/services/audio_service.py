@@ -239,11 +239,11 @@ def _prepare_reference(path: Path | None, reference_kind: str) -> dict:
     try:
         output_root = Path(tempfile.gettempdir()) / "xiangyin-demucs" / uuid.uuid4().hex
         command = [sys.executable, "-m", "demucs.separate", "--two-stems=vocals", "-n", "htdemucs", "-o", str(output_root), str(path)]
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=600, check=False)
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600, check=False)
         stem = output_root / "htdemucs" / path.stem / "vocals.wav"
         if result.returncode == 0 and stem.exists() and stem.stat().st_size > 4096:
             return {"available": True, "path": stem, "source": "demucs_vocals", "engine": "demucs", "message": "已从混音参考中分离人声，再用于主旋律对齐。"}
-        raw_detail = (result.stderr or "") + ("\n" if result.stderr and result.stdout else "") + (result.stdout or "")
+        raw_detail = _decode_process_output(result.stderr) + ("\n" if result.stderr and result.stdout else "") + _decode_process_output(result.stdout)
         detail = " ".join(raw_detail.split())
         logger.warning("demucs_separation_failed returncode=%s detail=%s", result.returncode, detail[-1200:])
         if "No module named demucs" in detail:
