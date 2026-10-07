@@ -1,4 +1,4 @@
-import { api, apiUrl } from "../api/client.js?v=20261007-2";
+import { api, apiUrl } from "../api/client.js?v=20261007-4";
 import { esc, loading, notify, pageHeader } from "../utils/dom.js";
 import { drawWaveform } from "../utils/waveform.js";
 import { showModal } from "../components/modal.js";
