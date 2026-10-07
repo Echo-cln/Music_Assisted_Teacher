@@ -170,6 +170,11 @@ export const api = {
   startLessonRun: (id, mode) => request(`/lessons/${id}/runs`, { method: "POST", body: JSON.stringify({ mode }) }),
   lessonRuns: id => request(`/lessons/${id}/runs`),
   lessonRunEvent: (id, payload) => request(`/lessons/runs/${id}/events`, { method: "POST", body: JSON.stringify(payload) }),
+  pauseLessonRunOnExit: id => fetch(apiUrl(`/lessons/runs/${id}/events`), {
+    method: "POST", credentials: "include", keepalive: true,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "pause" }),
+  }).catch(() => null),
   reviseLessonFromRun: (id, content) => request(`/lessons/runs/${id}/revise`, { method: "POST", body: JSON.stringify({ content }) }),
   lessonRevisions: id => request(`/lessons/${id}/revisions`),
   adjustLesson: (id, instruction) => request(`/lessons/${id}/adjust`, { method: "POST", body: JSON.stringify({ instruction }) }),
