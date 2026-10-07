@@ -277,3 +277,36 @@ class ArrangementProject(Base):
     arrangement_json: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class LessonRun(Base):
+    __tablename__ = "lesson_runs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teachers.id"), nullable=False, index=True)
+    lesson_plan_id: Mapped[int] = mapped_column(ForeignKey("lesson_plans.id"), nullable=False, index=True)
+    mode: Mapped[str] = mapped_column(String(20), default="simulation")
+    status: Mapped[str] = mapped_column(String(20), default="running", index=True)
+    plan_snapshot_json: Mapped[str] = mapped_column(Text)
+    stages_json: Mapped[str] = mapped_column(Text, default="[]")
+    current_stage_index: Mapped[int] = mapped_column(Integer, default=0)
+    total_active_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    total_paused_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    reflection: Mapped[str] = mapped_column(Text, default="")
+    active_since: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    paused_since: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class LessonPlanRevision(Base):
+    __tablename__ = "lesson_plan_revisions"
+    __table_args__ = (UniqueConstraint("lesson_plan_id", "revision_number", name="uq_lesson_plan_revision_number"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teachers.id"), nullable=False, index=True)
+    lesson_plan_id: Mapped[int] = mapped_column(ForeignKey("lesson_plans.id"), nullable=False, index=True)
+    source_run_id: Mapped[int | None] = mapped_column(ForeignKey("lesson_runs.id"), nullable=True, index=True)
+    revision_number: Mapped[int] = mapped_column(Integer)
+    content_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
