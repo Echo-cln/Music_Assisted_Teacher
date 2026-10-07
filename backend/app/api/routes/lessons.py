@@ -78,11 +78,27 @@ def start_lesson_run(
     )
     if not plan:
         raise HTTPException(status_code=404, detail="教案不存在")
+    now = datetime.utcnow()
+    existing_run = db.scalar(
+        select(LessonRun)
+        .where(
+            LessonRun.teacher_id == teacher.id,
+            LessonRun.lesson_plan_id == plan.id,
+            LessonRun.status.in_(["running", "paused", "interrupted"]),
+        )
+        .order_by(LessonRun.started_at.desc())
+    )
+    if existing_run:
+        if interrupt_stale_lesson_run(existing_run, now):
+            db.commit()
+        raise HTTPException(
+            status_code=409,
+            detail="这份教案已有未结束的授课记录。请先接续、结束或查看原记录，再开始新的授课。",
+        )
     content = json.loads(plan.content_json or "{}")
     stages = build_run_stages(content.get("timeline") or [])
     if not stages:
         raise HTTPException(status_code=422, detail="这份教案没有课堂流程，暂时无法开启授课计时。")
-    now = datetime.utcnow()
     stages[0]["status"] = "running"
     stages[0]["started_at"] = now.isoformat()
     run = LessonRun(
@@ -473,7 +489,7 @@ def delete_lesson(
     db: Session = Depends(get_db),
     teacher: Teacher = Depends(get_current_teacher),
 ):
-    """删除单条教案档案；保留音频分析，并拒绝删除仍有课堂记录的教案。"""
+    """删除单条教案档案；保留音频分析，并拒绝删除存在课堂/授课历史的教案。"""
     plan = db.scalar(select(LessonPlan).where(
         LessonPlan.id == lesson_id,
         LessonPlan.teacher_id == teacher.id,
@@ -489,6 +505,16 @@ def delete_lesson(
         raise HTTPException(
             status_code=409,
             detail="该教案已有课堂记录或反馈。为保留这些记录，请先在教学档案中处理关联课堂记录后再删除。",
+        )
+
+    has_lesson_run = db.scalar(select(LessonRun.id).where(
+        LessonRun.lesson_plan_id == lesson_id,
+        LessonRun.teacher_id == teacher.id,
+    ).limit(1))
+    if has_lesson_run:
+        raise HTTPException(
+            status_code=409,
+            detail="该教案已有授课计时、批注或复盘历史。为保留课堂过程记录，暂不能删除这份教案。",
         )
 
     try:
