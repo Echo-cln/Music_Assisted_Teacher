@@ -111,11 +111,44 @@ def _midi(values: np.ndarray) -> np.ndarray:
     return output
 
 
-def _filled(values: np.ndarray) -> np.ndarray:
-    valid = np.isfinite(values)
-    if valid.sum() < 2:
+def _voiced_sequence(track: PitchTrack, minimum_confidence: float = 0.25) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """只保留可信有声帧，返回 MIDI、原始帧索引和置信度。
+
+    不对静音/失声区间插值。插值会把停顿连接成虚构音高轨迹，进而让 DTW
+    把演唱错位、长停顿误认为连续旋律。
+    """
+    values = np.asarray(track.values, dtype=float)
+    confidence = np.asarray(track.confidence, dtype=float)
+    length = min(len(values), len(confidence))
+    values, confidence = values[:length], confidence[:length]
+    valid = np.isfinite(values) & (values > 0) & np.isfinite(confidence) & (confidence >= minimum_confidence)
+    frame_indices = np.flatnonzero(valid)
+    if len(frame_indices) < 2:
         raise ValueError("可用的人声音高帧不足")
-    return np.interp(np.arange(len(values)), np.flatnonzero(valid), values[valid])
+    return _midi(values[valid]), frame_indices, confidence[valid]
+
+
+def _midi(values: np.ndarray) -> np.ndarray:
+    output = np.full(len(values), np.nan, dtype=float)
+    valid = np.isfinite(values) & (values > 0)
+    output[valid] = 69 + 12 * np.log2(values[valid] / 440.0)
+    return output
+
+
+def _pitch_quality(track: PitchTrack) -> dict:
+    confidence = np.asarray(track.confidence, dtype=float)
+    values = np.asarray(track.values, dtype=float)
+    length = min(len(values), len(confidence))
+    if not length:
+        return {"voiced_ratio": 0.0, "usable_frames": 0, "median_confidence": 0.0}
+    confidence, values = confidence[:length], values[:length]
+    valid = np.isfinite(values) & (values > 0) & np.isfinite(confidence) & (confidence >= 0.25)
+    selected = confidence[valid]
+    return {
+        "voiced_ratio": round(float(valid.mean()), 3),
+        "usable_frames": int(valid.sum()),
+        "median_confidence": round(float(np.median(selected)), 3) if len(selected) else 0.0,
+    }
 
 
 def _audio_separator_executable() -> list[str] | None:
@@ -233,7 +266,7 @@ def _prepare_reference(path: Path | None, reference_kind: str) -> dict:
 
 
 def _align_tracks(recording_path: Path, reference: dict) -> dict:
-    """用 DTW 对齐两次演唱，而不是按两段音频总时长硬切窗口。"""
+    """只用可信有声帧进行 DTW；较短旋律可在较长录音中做子序列匹配。"""
     if not reference.get("available"):
         return {"available": False, "reason": reference.get("code"), "message": reference.get("message")}
     try:
@@ -241,39 +274,80 @@ def _align_tracks(recording_path: Path, reference: dict) -> dict:
 
         recording = _pitch_track(recording_path)
         expected = _pitch_track(Path(reference["path"]))
+        recording_quality, reference_quality = _pitch_quality(recording), _pitch_quality(expected)
         diagnostics = {
-            "recording_voiced_ratio": round(recording.voiced_ratio, 3),
-            "reference_voiced_ratio": round(expected.voiced_ratio, 3),
+            "recording_voiced_ratio": recording_quality["voiced_ratio"],
+            "reference_voiced_ratio": reference_quality["voiced_ratio"],
+            "recording_usable_frames": recording_quality["usable_frames"],
+            "reference_usable_frames": reference_quality["usable_frames"],
+            "recording_median_confidence": recording_quality["median_confidence"],
+            "reference_median_confidence": reference_quality["median_confidence"],
             "recording_pitch_backend": recording.backend,
             "reference_pitch_backend": expected.backend,
         }
-        if recording.voiced_ratio < 0.16:
-            return {"available": False, "reason": "recording_low_quality", "diagnostics": diagnostics, "message": f"练唱录音可用人声音高仅 {recording.voiced_ratio:.0%}，请降低伴奏并靠近麦克风重录。"}
-        if expected.voiced_ratio < 0.18:
-            return {"available": False, "reason": "reference_low_quality", "diagnostics": diagnostics, "message": f"参考人声可用音高仅 {expected.voiced_ratio:.0%}，不能作为主旋律目标。请确认上传的是无明显伴奏、无长静音的单人示范，而非将混音文件误选为“清晰人声”。"}
-        actual_midi, expected_midi = _filled(_midi(recording.values)), _filled(_midi(expected.values))
-        # 对齐阶段去掉各自中位音高，避免男女声八度差把时间路径拉坏；评分仍用原始音高。
-        a_feature, e_feature = actual_midi - np.nanmedian(actual_midi), expected_midi - np.nanmedian(expected_midi)
-        _, warp = librosa.sequence.dtw(X=a_feature[np.newaxis, :], Y=e_feature[np.newaxis, :], metric="euclidean", global_constraints=True, band_rad=0.2)
-        pairs = np.asarray(warp[::-1], dtype=int)
-        if len(pairs) < 16:
-            raise ValueError("音高时间对齐路径不足")
-        actual_hz, expected_hz = recording.values[pairs[:, 0]], expected.values[pairs[:, 1]]
-        confidence = np.minimum(recording.confidence[pairs[:, 0]], expected.confidence[pairs[:, 1]])
+        if recording_quality["voiced_ratio"] < 0.16:
+            return {"available": False, "reason": "recording_low_quality", "diagnostics": diagnostics, "message": f"练唱录音可用人声音高仅 {recording_quality['voiced_ratio']:.0%}，请降低伴奏并靠近麦克风重录。"}
+        if reference_quality["voiced_ratio"] < 0.18:
+            return {"available": False, "reason": "reference_low_quality", "diagnostics": diagnostics, "message": f"参考人声可用音高仅 {reference_quality['voiced_ratio']:.0%}，不能作为主旋律目标。请确认上传的是清晰人声；混音文件应选择“原唱/伴奏混音”。"}
+
+        actual_midi, recording_frames, recording_confidence = _voiced_sequence(recording)
+        expected_midi, reference_frames, reference_confidence = _voiced_sequence(expected)
+        # 去除整体音高位置后对齐旋律轮廓，评分阶段仍使用原始音高。
+        a_feature = actual_midi - np.median(actual_midi)
+        e_feature = expected_midi - np.median(expected_midi)
+        length_ratio = min(len(actual_midi), len(expected_midi)) / max(len(actual_midi), len(expected_midi))
+        if length_ratio >= 0.85:
+            _, warp = librosa.sequence.dtw(
+                X=a_feature[np.newaxis, :], Y=e_feature[np.newaxis, :],
+                metric="euclidean", global_constraints=True, band_rad=0.2,
+            )
+            pairs = np.asarray(warp[::-1], dtype=int)
+            alignment_mode = "full"
+        elif len(actual_midi) < len(expected_midi):
+            # 学生只唱一段时，在完整参考曲中寻找这一段，不把前奏/尾奏硬拉进对齐。
+            _, warp = librosa.sequence.dtw(
+                X=a_feature[np.newaxis, :], Y=e_feature[np.newaxis, :],
+                metric="euclidean", subseq=True,
+            )
+            pairs = np.asarray(warp[::-1], dtype=int)
+            alignment_mode = "recording_subsequence"
+        else:
+            # 反向查询，保持短的参考乐句完整匹配到学生录音中的位置。
+            _, warp = librosa.sequence.dtw(
+                X=e_feature[np.newaxis, :], Y=a_feature[np.newaxis, :],
+                metric="euclidean", subseq=True,
+            )
+            reverse_pairs = np.asarray(warp[::-1], dtype=int)
+            pairs = reverse_pairs[:, ::-1]
+            alignment_mode = "reference_subsequence"
+
+        if len(pairs) < 32:
+            return {"available": False, "reason": "alignment_too_short", "diagnostics": diagnostics, "message": "两段音频可对齐的可信人声不足约 0.7 秒，本次不给逐音分数。请上传更长、清晰的同一乐句。"}
+        # DTW 输出索引属于压缩后的有声序列；映射回原始帧，保留正确时间戳和置信度。
+        frame_pairs = np.column_stack((recording_frames[pairs[:, 0]], reference_frames[pairs[:, 1]])).astype(int)
+        actual_hz = recording.values[frame_pairs[:, 0]]
+        expected_hz = expected.values[frame_pairs[:, 1]]
+        confidence = np.minimum(recording_confidence[pairs[:, 0]], reference_confidence[pairs[:, 1]])
         valid = np.isfinite(actual_hz) & np.isfinite(expected_hz) & (confidence >= 0.25)
-        if valid.sum() < 14:
-            raise ValueError("对齐后可信人声音高不足")
-        pairs, actual_hz, expected_hz = pairs[valid], actual_hz[valid], expected_hz[valid]
+        if valid.sum() < 32:
+            diagnostics["trusted_aligned_frames"] = int(valid.sum())
+            return {"available": False, "reason": "alignment_low_confidence", "diagnostics": diagnostics, "message": "对齐后可信人声音高不足，本次不给逐音分数。请降低伴奏、减少环境噪声后重录。"}
+        frame_pairs, actual_hz, expected_hz = frame_pairs[valid], actual_hz[valid], expected_hz[valid]
         raw_cents = 1200 * np.log2(actual_hz / expected_hz)
         octave_shift = round(float(np.median(raw_cents)) / 1200) * 1200
         cents = raw_cents - octave_shift
         median_abs = float(np.median(np.abs(cents)))
+        diagnostics.update({
+            "trusted_aligned_frames": int(valid.sum()),
+            "trusted_pair_ratio": round(float(valid.mean()), 3),
+            "alignment_mode": alignment_mode,
+        })
         if median_abs > 600:
             return {"available": False, "reason": "reference_mismatch", "message": "对齐后中位音高差仍超过 600 cents，说明参考人声与练唱旋律不匹配，或分离结果被伴奏污染；本次不输出误导性的 0 分。", "diagnostics": {**diagnostics, "median_deviation_cents": round(median_abs, 1), "reference_source": reference.get("source")}}
-        return {"available": True, "recording": recording, "reference_track": expected, "pairs": pairs, "actual_hz": actual_hz, "expected_hz": expected_hz, "cents": cents, "octave_shift": octave_shift, "reference_source": reference.get("source"), "diagnostics": diagnostics, "message": reference.get("message")}
+        return {"available": True, "recording": recording, "reference_track": expected, "pairs": frame_pairs, "actual_hz": actual_hz, "expected_hz": expected_hz, "cents": cents, "octave_shift": octave_shift, "reference_source": reference.get("source"), "diagnostics": diagnostics, "message": reference.get("message")}
     except Exception as exc:
+        logger.exception("solo_pitch_alignment_failed error=%s", exc)
         return {"available": False, "reason": "alignment_failed", "message": f"主旋律对齐未完成：{str(exc)[:180]}。本次不输出逐音分数。"}
-
 
 def _score_details(cents: np.ndarray) -> tuple[int, float, float]:
     absolute = np.abs(cents)
