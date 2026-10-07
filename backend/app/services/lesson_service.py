@@ -107,9 +107,34 @@ def _song_design_basis(song: Song) -> dict:
     return {"primary": primary, "practice": practice, "facts": facts, "rhythm_focus": rhythm_focus, "range_focus": range_focus}
 
 
+def _extract_classroom_setup(requirements: str) -> tuple[str, str]:
+    """从教师要求中读取设备条件，并移除仅供规则层识别的标记。"""
+    match = re.search(r"\[课堂设备条件：([^\]]+)\]", requirements or "")
+    setup = match.group(1).strip() if match else "电脑与音箱"
+    clean = re.sub(r"\s*\[课堂设备条件：[^\]]+\]\s*", " ", requirements or "").strip()
+    return setup, clean
+
+
+def _low_device_option(stage: str, setup: str) -> str:
+    """为同一教学目标提供不依赖乐器/投影的课堂替代做法。"""
+    if "无电子设备" in setup:
+        options = {
+            "情境导入": "教师清唱或哼唱一个乐句；学生用动作表现情绪，并口述听到的变化。",
+            "节奏游戏": "用拍手、跺脚或轻敲桌面完成节奏接龙，不使用电子鼓或音源。",
+            "分句学唱": "教师先唱短句，学生用哼鸣回声模唱，再轻声填词。",
+            "难点练习": "把难点拆成两拍口令与身体声势，放慢后逐步恢复原速。",
+            "展示评价": "小组无伴奏演唱或声势展示，同伴按本课观察点反馈。",
+        }
+        return options.get(stage, "教师示范，学生用人声、拍手或身体动作完成同一音乐任务。")
+    if "手机" in setup:
+        return "提前把音频下载到手机；播放失败时改为教师范唱，节奏用拍手或跺脚保持。"
+    return "投影或网络不可用时使用本机已下载音频；音频也不可用时教师范唱，学生以拍手和哼唱继续。"
+
+
 def _local_content(
     song: Song, profile: ClassProfile | None, duration: int, activity: str, requirements: str, knowledge: dict
 ) -> dict:
+    classroom_setup, clean_requirements = _extract_classroom_setup(requirements)
     class_name = profile.name if profile else "通用班级"
     rhythm = profile.rhythm_level if profile else "节奏基础一般"
     pitch = profile.pitch_level if profile else "音准基础一般"
@@ -130,39 +155,55 @@ def _local_content(
             f"围绕本曲的{basis['primary']}，在律动、拍手或小组接唱中完成可观察的节拍或音高任务，回应班级“{rhythm}”现状。",
             f"能依据歌曲的{song.song_type}、{song.mode}或{song.range_note}中至少一项资料，说出并展示一个听到的音乐特点。",
         ],
+        "objective_evidence": [
+            {"objective": f"演唱《{song.name}》主要乐句并表现“{song.mood}”情绪。", "evidence": "抽取一组回唱同一乐句，观察起音、长音收尾与情绪动作。"},
+            {"objective": f"完成与{basis['primary']}相关的节拍或音高任务。", "evidence": f"观察小组能否连续完成两轮任务，并回应班级“{rhythm}”基础。"},
+            {"objective": f"说出并展示歌曲的一个音乐特点。", "evidence": f"学生指出{song.song_type}、{song.mode}或{song.range_note}中的一项，并用演唱或动作示范。"},
+        ],
         "key_points": f"本课优先解决{basis['primary']}：依据{song.range_note}分句学唱，用与“{song.mood}”相匹配的声音和律动完成听、唱、评。",
         "difficulties": f"结合本曲{song.song_type}与{song.mode}特征，针对班级“{pitch}”情况，把抽象要求落实为可模仿的短句与即时互听。",
-        "preparation": "歌曲音频或教师范唱、黑板/投影、节奏卡片；无乐器时使用拍手、跺脚和桌面敲击。",
+        "classroom_setup": classroom_setup,
+        "preparation": f"设备条件：{classroom_setup}。准备歌曲音频或教师范唱、节奏卡片；无乐器时使用拍手、跺脚和桌面敲击。",
         "timeline": [
             {
                 "minutes": parts[0],
                 "stage": "情境导入",
                 "teacher": f"先播放或范唱片段，引导学生捕捉《{song.name}》“{song.mood}”的声音感受；再补充{song.province}相关线索，避免只讲地区介绍。",
                 "students": f"用一个动作或两个关键词回应歌曲的{song.mood}情绪，并说出听到的一个节奏、旋律或音色线索。",
+                "look_for": "至少说出或做出一个与歌曲情绪相符的声音/动作线索。",
+                "low_device_option": _low_device_option("情境导入", classroom_setup),
             },
             {
                 "minutes": parts[1],
                 "stage": knowledge["game"]["name"],
                 "teacher": knowledge["game"]["instructions"],
                 "students": "以小组形式完成节奏或声音模仿。",
+                "look_for": "小组能连续完成两轮节奏接龙，并在约定拍点同时开始。",
+                "low_device_option": _low_device_option("节奏游戏", classroom_setup),
             },
             {
                 "minutes": parts[2],
                 "stage": "分句学唱",
                 "teacher": f"{basis['practice']}；每两句停一次，重点观察学生能否在{song.range_note}内保持稳定起音与换气。",
                 "students": "先用 lu 回声模唱，再填词；基础较弱者先唱骨干音，同伴用“首拍、长音、情绪”三个词互听。",
+                "look_for": "随机抽一组回唱同一句，记录起音和长音是否能跟随示范。",
+                "low_device_option": _low_device_option("分句学唱", classroom_setup),
             },
             {
                 "minutes": parts[3],
                 "stage": "难点练习",
                 "teacher": f"先回到本曲最需要处理的{basis['primary']}，再使用：{knowledge['mistake']['correction']}",
                 "students": "轮换练习并记录最容易出错的一句；能说清是首拍、音高、换气还是情绪表达需要再练。",
+                "look_for": "学生能指出本组反复练习的具体乐句，并说出一个改进前后的差异。",
+                "low_device_option": _low_device_option("难点练习", classroom_setup),
             },
             {
                 "minutes": parts[4],
                 "stage": "展示评价",
                 "teacher": f"按“{basis['primary']}、声音是否表现{song.mood}、合作完成”三项标准评价，并记录下一节需要回看的乐句。",
                 "students": "小组展示，并用证据说出一个优点和一个下次目标。",
+                "look_for": "每组完成一次展示，并引用节拍、长音或情绪中的一项证据自评。",
+                "low_device_option": _low_device_option("展示评价", classroom_setup),
             },
         ],
         "theory_explanation": knowledge["theory"],
@@ -174,7 +215,7 @@ def _local_content(
         ],
         "assessment": "学生完成三颗星自评：节拍稳定、声音自然、合作完成。教师记录最容易出错的乐句。",
         "activity_preference": activity,
-        "teacher_requirements": requirements,
+        "teacher_requirements": clean_requirements,
         "generation_context": {
             "selected_song_from_database": {
                 "name": song.name,
@@ -398,6 +439,11 @@ def _validated_content(raw: str, base: dict) -> dict:
         value = generated.get(field)
         if isinstance(value, type(content.get(field))) and value:
             content[field] = value
+
+    if content.get("objective_evidence"):
+        for index, item in enumerate(content["objective_evidence"]):
+            if isinstance(item, dict) and index < len(content.get("objectives", [])):
+                item["objective"] = content["objectives"][index]
 
     # 课堂流程的阶段、时长由规则层根据课时生成，不能被模型删减或改写。
     # 模型只可增强同一位置的教师、学生活动；若个别项生成不完整，则保留骨架内容。

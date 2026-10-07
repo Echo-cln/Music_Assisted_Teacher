@@ -3,7 +3,7 @@ import { esc, loading, notify, pageHeader } from "../utils/dom.js";
 import { drawWaveform } from "../utils/waveform.js";
 import { cancelActiveAudioJob, refreshAudioJob, startAudioJob } from "../state/audio_jobs.js";
 
-const scoreNames = { pitch_stability: "音高稳定", rhythm_regularness: "节拍稳定", dynamics: "力度层次", clarity: "清晰度" };
+const scoreNames = { pitch_stability: "主音高轨迹稳定度估算", rhythm_regularness: "起音间隔规律估算", dynamics: "力度变化估算", clarity: "录音清晰度估算" };
 
 export async function renderAudio(container) {
   const lessons = await api.lessons();
@@ -160,13 +160,14 @@ function resultView(result) {
 
 function classroomResultView(result, player, method) {
   const scoreCards = Object.entries(result.scores || {}).map(([key, value]) => `<div><b>${value}</b><small>${scoreNames[key] || key}</small></div>`).join("");
+  const scoreCaveat = `<p class="classroom-score-caveat">这些数值是整段录音的自动声学线索（0–100），受合唱人数、混响、伴奏和麦克风位置影响；不是学生个人成绩，也不能单独判定是否唱准。请结合分段回听与教师观察。</p>`;
   const evidence = result.classroom_evidence || {};
   const evidencePanel = evidence.summary ? `<section class="classroom-evidence"><span class="eyebrow">EVIDENCE SUMMARY</span><h3>课堂分析依据</h3><p>${esc(evidence.summary)}</p>${(evidence.limitations || []).map(item => `<small>${esc(item)}</small>`).join("")}</section>` : "";
   const findings = result.findings || [];
   const findingPanel = findings.length ? `<h3>按录音证据排出的本次优先动作</h3><div class="segment-list evidence-actions">${findings.map(item => `<div><b>${esc(item.priority)} · ${esc(item.time)}</b><span>${esc(item.metric)}</span><p class="segment-evidence">${esc(item.evidence)}</p><p>${esc(item.action)}</p></div>`).join("")}</div>` : "";
   const insight = result.model_insight || {};
   const modelPanel = insight.status === "ready" ? `<section class="model-insight"><div><span class="eyebrow">课堂观察</span><h3>结合本课目标的教学解读</h3><p>${esc(insight.summary)}</p></div><small>以下解读依据录音片段与测量结果；课堂整体分析不等同于个人音准评分。</small><div class="model-insight-list">${(insight.priorities || []).map(item => `<article><b>${esc(item.time)} · ${esc(item.headline)}</b><p>${esc(item.interpretation)}</p><span><strong>下一步：</strong>${esc(item.action)}</span></article>`).join("")}</div></section>` : `<section class="model-insight muted-insight"><span class="eyebrow">教学解读</span><h3>本次暂无教学解读</h3><p>${esc(insight.message || "历史记录中没有教学解读。重新分析课堂录音后可查看分段观察。")}</p></section>`;
-  return `<section class="analysis-result"><div class="card"><div class="card-head"><div><span class="eyebrow">CLASSROOM EVIDENCE</span><h2>《${esc(result.song_name)}》课堂整体分析</h2><p class="muted">已保存 · 时长 ${result.duration_seconds} 秒 · 推测速度 ${result.tempo_bpm ?? "—"} BPM</p></div><span class="status ok">分析记录 #${result.id}</span></div><p class="analysis-scope">${esc(result.analysis_scope)}</p><div class="scores professional-scores">${scoreCards}</div>${evidencePanel}${player}${findingPanel}${modelPanel}<h3>分段关注点</h3><div class="segment-list">${(result.segment_feedback || []).map(item => `<div><b>${esc(item.time)}</b><span>${esc(item.focus)} · ${item.pitch_stability ?? "—"} 分</span><p class="segment-evidence">${esc(item.evidence || "")}</p><p>${esc(item.note)}</p></div>`).join("")}</div>${method}<button class="btn primary" id="toFeedback">将分析总结写入课堂反馈</button></div>${referenceView(result)}</section>`;
+  return `<section class="analysis-result"><div class="card"><div class="card-head"><div><span class="eyebrow">CLASSROOM EVIDENCE</span><h2>《${esc(result.song_name)}》课堂整体分析</h2><p class="muted">已保存 · 时长 ${result.duration_seconds} 秒 · 推测速度 ${result.tempo_bpm ?? "—"} BPM</p></div><span class="status ok">分析记录 #${result.id}</span></div><p class="analysis-scope">${esc(result.analysis_scope)}</p>${scoreCaveat}<div class="scores professional-scores">${scoreCards}</div>${evidencePanel}${player}${findingPanel}${modelPanel}<h3>分段关注点</h3><div class="segment-list">${(result.segment_feedback || []).map(item => `<div><b>${esc(item.time)}</b><span>${esc(item.focus)} · 轨迹稳定度估算 ${item.pitch_stability ?? "—"}/100</span><p class="segment-evidence">${esc(item.evidence || "")}</p><p>${esc(item.note)}</p></div>`).join("")}</div>${method}<button class="btn primary" id="toFeedback">将分析总结写入课堂反馈</button></div>${referenceView(result)}</section>`;
 }
 
 function readableReferenceFailure(message) {

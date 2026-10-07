@@ -174,6 +174,7 @@ export const api = {
   audioAnalyses: () => request("/audio/analyses"),
   audioAnalysis: id => request(`/audio/analyses/${id}`),
   feedback: payload => request("/feedback", { method: "POST", body: JSON.stringify(payload) }),
+  updateFeedback: (id, payload) => request(`/feedback/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   feedbackRecords: () => request("/feedback"),
   workbenchProjects: () => request("/workbench/projects"),
   workbenchProject: id => request(`/workbench/projects/${id}`),

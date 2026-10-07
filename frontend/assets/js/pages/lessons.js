@@ -54,7 +54,43 @@ async function renderArchive(container, kind) {
   }
   const rows = await api.feedbackRecords();
   container.innerHTML = `<section class="list-search"><div class="list-filters"><select id="feedbackSort" aria-label="课堂反馈排序"><option value="newest">最新反馈</option><option value="oldest">最早反馈</option><option value="lesson">教案名称</option></select></div></section><section class="archive-list" id="feedbackRows"></section>`;
-  const paintFeedback = () => { const sorted = [...rows]; const sort = document.getElementById("feedbackSort").value; if (sort === "oldest") sorted.reverse(); if (sort === "lesson") sorted.sort((a,b) => a.lesson_title.localeCompare(b.lesson_title, "zh-CN")); document.getElementById("feedbackRows").innerHTML = sorted.length ? sorted.map(item => `<article class="card archive-item feedback-archive-item"><div><span class="eyebrow">CLASSROOM FEEDBACK</span><h3>${esc(item.lesson_title)}</h3><p>${esc(item.song_name)} · ${esc(item.created_at)} · 整体效果：${esc(item.overall_effect)}</p><dl><dt>音频分析总结</dt><dd>${esc(item.audio_summary || "未带入音频分析")}</dd><dt>课堂亮点</dt><dd>${esc(item.highlights || "—")}</dd><dt>存在问题</dt><dd>${esc(item.problems || "—")}</dd><dt>下次改进</dt><dd>${esc(item.improvement || "—")}</dd></dl></div>${item.audio_analysis_id ? `<aside class="feedback-audio-link"><b>已关联音频记录</b><span>${esc(item.analysis?.analysis_mode_label || "课堂音频分析")}</span><button class="btn soft" data-open-feedback-audio="${item.audio_analysis_id}">查看完整分析</button><small>包含分段证据、建议与录音回听</small></aside>` : ""}</article>`).join("") : '<section class="card empty">暂无课堂反馈记录。保存反馈后会完整归档在这里。</section>'; container.querySelectorAll("[data-open-feedback-audio]").forEach(button => button.onclick = () => { localStorage.setItem("lastAudioAnalysisId", button.dataset.openFeedbackAudio); window.dispatchEvent(new CustomEvent("app:navigate", { detail: "audio" })); }); };
+  const paintFeedback = () => {
+    const sorted = [...rows];
+    const sort = document.getElementById("feedbackSort").value;
+    if (sort === "oldest") sorted.reverse();
+    if (sort === "lesson") sorted.sort((a, b) => a.lesson_title.localeCompare(b.lesson_title, "zh-CN"));
+    document.getElementById("feedbackRows").innerHTML = sorted.length ? sorted.map(item => {
+      const goals = item.analysis?.goal_observations || [];
+      const goalLabel = status => status === "achieved" ? "已达到" : status === "developing" ? "正在形成" : status === "not_observed" ? "本次未观察到" : "暂未记录";
+      return `<article class="card archive-item feedback-archive-item"><div><span class="eyebrow">CLASSROOM FEEDBACK</span><h3>${esc(item.lesson_title)}</h3><p>${esc(item.song_name)} · ${esc(item.created_at)} · 整体效果：${esc(item.overall_effect)}</p><dl><dt>音频分析总结</dt><dd>${esc(item.audio_summary || "未带入音频分析")}</dd><dt>课堂亮点</dt><dd>${esc(item.highlights || "—")}</dd><dt>存在问题</dt><dd>${esc(item.problems || "—")}</dd><dt>下次改进</dt><dd>${esc(item.improvement || "—")}</dd></dl>${goals.length ? `<section class="archived-goal-observations"><b>本课目标观察</b><ul>${goals.map(goal => `<li><span>${esc(goal.objective)}</span><small>${goalLabel(goal.status)}</small></li>`).join("")}</ul></section>` : ""}<details class="feedback-inline-edit"><summary>编辑这条反馈</summary><div class="feedback-edit-grid"><label>整体效果<select data-edit-field="overall_effect"><option ${item.overall_effect === "很好" ? "selected" : ""}>很好</option><option ${item.overall_effect === "较好" ? "selected" : ""}>较好</option><option ${item.overall_effect === "一般" ? "selected" : ""}>一般</option><option ${item.overall_effect === "较差" ? "selected" : ""}>较差</option></select></label><label>音频分析总结<textarea data-edit-field="audio_summary">${esc(item.audio_summary || "")}</textarea></label><label>课堂亮点<textarea data-edit-field="highlights">${esc(item.highlights || "")}</textarea></label><label>存在问题<textarea data-edit-field="problems">${esc(item.problems || "")}</textarea></label><label>下次改进<textarea data-edit-field="improvement">${esc(item.improvement || "")}</textarea></label></div>${goals.length ? `<div class="feedback-edit-goals"><b>目标观察</b>${goals.map((goal, index) => `<label><span>${esc(goal.objective)}</span><select data-edit-goal="${index}"><option value="" ${!goal.status ? "selected" : ""}>暂未记录</option><option value="achieved" ${goal.status === "achieved" ? "selected" : ""}>已达到</option><option value="developing" ${goal.status === "developing" ? "selected" : ""}>正在形成</option><option value="not_observed" ${goal.status === "not_observed" ? "selected" : ""}>本次未观察到</option></select></label>`).join("")}</div>` : ""}<button class="btn primary" type="button" data-save-feedback-edit="${item.id}">保存反馈修改</button></details></div>${item.audio_analysis_id ? `<aside class="feedback-audio-link"><b>已关联音频记录</b><span>${esc(item.analysis?.analysis_mode_label || "课堂音频分析")}</span><button class="btn soft" data-open-feedback-audio="${item.audio_analysis_id}">查看完整分析</button><small>包含分段证据、建议与录音回听</small></aside>` : ""}</article>`;
+    }).join("") : '<section class="card empty">暂无课堂反馈记录。保存反馈后会完整归档在这里。</section>';
+    container.querySelectorAll("[data-open-feedback-audio]").forEach(button => button.onclick = () => { localStorage.setItem("lastAudioAnalysisId", button.dataset.openFeedbackAudio); window.dispatchEvent(new CustomEvent("app:navigate", { detail: "audio" })); });
+    container.querySelectorAll("[data-save-feedback-edit]").forEach(button => button.onclick = async () => {
+      const item = rows.find(record => record.id === Number(button.dataset.saveFeedbackEdit));
+      const card = button.closest(".feedback-archive-item");
+      if (!item || !card) return;
+      const value = field => card.querySelector(`[data-edit-field="${field}"]`)?.value || "";
+      const goal_observations = goalsForItem(item).map((goal, index) => {
+        const status = card.querySelector(`[data-edit-goal="${index}"]`)?.value || "";
+        return status ? { ...goal, status } : null;
+      }).filter(Boolean);
+      button.disabled = true;
+      try {
+        await api.updateFeedback(item.id, {
+          lesson_plan_id: item.lesson_plan_id, audio_analysis_id: item.audio_analysis_id || null,
+          overall_effect: value("overall_effect"), audio_summary: value("audio_summary"),
+          highlights: value("highlights"), problems: value("problems"), improvement: value("improvement"),
+          analysis: { ...(item.analysis || {}), goal_observations },
+        });
+        notify("课堂反馈已更新");
+        await renderArchive(container, "feedback");
+      } catch (error) {
+        button.disabled = false;
+        notify(`更新反馈失败：${error.message}`, "error");
+      }
+    });
+  };
+  const goalsForItem = item => item.analysis?.goal_observations || [];
   document.getElementById("feedbackSort").onchange = paintFeedback; paintFeedback();
 }
 

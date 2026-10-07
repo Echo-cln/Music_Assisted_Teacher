@@ -1,4 +1,4 @@
-from app.services.lesson_service import _validate_saved_preview, _validated_content
+from app.services.lesson_service import _extract_classroom_setup, _low_device_option, _validate_saved_preview, _validated_content
 
 
 def _base():
@@ -58,3 +58,27 @@ def test_saving_rendered_preview_keeps_structured_theory_and_mistake_fields():
     saved = _validate_saved_preview(preview)
     assert saved["theory_explanation"] == preview["theory_explanation"]
     assert saved["mistake_practice"] == preview["mistake_practice"]
+
+
+def test_device_condition_is_removed_from_teacher_copy_and_kept_as_structured_context():
+    setup, requirements = _extract_classroom_setup("强调节奏练习\n[课堂设备条件：无电子设备（教师清唱与身体声势）]")
+    assert setup.startswith("无电子设备")
+    assert requirements == "强调节奏练习"
+
+
+def test_low_device_alternative_is_specific_to_each_lesson_stage():
+    option = _low_device_option("分句学唱", "无电子设备（教师清唱与身体声势）")
+    assert "教师先唱短句" in option
+    assert "哼鸣回声模唱" in option
+
+
+def test_lesson_contract_preserves_local_evidence_and_device_alternatives():
+    base = _base()
+    base["timeline"][0]["look_for"] = "观察学生能否跟随强拍起唱。"
+    base["timeline"][0]["low_device_option"] = "教师清唱，学生拍手保持恒拍。"
+    base["objective_evidence"] = [{"objective": "旧目标", "evidence": "观察首拍"}]
+    raw = '''{"title":"生成课","objectives":["学生跟随示范完成两次回唱"],"key_points":"保持首拍","difficulties":"长音收尾","preparation":"清唱示范","timeline":[{"teacher":"教师示范后停顿两拍。","students":"两人互换回唱。"}],"theory_explanation":{"term":"节拍","script":"强拍像走路时先落下的一步。"},"mistake_practice":{"problem":"抢拍","correction":"先拍两轮再唱。"},"differentiation":["跟唱","领唱"],"assessment":"记录起音是否稳定。"}'''
+    result = _validated_content(raw, base)
+    assert result["timeline"][0]["look_for"] == base["timeline"][0]["look_for"]
+    assert result["timeline"][0]["low_device_option"] == base["timeline"][0]["low_device_option"]
+    assert result["objective_evidence"][0]["objective"] == result["objectives"][0]
