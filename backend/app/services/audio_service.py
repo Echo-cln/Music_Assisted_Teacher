@@ -208,13 +208,15 @@ def _separate_with_audio_separator(path: Path, output_root: Path) -> tuple[Path 
 
 
 def _prepare_reference(path: Path | None, reference_kind: str) -> dict:
-    """将参考音频变为可用于主旋律比较的人声；混音不允许直接拿来打分。"""
+    """清晰人声直测；混音分离先试 BS-RoFormer，失败后再试 Demucs。"""
     if not path:
         return {"available": False, "code": "reference_missing", "message": "未提供参考旋律：只能做课堂整体声学分析，不能判定是否唱准。"}
     if reference_kind == "vocal":
         return {"available": True, "path": path, "source": "clean_vocal", "message": "使用上传的清晰单人参考人声进行对齐。"}
     if reference_kind not in {"mixed", "auto"}:
         return {"available": False, "code": "reference_unsupported", "message": "参考类型无效。请选“清晰人声”或“原唱/伴奏混音”。"}
+
+    separator_error = None
     separator_command = _audio_separator_executable()
     if separator_command:
         try:
@@ -224,39 +226,48 @@ def _prepare_reference(path: Path | None, reference_kind: str) -> dict:
                 model = str(getattr(get_settings(), "audio_separator_model", "BS-RoFormer"))
                 return {"available": True, "path": stem, "source": "audio_separator_vocals", "engine": "audio_separator", "message": f"已使用 Audio Separator 分离参考人声（{model}），再用于主旋律对齐。"}
             wav_count = sum(1 for item in output_root.rglob("*") if item.is_file() and item.suffix.lower() == ".wav")
+            separator_error = _separator_failure_message(detail, wav_count)
             logger.warning("reference_vocal_separation_unavailable engine=audio-separator detail=%s", detail[-1200:])
-            return {"available": False, "source": "audio_separator_failed", "engine": "audio_separator", "code": "vocal_separation_failed", "message": _separator_failure_message(detail, wav_count)}
         except subprocess.TimeoutExpired:
-            return {"available": False, "code": "vocal_separation_timeout", "message": "Audio Separator 人声分离超过 15 分钟仍未完成，本次不输出逐音分数。请使用较短的参考片段或清晰单人参考人声。"}
+            return {"available": False, "source": "audio_separator_failed", "engine": "audio_separator", "code": "vocal_separation_timeout", "message": "BS-RoFormer 分离超过 15 分钟仍未完成。本次不输出逐音分数；请使用较短参考片段或上传清晰单人参考人声。"}
         except Exception as exc:
+            separator_error = f"BS-RoFormer 执行失败：{str(exc)[:180]}"
             logger.exception("audio_separator_reference_failed error=%s", exc)
-            return {"available": False, "source": "audio_separator_failed", "engine": "audio_separator", "code": "vocal_separation_failed", "message": f"BS-RoFormer 分离命令执行失败：{str(exc)[:180]}。本次不输出逐音分数；可先上传清晰单人参考人声。"}
+
+    # BS-RoFormer 安装存在但模型/输出失败时，继续尝试已有 Demucs 安装。
+    # 之前遇到第一个分离器失败就直接返回，导致另一个可用分离器完全没有机会。
     try:
         output_root = Path(tempfile.gettempdir()) / "xiangyin-demucs" / uuid.uuid4().hex
         command = [sys.executable, "-m", "demucs.separate", "--two-stems=vocals", "-n", "htdemucs", "-o", str(output_root), str(path)]
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=600, check=False)
         stem = output_root / "htdemucs" / path.stem / "vocals.wav"
         if result.returncode == 0 and stem.exists() and stem.stat().st_size > 4096:
-            return {"available": True, "path": stem, "source": "demucs_vocals", "message": "已从混音参考中分离人声，再用于主旋律对齐。"}
+            return {"available": True, "path": stem, "source": "demucs_vocals", "engine": "demucs", "message": "已从混音参考中分离人声，再用于主旋律对齐。"}
         raw_detail = (result.stderr or "") + ("\n" if result.stderr and result.stdout else "") + (result.stdout or "")
         detail = " ".join(raw_detail.split())
-        if "No module named demucs" in detail:
-            return {"available": False, "source": "demucs_failed", "engine": "demucs", "code": "vocal_separator_not_installed", "message": "本机未检测到 Audio Separator，也未安装 Demucs，因此无法分离混音参考。请在项目根目录运行 setup_audio_separator.bat（首次下载模型需要联网），重启后端再分析；也可上传清晰单人参考人声。"}
-        # tqdm 的模型下载进度可能有数千字符，并非教师可读的诊断；保留在
-        # 后端日志用于排查，API 只返回稳定、可执行的短错误，不污染结果卡。
         logger.warning("demucs_separation_failed returncode=%s detail=%s", result.returncode, detail[-1200:])
-        download_failure = any(token in detail.lower() for token in ("download", "http", "connection", "https", "100%|", "0%|", "urlopen"))
-        message = (
-            "混音人声分离失败：Demucs 模型下载或加载未完成。首次运行需要联网下载分离模型；请确认网络可访问，或改上传清晰单人参考人声后重试。"
-            if download_failure else
-            "混音人声分离未生成有效的人声轨。本次不输出逐音分数；请改上传清晰单人参考人声，或查看后端日志中的 Demucs 错误后重试。"
-        )
-        return {"available": False, "source": "demucs_failed", "engine": "demucs", "code": "vocal_separation_failed", "message": message}
+        if "No module named demucs" in detail:
+            message = "未找到可用的 Demucs 分离器。"
+        else:
+            download_failure = any(token in detail.lower() for token in ("download", "http", "connection", "https", "100%|", "0%|", "urlopen"))
+            message = (
+                "Demucs 模型下载或加载未完成。首次运行需要联网下载分离模型。"
+                if download_failure else
+                "Demucs 未生成有效的人声轨。"
+            )
+        if separator_error:
+            message = f"{separator_error}；备用 Demucs 也不可用：{message}"
+        return {"available": False, "source": "vocal_separation_failed", "engine": "audio_separator_then_demucs" if separator_command else "demucs", "code": "vocal_separation_failed", "message": f"{message} 本次不给逐音分数；请查看后端音频分离日志，或上传清晰单人参考人声。"}
     except (ModuleNotFoundError, FileNotFoundError):
-        return {"available": False, "source": "demucs_failed", "engine": "demucs", "code": "vocal_separator_not_installed", "message": "本机未检测到 Audio Separator，也未安装 Demucs。请在项目根目录运行 setup_audio_separator.bat，重启后端并重新分析；也可上传清晰单人参考人声。"}
+        message = "本机未检测到 Demucs。请在项目根目录运行 setup_audio_separator.bat，或上传清晰单人参考人声。"
+        if separator_error:
+            message = f"{separator_error}；同时{message}"
+        return {"available": False, "source": "vocal_separation_failed", "engine": "audio_separator_then_demucs" if separator_command else "demucs", "code": "vocal_separator_not_installed", "message": message}
     except subprocess.TimeoutExpired:
-        return {"available": False, "code": "vocal_separation_timeout", "message": "人声分离超过 10 分钟仍未完成，本次未生成逐音分数。请使用更短的片段或清晰人声参考。"}
-
+        message = "Demucs 人声分离超过 10 分钟仍未完成，本次不输出逐音分数。"
+        if separator_error:
+            message = f"{separator_error}；备用 Demucs 超时。"
+        return {"available": False, "source": "vocal_separation_failed", "engine": "audio_separator_then_demucs" if separator_command else "demucs", "code": "vocal_separation_timeout", "message": f"{message} 请使用更短的片段或清晰单人参考人声。"}
 
 def _align_tracks(recording_path: Path, reference: dict) -> dict:
     """只用可信有声帧进行 DTW；较短旋律可在较长录音中做子序列匹配。"""
