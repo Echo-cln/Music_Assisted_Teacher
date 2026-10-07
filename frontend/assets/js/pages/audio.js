@@ -1,4 +1,4 @@
-import { api, apiUrl } from "../api/client.js?v=20261007-1";
+import { api, apiUrl } from "../api/client.js?v=20261007-2";
 import { esc, loading, notify, pageHeader } from "../utils/dom.js";
 import { drawWaveform } from "../utils/waveform.js";
 import { showModal } from "../components/modal.js";
@@ -203,11 +203,12 @@ function soloResultView(result, player, method) {
   const alignment = diagnostics.alignment || {};
   const hasPitchScore = Boolean(comparison.available || note.available);
   const recordingQuality = quality == null ? "—" : `${Math.round(quality * 100)}%`;
-  const referenceLabel = reference.source === "audio_separator_vocals" ? "RoFormer/UVR 已分离参考人声" : reference.source === "demucs_vocals" ? "Demucs 已分离参考人声" : reference.source === "clean_vocal" ? "清晰单人参考人声" : reference.available === false ? "混音分离失败" : "待确认";
+  const referenceLabel = reference.source === "audio_separator_vocals" ? "RoFormer/UVR 已分离参考人声" : reference.source === "demucs_vocals" ? "Demucs 已分离参考人声" : reference.source === "audio_separator_failed" ? "BS-RoFormer 分离失败" : reference.source === "demucs_failed" ? "Demucs 分离失败" : reference.source === "clean_vocal" ? "清晰单人参考人声" : reference.available === false ? "混音分离失败" : "待确认";
   const separationFailed = reference.available === false || referenceLabel === "混音分离失败";
   const diagnosticsPanel = `<section class="solo-check-panel"><div class="solo-check-heading"><span class="eyebrow">ASSESSMENT CHECK</span><h3>本次逐音评测条件</h3></div><div class="solo-check-grid"><div><small>练唱人声可用度 <span>（不是得分）</span></small><b>${recordingQuality}</b></div><div><small>参考主旋律来源</small><b>${esc(referenceLabel)}</b></div>${alignment.reference_voiced_ratio != null ? `<div><small>参考音频可用人声</small><b>${Math.round(alignment.reference_voiced_ratio * 100)}%</b></div><div><small>练唱对齐可用人声</small><b>${alignment.recording_voiced_ratio == null ? "—" : `${Math.round(alignment.recording_voiced_ratio * 100)}%`}</b></div>` : ""}</div></section>`;
+  const separationReason = readableReferenceFailure(reference.message);
   const noScoreCopy = separationFailed
-    ? `练唱人声可用度 ${recordingQuality} 不是得分。参考文件是混音，但没有分离出可用的人声音轨，因此系统没有进行逐音对齐。可先上传清晰的单人参考人声；若要继续用混音，请检查后端音源分离日志后重试。`
+    ? `练唱人声可用度 ${recordingQuality} 不是得分。参考文件是混音，但没有分离出可用的人声音轨，因此系统没有进行逐音对齐。${separationReason ? `本次诊断：${separationReason}` : "请上传清晰单人参考人声，或查看后端分离日志后重试。"}`
     : readableReferenceFailure(note.message || comparison.message || reference.message);
   const referenceStatus = !hasPitchScore ? `<section class="solo-no-score"><div><span class="eyebrow">PITCH ASSESSMENT</span><h3>本次未生成逐音分数</h3></div><p>${esc(noScoreCopy)}</p></section>` : "";
   const comparisonCard = comparison.available ? `<section class="intonation-card"><div><span class="eyebrow">PITCH ALIGNMENT</span><h3>参考主旋律对齐</h3><p>${esc(comparison.message)}</p></div><div class="intonation-score"><b>${comparison.intonation_score}</b><span>${esc(comparison.status)}</span></div><div class="analysis-summary"><span>中位偏差 <b>${comparison.median_deviation_cents} cents</b></span><span>偏差帧 <b>${comparison.off_pitch_ratio}%</b></span></div></section>` : "";
