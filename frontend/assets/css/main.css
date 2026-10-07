@@ -783,3 +783,15 @@ td small { color: var(--muted); }
   .auth-feature-pills span { gap: 5px; }
   .auth-card { padding: 21px 18px; border-radius: 21px; }
 }
+
+/* 音频记录操作并排；课堂反馈右栏从与主表单相同的顶边开始。 */
+.archive-actions { align-content: start; }
+.archive-action-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.archive-action-buttons > .btn { width: 100%; min-height: 42px; margin: 0; white-space: nowrap; }
+.archive-action-buttons > .btn[data-import-analysis] { justify-content: center; }
+.feedback-layout > .side-stack { align-self: start; align-content: start; position: static; top: auto; margin: 0; padding: 0; }
+.feedback-layout > .side-stack > .feedback-record-card { align-self: start; margin: 0; }
+.danger-link { color: #a34536 !important; }
+@media (max-width: 760px) {
+  .archive-action-buttons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
