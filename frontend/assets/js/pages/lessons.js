@@ -1,6 +1,6 @@
-import { api, apiUrl } from "../api/client.js?v=20261007-2";
+import { api, apiUrl } from "../api/client.js?v=20261007-3";
 import { lessonView } from "../components/lesson.js?v=20261007-2";
-import { openSavedAudioAnalysis } from "./audio.js?v=20261007-2";
+import { openSavedAudioAnalysis } from "./audio.js?v=20261007-3";
 import { showModal } from "../components/modal.js";
 import { esc, notify, pageHeader } from "../utils/dom.js";
 import { exportLessonPdf, exportLessonWord } from "../utils/lesson-export.js?v=20261007-2";
@@ -44,7 +44,7 @@ export async function renderLessons(container) {
     rows.querySelectorAll("button[data-delete-lesson]").forEach(button => button.onclick = async () => {
       const plan = plans.find(item => item.id === Number(button.dataset.deleteLesson));
       if (!plan) return;
-      const confirmed = window.confirm("确定删除《" + plan.title + "》？此操作也会删除关联的课堂反馈、课堂记录及音频分析记录，不能撤销。");
+      const confirmed = window.confirm("确定删除《" + plan.title + "》？教案删除后无法恢复；关联的音频分析会保留，已有课堂记录的教案需要先处理课堂记录。");
       if (!confirmed) return;
       button.disabled = true;
       try {
