@@ -32,6 +32,7 @@ export function lessonView(plan) {
   const strategy = content.generation_strategy || plan.generation_strategy;
   const strategyLabel = strategy === "fast" ? "快速模式" : strategy === "deep" ? "深度模式" : "历史教案";
   const sourceLabel = content.generation_source === "ai" ? "模型生成" : content.generation_source === "rules" ? "基础生成" : "";
+  const flow = (Array.isArray(content.timeline) ? content.timeline : []).map((item, index) => stageCard(item || {}, index)).join("") || '<p class="muted lesson-flow-empty">这份教案还没有课堂流程。</p>'
   return `<article class="lesson" id="lessonDocument">
     <header class="lesson-hero"><div><span>课堂设计 · ${esc(strategyLabel)}${sourceLabel ? ` · ${esc(sourceLabel)}` : ""}</span><h2>${esc(content.title || plan.title || "音乐教案")}</h2><p>${esc(summary.class_name || plan.class_name || "通用班级")} · ${esc(summary.duration || plan.duration_minutes || "—")} 分钟 · ${esc(summary.region || "—")}</p><button class="btn soft lesson-start-teaching" type="button" data-teaching-start>进入授课视图</button></div><div class="lesson-hero-badge"><b>${esc(song.mood || "音乐课")}</b><small>${esc(song.song_type || "课堂设计")}</small></div></header>
     <div class="lesson-summary"><div><small>建议音域</small><b>${esc(summary.range_note || song.range_note || "—")}</b></div><div><small>歌曲难度</small><b>${esc(summary.difficulty || song.difficulty || "—")}</b></div><div><small>课堂重点</small><b>${esc(basis.primary || "听唱与表达")}</b></div><div><small>适用班级</small><b>${esc(summary.class_name || plan.class_name || "—")}</b></div></div>
