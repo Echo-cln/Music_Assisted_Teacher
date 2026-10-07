@@ -14,7 +14,7 @@ from app.core.security import get_current_teacher
 from app.db.session import SessionLocal, get_db
 from app.models.entities import AudioAnalysis, AudioAnalysisJob, AudioAsset, ClassroomRecord, LessonPlan, Song, Teacher
 from app.repositories.song_repository import SongRepository
-from app.services.audio_service import _prepare_reference, analyze_singing, assess_note_accuracy, compare_intonation, compare_waveforms, load_waveform, save_upload
+from app.services.audio_service import _prepare_reference, _same_audio_content, analyze_singing, assess_note_accuracy, compare_intonation, compare_waveforms, load_waveform, save_upload
 from app.services.object_storage import ObjectStorageError, download_object, is_remote_ref, materialize_file, upload_app_file
 from app.services.classroom_insight_service import build_classroom_model_insight
 
@@ -106,8 +106,11 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
         if report: report(52, "正在准备参考主旋律")
         if reference_path and song.owner_teacher_id == teacher_id:
             song.original_audio_path = reference_storage_ref
-        if reference_kind == "mixed" and report: report(60, "正在分离混音参考中的人声")
-        prepared_reference = _prepare_reference(reference_path, reference_kind)
+        identical_pair = _same_audio_content(recording_path, reference_path)
+        effective_reference_kind = "identical" if identical_pair else reference_kind
+        if effective_reference_kind == "mixed" and report: report(60, "正在分离混音参考中的人声")
+        elif identical_pair and report: report(60, "检测到两份音频完全一致，跳过分离并进行对齐")
+        prepared_reference = _prepare_reference(reference_path, effective_reference_kind)
         if report: report(76, "正在将练唱与参考主旋律逐音对齐")
         intonation = compare_intonation(recording_path, prepared_reference)
         aligned = intonation.pop("_aligned", None)
@@ -115,9 +118,23 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
         # 只画可供逐音评测的人声参考。若上传的是混音，这里使用 Demucs
         # 已分离出的 vocals，而不是把整段伴奏与练唱人声错误地拿来比较。
         reference_waveform = None
+        reference_preview_only = False
         if prepared_reference.get("available") and prepared_reference.get("path"):
             reference_waveform = load_waveform(Path(prepared_reference["path"]))[0]
-        waveform_comparison = compare_waveforms(reference_waveform, recording_waveform)
+        elif reference_path:
+            # 分离失败也展示红蓝波形供教师核对输入；原始混音只预览，不参与评分。
+            reference_waveform = load_waveform(reference_path)[0]
+            reference_preview_only = True
+        waveform_comparison = compare_waveforms(
+            reference_waveform if not reference_preview_only else None,
+            recording_waveform,
+        )
+        if reference_preview_only:
+            waveform_comparison.update({
+                "reference_waveform": reference_waveform,
+                "recording_waveform": recording_waveform,
+                "reference_waveform_preview_only": True,
+            })
         if report: report(88, "正在汇总逐音偏差与可信度")
         quality = acoustic.get("classroom_evidence", {}).get("quality", {})
         result = {
@@ -128,12 +145,18 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
             "analysis_method": ["先检查练唱录音可用人声比例。", "清晰人声直接使用；原唱/伴奏混音先用 Audio Separator / BS-RoFormer，未安装时再尝试 Demucs。", "以 DTW 对齐主旋律，再按稳定音符片段计算 cents 偏差。"],
             "solo_diagnostics": {
                 "recording_voiced_ratio": quality.get("voiced_ratio"),
+                "identical_uploads": identical_pair,
                 "reference": {k: prepared_reference.get(k) for k in ("available", "source", "code", "message")},
                 "alignment": intonation.get("diagnostics", {}),
             },
             "scores": {}, "segment_feedback": [], "findings": [], "suggestions": [], "classroom_evidence": {},
             **waveform_comparison,
-            "reference_waveform_label": "已分离人声参考（红）" if prepared_reference.get("source") in {"demucs_vocals", "audio_separator_vocals"} else "参考旋律（红）",
+            "reference_waveform_label": (
+                "原始参考音频（红 · 仅预览，未参与评分）" if reference_preview_only else
+                "相同参考音频（红）" if prepared_reference.get("source") == "identical_audio_pair" else
+                "已分离人声参考（红）" if prepared_reference.get("source") in {"demucs_vocals", "audio_separator_vocals"} else
+                "参考旋律（红）"
+            ),
             "recording_waveform_label": "我的练唱（蓝）",
             "intonation_comparison": intonation, "note_assessment": note_assessment,
         }
