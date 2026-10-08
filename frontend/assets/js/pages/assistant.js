@@ -440,11 +440,13 @@ function renderPreview(area, generating = false, job = null) {
     const list = area.querySelector("[data-manual-timeline]");
     list.insertAdjacentHTML("beforeend", manualStageEditor({ stage: "新教学环节", minutes: 5 }, -1));
   });
-  area.querySelectorAll("[data-manual-remove-stage]").forEach(button => button.addEventListener("click", () => {
+  area.querySelector("[data-manual-timeline]")?.addEventListener("click", event => {
+    const button = event.target.closest("[data-manual-remove-stage]");
+    if (!button) return;
     const list = area.querySelector("[data-manual-timeline]");
     if (list.querySelectorAll("[data-manual-stage]").length <= 1) return notify("课堂流程至少保留一个环节");
     button.closest("[data-manual-stage]")?.remove();
-  }));
+  });
 }
 function generationStepView(job) {
   const steps = job?.steps || [];
