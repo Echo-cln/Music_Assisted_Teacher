@@ -3,5 +3,10 @@
   "name": "music-assisted-teacher",
   "buildCommand": "echo 'Static frontend: no build step required'",
   "installCommand": "echo 'Static frontend: no packages to install'",
-  "outputDirectory": "frontend"
+  "outputDirectory": "frontend",
+  "cloudFunctions": {
+    "python": {
+      "maxDuration": 120
+    }
+  }
 }
