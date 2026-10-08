@@ -18,7 +18,7 @@ function adjustmentChanges(before, after) {
   const to = after?.content || after || {};
   const changes = [];
   const fields = [
-    ["objectives", "教学目标"], ["key_points", "教学重点"], ["difficulties", "教学难点"],
+    ["title", "教案标题"], ["objectives", "教学目标"], ["key_points", "教学重点"], ["difficulties", "教学难点"],
     ["preparation", "课前准备"], ["theory_explanation", "乐理讲解"], ["mistake_practice", "易错点练习"],
     ["differentiation", "分层教学"], ["assessment", "课堂评价"],
   ];
@@ -26,9 +26,9 @@ function adjustmentChanges(before, after) {
   const beforeTimeline = from.timeline || [], afterTimeline = to.timeline || [];
   afterTimeline.forEach((stage, index) => {
     const old = beforeTimeline[index] || {};
-    if (normalizeText(old.teacher) !== normalizeText(stage.teacher) || normalizeText(old.students) !== normalizeText(stage.students)) {
-      changes.push({ label: `课堂流程 · ${stage.stage || `第 ${index + 1} 环节`}`, detail: "教师组织或学生任务已更新" });
-    }
+    const changed = ["stage", "minutes", "teacher", "students", "device_action", "look_for", "low_device_option"]
+      .some(key => normalizeText(old[key]) !== normalizeText(stage[key]));
+    if (changed) changes.push({ label: `课堂流程 · ${stage.stage || `第 ${index + 1} 环节`}`, detail: "环节安排、时间或观察任务已更新" });
   });
   return changes.slice(0, 6);
 }
@@ -309,17 +309,141 @@ function disableActions(generating) {
   save.textContent = currentPlan?.is_saved ? "已保存到教案与课堂记录" : generating ? "完善完成后可保存" : "保存教案";
 }
 
+
+function manualEditorField(label, path, value, rows) {
+  const text = Array.isArray(value) ? value.join("\n") : String(value ?? "");
+  return '<label class="full">' + esc(label) + '<textarea data-content-path="' + esc(path) + '" rows="' + (rows || 3) + '">' + esc(text) + '</textarea></label>';
+}
+function manualStageEditor(item, index) {
+  item = item || {};
+  const val = key => esc(item[key] == null ? "" : item[key]);
+  return '<article class="manual-stage-editor" data-manual-stage data-original-index="' + index + '">' +
+    '<header><b>' + esc(item.stage || ("教学环节 " + (index + 1))) + '</b><button class="link danger-link" type="button" data-manual-remove-stage>移除此环节</button></header>' +
+    '<div class="form-grid"><label>环节名称<input data-stage-field="stage" value="' + val("stage") + '"></label>' +
+    '<label>计划时长（分钟）<input data-stage-field="minutes" type="number" min="1" max="120" value="' + esc(item.minutes == null ? 5 : item.minutes) + '"></label>' +
+    manualEditorField("教师活动", "teacher", item.teacher, 4) +
+    manualEditorField("学生活动", "students", item.students, 4) +
+    manualEditorField("设备安排", "device_action", item.device_action, 2) +
+    manualEditorField("本段观察", "look_for", item.look_for, 2) +
+    manualEditorField("设备不足时的替代做法", "low_device_option", item.low_device_option, 2) + '</div></article>';
+}
+function manualEditorMarkup(content) {
+  content = content || {};
+  const theory = content.theory_explanation || {};
+  const mistake = content.mistake_practice || {};
+  const stages = Array.isArray(content.timeline) ? content.timeline : [];
+  return '<section class="manual-plan-editor" data-manual-editor>' +
+    '<div class="manual-editor-intro"><span class="eyebrow">TEACHER EDIT</span><h3>手动编辑教案</h3><p>可直接修改教案正文和课堂环节。应用后先检查预览，再点击“保存教案”写入档案。</p></div>' +
+    '<div class="form-grid"><label class="full">教案标题<input data-content-path="title" value="' + esc(content.title || "") + '"></label>' +
+    manualEditorField("教师补充要求", "teacher_requirements", content.teacher_requirements, 2) +
+    manualEditorField("教学目标（每行一项）", "objectives", content.objectives, 4) +
+    manualEditorField("教学重点", "key_points", content.key_points, 3) +
+    manualEditorField("教学难点", "difficulties", content.difficulties, 3) +
+    manualEditorField("课前准备", "preparation", content.preparation, 3) +
+    manualEditorField("乐理标题", "theory_explanation.term", theory.term, 2) +
+    manualEditorField("乐理讲解", "theory_explanation.script", theory.script, 4) +
+    manualEditorField("易错表现", "mistake_practice.problem", mistake.problem, 2) +
+    manualEditorField("纠正练习", "mistake_practice.correction", mistake.correction, 3) +
+    manualEditorField("分层教学（每行一项）", "differentiation", content.differentiation, 3) +
+    manualEditorField("课堂评价", "assessment", content.assessment, 3) + '</div>' +
+    '<div class="manual-timeline-head"><div><h4>课堂流程</h4><p>环节名称、时间、师生活动、设备安排和无设备替代做法都可以编辑。</p></div><button class="btn soft" type="button" data-manual-add-stage>＋ 添加环节</button></div>' +
+    '<div class="manual-timeline-list" data-manual-timeline>' + stages.map((item, index) => manualStageEditor(item, index)).join("") + '</div>' +
+    '<div class="manual-editor-actions"><button class="btn primary" type="button" data-manual-apply>应用修改到预览</button><button class="btn soft" type="button" data-manual-cancel>取消</button></div></section>';
+}
+function applyManualEditor(area) {
+  const editor = area.querySelector("[data-manual-editor]");
+  if (!editor || !currentPlan) return;
+  const before = currentPlan;
+  const original = before.content || {};
+  const content = JSON.parse(JSON.stringify(original));
+  editor.querySelectorAll("[data-content-path]").forEach(field => {
+    const parts = field.dataset.contentPath.split(".");
+    let target = content;
+    let source = original;
+    parts.slice(0, -1).forEach(part => {
+      target[part] = target[part] || {};
+      target = target[part];
+      source = source && source[part];
+    });
+    const last = parts[parts.length - 1];
+    const oldValue = source && source[last];
+    const value = field.value.trim();
+    target[last] = Array.isArray(oldValue) ? value.split(/\n+/).map(item => item.trim()).filter(Boolean) : value;
+  });
+  const timeline = Array.from(editor.querySelectorAll("[data-manual-stage]")).map(node => {
+    const oldIndex = Number(node.dataset.originalIndex);
+    const oldStage = Number.isInteger(oldIndex) && oldIndex >= 0 ? (original.timeline || [])[oldIndex] || {} : {};
+    const value = key => {
+      const field = node.querySelector('[data-stage-field="' + key + '"]');
+      return field ? field.value.trim() : "";
+    };
+    return {
+      ...oldStage,
+      stage: value("stage"),
+      minutes: Number(value("minutes")),
+      teacher: value("teacher"),
+      students: value("students"),
+      device_action: value("device_action"),
+      look_for: value("look_for"),
+      low_device_option: value("low_device_option"),
+    };
+  });
+  if (!String(content.title || "").trim()) return notify("教案标题不能为空", "error");
+  if (!timeline.length) return notify("课堂流程至少保留一个环节", "error");
+  if (timeline.some(item => !item.stage || !Number.isFinite(item.minutes) || item.minutes < 1)) {
+    return notify("请填写每个环节的名称和大于 0 的分钟数", "error");
+  }
+  content.timeline = timeline;
+  currentPlan = { ...before, content, is_saved: false };
+  currentPlan.adjustment_changes = adjustmentChanges(before, currentPlan);
+  manualEditing = false;
+  renderPreview(area, false);
+  disableActions(false);
+  notify("修改已应用到预览；点击“保存教案”后才会写入档案。");
+}
+let manualEditing = false;
+
 function renderPreview(area, generating = false, job = null) {
   if (!currentPlan) return;
+  if (generating) manualEditing = false;
   const status = generating
     ? `<div class="ai-preview-banner"><div><b>正在完善教案</b><span>${esc(job?.stage || "切换页面后任务仍会继续")}</span></div><button class="btn soft" id="cancelGenerationInPage">取消本次生成</button></div><div class="generation-progress"><i style="width:${Math.min(100, Math.max(0, Number(job?.progress || 0)))}%"></i></div>${generationStepView(job)}`
     : "";
-  area.innerHTML = `${status}<section class="card lesson-preview-card"><div class="card-head"><div><h3>教案预览</h3><p class="muted">${currentPlan.is_saved ? "已保存到教案与课堂记录" : generating ? "当前显示教案初稿，完善完成后会自动更新" : "未保存：可继续调整，满意后点击右侧“保存教案”"}</p></div></div><div class="lesson-preview-scroll">${lessonView(currentPlan)}</div></section>`;
+  const editButton = !generating && !currentPlan.is_saved && !manualEditing
+    ? '<button class="btn soft" type="button" data-manual-edit-open>手动编辑教案</button>'
+    : "";
+  const previewBody = manualEditing
+    ? manualEditorMarkup(currentPlan.content || {})
+    : '<div class="lesson-preview-scroll">' + lessonView(currentPlan) + '</div>';
+  const hint = currentPlan.is_saved
+    ? "已保存到教案与课堂记录"
+    : generating
+      ? "当前显示教案初稿，完善完成后会自动更新"
+      : "未保存：可手动编辑，也可填写调整要求；完成后点击右侧“保存教案”";
+  area.innerHTML = status + '<section class="card lesson-preview-card"><div class="card-head"><div><h3>教案预览</h3><p class="muted">' + hint + '</p></div>' + editButton + '</div>' + previewBody + '</section>';
   area.querySelector("#cancelGenerationInPage")?.addEventListener("click", async () => {
     try { await cancelActiveGeneration(); } catch (error) { notify(error.message); }
   });
+  area.querySelector("[data-manual-edit-open]")?.addEventListener("click", () => {
+    manualEditing = true;
+    renderPreview(area, false);
+  });
+  area.querySelector("[data-manual-apply]")?.addEventListener("click", () => applyManualEditor(area));
+  area.querySelector("[data-manual-cancel]")?.addEventListener("click", () => {
+    manualEditing = false;
+    renderPreview(area, false);
+  });
+  area.querySelector("[data-manual-add-stage]")?.addEventListener("click", () => {
+    const list = area.querySelector("[data-manual-timeline]");
+    const count = list.querySelectorAll("[data-manual-stage]").length;
+    list.insertAdjacentHTML("beforeend", manualStageEditor({ stage: "新教学环节", minutes: 5 }, -1));
+  });
+  area.querySelectorAll("[data-manual-remove-stage]").forEach(button => button.addEventListener("click", () => {
+    const list = area.querySelector("[data-manual-timeline]");
+    if (list.querySelectorAll("[data-manual-stage]").length <= 1) return notify("课堂流程至少保留一个环节");
+    button.closest("[data-manual-stage]")?.remove();
+  }));
 }
-
 function generationStepView(job) {
   const steps = job?.steps || [];
   if (!steps.length) return "";
