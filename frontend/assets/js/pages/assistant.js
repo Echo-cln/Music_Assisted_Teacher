@@ -52,7 +52,7 @@ export async function renderAssistant(container) {
             <label>课堂偏好<select id="activity"><option>互动与分组合作</option><option>唱游与律动</option><option>地方文化体验</option><option>基础演唱训练</option></select></label>
             ${equipmentControls("smart")}
             <label>生成模式<select id="strategy"><option value="fast">快速模式 · 更快生成完整教案</option><option value="deep" selected>深度模式 · 生成时间较长</option></select></label>
-            <label class="full">本课要求（选填）<textarea id="requirements" placeholder="填写设备条件、学生基础或课堂重点"></textarea></label>
+            <label class="full">本课要求（选填）<textarea id="requirements" placeholder="填写设备条件、学生基础或课堂重点"></textarea></label><small class="muted full">歌曲信息、班级整体特征和本课要求会发送给你配置的模型服务以生成教案；请勿填写学生姓名、联系方式或可识别个人的信息。</small>
             <button class="btn primary" id="recommend">从数据库推荐歌曲</button>
           </div>
           <div id="manualForm" class="form-grid hidden">
@@ -62,7 +62,7 @@ export async function renderAssistant(container) {
             <label>课堂偏好<select id="manualActivity"><option>互动与分组合作</option><option>唱游与律动</option><option>地方文化体验</option></select></label>
             ${equipmentControls("manual")}
             <label>生成模式<select id="manualStrategy"><option value="fast">快速模式 · 更快生成完整教案</option><option value="deep" selected>深度模式 · 生成时间较长</option></select></label>
-            <label class="full">本课要求（选填）<textarea id="manualRequirements" placeholder="填写设备条件、学生基础或课堂重点"></textarea></label>
+            <label class="full">本课要求（选填）<textarea id="manualRequirements" placeholder="填写设备条件、学生基础或课堂重点"></textarea></label><small class="muted full">歌曲信息、班级整体特征和本课要求会发送给你配置的模型服务以生成教案；请勿填写学生姓名、联系方式或可识别个人的信息。</small>
             <button class="btn primary" id="manualGenerate">检索并生成教案</button>
           </div>
           <div id="recommendations"></div>
@@ -70,7 +70,7 @@ export async function renderAssistant(container) {
         <div id="lessonArea"></div>
       </div>
       <aside class="side-stack">
-        <section class="card"><h3>调整与保存</h3><p class="muted">生成期间可在右下角查看进度，也可以切换到其他页面。</p><label>调整要求<textarea id="adjustment" placeholder="写下希望修改的部分"></textarea></label><button class="btn block" id="adjustPlan" disabled>按要求调整预览</button><button class="btn primary block" id="savePlan" disabled>保存教案</button><button class="btn block" id="printPlan" disabled>打印 / 导出 PDF</button></section>
+        <section class="card"><h3>调整与保存</h3><p class="muted">生成期间可在右下角查看进度，也可以切换到其他页面。</p><label>调整要求<textarea id="adjustment" placeholder="写下希望修改的部分"></textarea></label><small class="muted">调整要求也会发送给配置的模型服务；请勿填写学生姓名或其他可识别个人的信息。</small><button class="btn block" id="adjustPlan" disabled>按要求调整预览</button><button class="btn primary block" id="savePlan" disabled>保存教案</button><button class="btn block" id="printPlan" disabled>打印 / 导出 PDF</button></section>
       </aside>
     </div>`;
 

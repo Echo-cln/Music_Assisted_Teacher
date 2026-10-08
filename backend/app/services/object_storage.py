@@ -12,6 +12,8 @@ import mimetypes
 import os
 from pathlib import Path
 import tempfile
+import time
+import uuid
 from urllib.parse import quote, urlsplit
 
 import httpx
@@ -148,7 +150,29 @@ def materialize_file(reference: str | Path) -> Path:
     if not cache_path.is_file():
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         data = download_object(value)
-        temporary = cache_path.with_suffix(cache_path.suffix + ".tmp")
-        temporary.write_bytes(data)
-        os.replace(temporary, cache_path)
+        temporary = cache_path.with_name(f"{cache_path.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            temporary.write_bytes(data)
+            os.replace(temporary, cache_path)
+        finally:
+            temporary.unlink(missing_ok=True)
     return cache_path
+
+
+def cleanup_materialized_cache(max_age_seconds: int = 7 * 24 * 60 * 60) -> int:
+    """Remove stale downloaded media copies; canonical private objects remain in Storage."""
+    cache_dir = Path(tempfile.gettempdir()) / "xiangyin-object-cache"
+    if not cache_dir.exists():
+        return 0
+    cutoff = time.time() - max(60, max_age_seconds)
+    removed = 0
+    for candidate in cache_dir.iterdir():
+        if candidate.is_symlink() or not candidate.is_file():
+            continue
+        try:
+            if candidate.stat().st_mtime < cutoff:
+                candidate.unlink()
+                removed += 1
+        except OSError:
+            continue
+    return removed

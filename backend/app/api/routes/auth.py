@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from email.message import EmailMessage
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.security import clear_login_session, create_login_session, get_current_teacher, hash_password, verify_password
@@ -39,9 +39,24 @@ def request_email_verification(payload: VerificationRequest, db: Session = Depen
     if not all([settings.smtp_host, settings.smtp_username, settings.smtp_password, settings.smtp_from]):
         raise HTTPException(status_code=503, detail="邮件验证码服务尚未配置；请在 backend/.env 配置 SMTP_HOST、SMTP_USERNAME、SMTP_PASSWORD、SMTP_FROM")
     email = payload.email.strip().lower()
+    now = datetime.utcnow()
+    recent = db.scalar(select(VerificationCode.created_at).where(
+        VerificationCode.target == email,
+        VerificationCode.channel == "email",
+        VerificationCode.created_at >= now - timedelta(minutes=1),
+    ).order_by(VerificationCode.created_at.desc()).limit(1))
+    if recent:
+        retry_after = max(1, 60 - int((now - recent).total_seconds()))
+        raise HTTPException(status_code=429, detail="验证码已发送，请稍后再试", headers={"Retry-After": str(retry_after)})
+    issued_last_hour = db.scalar(select(func.count()).select_from(VerificationCode).where(
+        VerificationCode.target == email,
+        VerificationCode.channel == "email",
+        VerificationCode.created_at >= now - timedelta(hours=1),
+    )) or 0
+    if issued_last_hour >= 5:
+        raise HTTPException(status_code=429, detail="此邮箱一小时内的验证码请求已达上限，请稍后再试", headers={"Retry-After": "3600"})
     code = f"{secrets.randbelow(1_000_000):06d}"
-    db.add(VerificationCode(target=email, channel="email", code_hash=_code_hash(code), expires_at=datetime.utcnow() + timedelta(minutes=10)))
-    db.commit()
+    verification = VerificationCode(target=email, channel="email", code_hash=_code_hash(code), expires_at=now + timedelta(minutes=10))
     message = EmailMessage()
     message["Subject"] = "乡音智谱注册验证码"
     message["From"], message["To"] = settings.smtp_from, email
@@ -52,6 +67,11 @@ def request_email_verification(payload: VerificationRequest, db: Session = Depen
             smtp.send_message(message)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"邮件发送失败：{str(exc)[:120]}")
+    db.execute(delete(VerificationCode).where(
+        VerificationCode.expires_at <= now,
+    ))
+    db.add(verification)
+    db.commit()
     return {"message": "验证码已发送，请在 10 分钟内填写"}
 
 

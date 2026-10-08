@@ -263,6 +263,8 @@ OMR_TIMEOUT_SECONDS=180
 
 本地模式下，数据保存在运行服务的这台电脑，不会自动和队友的电脑同步。把数据库地址改为 Supabase 只会连接云端数据库；音频、乐谱等媒体文件还需要配置对象存储，并保证文件本体已上传。团队协作或远程使用前，应另行确认数据库、文件存储、备份、账号安全与网络访问方案。
 
+当前后端的字段范围、外部模型数据流、录音保留方式和仍待补齐的账号级隐私能力见[数据隐私与后端处理说明](docs/DATA_PRIVACY.md)。
+
 ## 技术组成
 
 | 层 | 技术 |
@@ -345,5 +347,6 @@ macOS / Linux：
 - [数字乐器与编曲工作台验收](docs/WORKBENCH_ACCEPTANCE.md)
 - [模型与音频可靠性说明](docs/LLM_AND_AUDIO_RELIABILITY.md)
 - [SQLite 数据迁移说明](docs/SUPABASE_SQLITE_MIGRATION.md)
+- [数据隐私与后端处理说明](docs/DATA_PRIVACY.md)
 
 - [本机混音人声分离安装与验收](docs/AUDIO_SEPARATION_SETUP.md)

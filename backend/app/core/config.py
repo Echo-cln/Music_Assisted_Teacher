@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     database_url: str = f"sqlite:///{BACKEND_DIR / 'data' / 'zhiban.db'}"
     upload_dir: str = str(BACKEND_DIR / "data" / "uploads")
+    audio_max_upload_bytes: int = 104857600
     # Private object storage for media shared by local and hosted backends.
     supabase_url: str = ""
     supabase_service_role_key: str = ""
@@ -65,6 +66,10 @@ class Settings(BaseSettings):
     )
 
     def model_post_init(self, __context) -> None:
+        # Hosted sessions must not be sent over plain HTTP. Local development stays
+        # configurable so http://127.0.0.1 can keep working.
+        if self.app_env.lower() in {"production", "prod"}:
+            self.session_cookie_secure = True
         # Vercel 的部署目录是只读的；未接入生产数据库前，允许它以临时
         # SQLite 演示模式启动，而不是在建表时直接失败。数据不会跨实例保存。
         if os.getenv("VERCEL") and self.database_url.startswith("sqlite"):

@@ -1,10 +1,14 @@
+import json
 import secrets
+from datetime import datetime, timedelta
+from pathlib import Path
 
-from sqlalchemy import inspect, text
+from sqlalchemy import delete, inspect, or_, select, text, update
 
+from app.core.config import get_settings
 from app.db.session import Base, SessionLocal, engine
 from app.models import entities  # noqa: F401
-from app.models.entities import Teacher
+from app.models.entities import AudioAnalysisJob, AuthSession, Teacher, VerificationCode
 
 
 TENANT_COLUMNS = {
@@ -94,3 +98,47 @@ def _upgrade_legacy_sqlite() -> None:
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _upgrade_legacy_sqlite()
+    _cleanup_expired_auth_data()
+
+
+def _cleanup_expired_auth_data() -> None:
+    """Drop unusable login sessions and one-time codes instead of retaining them indefinitely."""
+    now = datetime.utcnow()
+    with SessionLocal() as db:
+        _clear_audio_job_inputs(db)
+        db.execute(delete(AuthSession).where(AuthSession.expires_at <= now))
+        db.execute(delete(VerificationCode).where(or_(VerificationCode.expires_at <= now, VerificationCode.consumed_at.is_not(None))))
+        db.commit()
+
+
+def _clear_audio_job_inputs(db) -> None:
+    """Scrub old path-bearing payloads and clean inputs from long-interrupted tasks."""
+    upload_root = Path(get_settings().upload_dir).resolve()
+    stale_before = datetime.utcnow() - timedelta(hours=24)
+    jobs = db.scalars(select(AudioAnalysisJob).where(
+        AudioAnalysisJob.status.in_(("pending", "running")),
+        AudioAnalysisJob.updated_at <= stale_before,
+    )).all()
+    for job in jobs:
+        try:
+            payload = json.loads(job.request_json or "{}")
+        except (TypeError, json.JSONDecodeError):
+            payload = {}
+        for key in ("recording_path", "reference_path"):
+            raw_path = payload.get(key)
+            if not raw_path:
+                continue
+            try:
+                candidate = Path(raw_path).resolve()
+                candidate.relative_to(upload_root)
+                candidate.unlink(missing_ok=True)
+            except (OSError, ValueError):
+                continue
+        job.status = "failed"
+        job.stage = "任务超时，已清理临时输入"
+        job.error_message = "任务超过 24 小时没有更新，未保存本次结果；请重新上传后重试。"
+        job.request_json = "{}"
+    db.execute(update(AudioAnalysisJob).where(
+        AudioAnalysisJob.status.notin_(("pending", "running")),
+        AudioAnalysisJob.request_json != "{}",
+    ).values(request_json="{}"))

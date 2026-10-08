@@ -24,6 +24,41 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_AUDIO_EXTENSIONS = {
+    ".wav", ".mp3", ".m4a", ".mp4", ".aac", ".flac", ".ogg", ".oga",
+    ".opus", ".webm", ".wma", ".aif", ".aiff",
+}
+
+
+class AudioUploadError(ValueError):
+    status_code = 422
+
+
+class UnsupportedAudioUpload(AudioUploadError):
+    status_code = 415
+
+
+class AudioUploadTooLarge(AudioUploadError):
+    status_code = 413
+
+
+def validate_upload(file: UploadFile) -> None:
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in ALLOWED_AUDIO_EXTENSIONS:
+        allowed = ", ".join(sorted(ALLOWED_AUDIO_EXTENSIONS))
+        raise UnsupportedAudioUpload(f"不支持此音频格式；请选择 {allowed} 中的文件")
+    try:
+        file.file.seek(0, 2)
+        size = file.file.tell()
+        file.file.seek(0)
+    except (AttributeError, OSError):
+        size = None
+    if size == 0:
+        raise AudioUploadError("音频文件为空")
+    max_bytes = max(1, int(get_settings().audio_max_upload_bytes))
+    if size is not None and size > max_bytes:
+        raise AudioUploadTooLarge(f"单个音频文件不能超过 {max(1, max_bytes // (1024 * 1024))} MB")
+
 
 @dataclass
 class PitchTrack:
@@ -35,12 +70,26 @@ class PitchTrack:
 
 
 def save_upload(file: UploadFile, folder: str) -> Path:
+    validate_upload(file)
+    max_bytes = max(1, int(get_settings().audio_max_upload_bytes))
     target_dir = Path(get_settings().upload_dir) / folder
     target_dir.mkdir(parents=True, exist_ok=True)
     suffix = Path(file.filename or "audio.wav").suffix.lower()
     target = target_dir / f"{uuid.uuid4().hex}{suffix}"
-    with target.open("wb") as output:
-        shutil.copyfileobj(file.file, output)
+    total = 0
+    try:
+        file.file.seek(0)
+        with target.open("wb") as output:
+            while chunk := file.file.read(1024 * 1024):
+                total += len(chunk)
+                if total > max_bytes:
+                    raise AudioUploadTooLarge(f"单个音频文件不能超过 {max(1, max_bytes // (1024 * 1024))} MB")
+                output.write(chunk)
+        if total == 0:
+            raise AudioUploadError("音频文件为空")
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
     return target
 
 

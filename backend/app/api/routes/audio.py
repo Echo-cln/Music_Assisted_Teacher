@@ -12,10 +12,11 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_teacher
+from app.core.config import get_settings
 from app.db.session import SessionLocal, get_db
 from app.models.entities import AudioAnalysis, AudioAnalysisJob, AudioAsset, ClassroomRecord, Feedback, LessonPlan, Song, Teacher
 from app.repositories.song_repository import SongRepository
-from app.services.audio_service import _prepare_reference, analyze_singing, assess_note_accuracy, compare_intonation, compare_waveforms, load_waveform, save_upload
+from app.services.audio_service import AudioUploadError, _prepare_reference, analyze_singing, assess_note_accuracy, compare_intonation, compare_waveforms, load_waveform, save_upload, validate_upload
 from app.services.object_storage import ObjectStorageError, delete_object, download_object, is_remote_ref, materialize_file, upload_app_file
 from app.services.classroom_insight_service import build_classroom_model_insight
 
@@ -23,6 +24,58 @@ router = APIRouter(prefix="/audio", tags=["音频"])
 logger = logging.getLogger(__name__)
 # 音频解码和音高估计是 CPU 密集型任务。限制为两个工作线程，避免多次上传拖慢全部 API。
 audio_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="audio-analysis")
+
+
+def _cleanup_uploaded_file(path: str | Path | None) -> None:
+    """Delete only request uploads below UPLOAD_DIR; never remove catalog files or cache entries."""
+    if not path:
+        return
+    try:
+        root = Path(get_settings().upload_dir).resolve()
+        candidate = Path(path).resolve()
+        candidate.relative_to(root)
+    except (OSError, ValueError):
+        return
+    candidate.unlink(missing_ok=True)
+
+
+def _save_request_uploads(teacher_id: int, recording: UploadFile, original: UploadFile | None) -> tuple[Path, Path | None]:
+    for upload in (recording, original):
+        if upload is None:
+            continue
+        try:
+            validate_upload(upload)
+        except AudioUploadError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    saved: list[Path] = []
+    try:
+        recording_path = save_upload(recording, f"recordings/{teacher_id}")
+        saved.append(recording_path)
+        reference_path = save_upload(original, f"originals/{teacher_id}") if original else None
+        if reference_path:
+            saved.append(reference_path)
+        return recording_path, reference_path
+    except AudioUploadError as exc:
+        for path in saved:
+            _cleanup_uploaded_file(path)
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except Exception:
+        for path in saved:
+            _cleanup_uploaded_file(path)
+        raise
+
+
+def _private_audio_label(path: Path, role: str) -> str:
+    """Do not persist a user-supplied filename, which may contain student names."""
+    return f"{role}{path.suffix.lower()}"
+
+
+def _cleanup_uncommitted_remote_files(references: list[str]) -> None:
+    for reference in references:
+        try:
+            delete_object(reference)
+        except ObjectStorageError as exc:
+            logger.error("audio_orphan_cleanup_failed error_type=%s", type(exc).__name__)
 
 
 def _check_request(db: Session, teacher: Teacher, song_id: int, lesson_plan_id: int | None, classroom_record_id: int | None, analysis_mode: str, has_original: bool):
@@ -49,7 +102,7 @@ def _check_request(db: Session, teacher: Teacher, song_id: int, lesson_plan_id: 
 def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: int | None, classroom_record_id: int | None,
                     analysis_mode: str, recording_path: Path, recording_name: str, recording_type: str,
                     reference_path: Path | None, reference_name: str | None, reference_type: str | None, reference_kind: str,
-                    report=None, consent_confirmed_at: str | None = None):
+                    report=None, consent_confirmed_at: str | None = None, uploaded_refs: list[str] | None = None):
     # 两个模式共享解码和录音质量检测；结果模型和页面输出完全分开。
     if report: report(10, "正在解码录音并校验时长")
     recording_waveform, recording_duration = load_waveform(recording_path)
@@ -61,7 +114,11 @@ def _build_analysis(db: Session, teacher_id: int, song: Song, lesson_plan_id: in
 
     try:
         recording_storage_ref = upload_app_file(recording_path, teacher_id, "recordings")
+        if uploaded_refs is not None and is_remote_ref(recording_storage_ref):
+            uploaded_refs.append(recording_storage_ref)
         reference_storage_ref = upload_app_file(reference_path, teacher_id, "references") if reference_path else None
+        if uploaded_refs is not None and reference_storage_ref and is_remote_ref(reference_storage_ref):
+            uploaded_refs.append(reference_storage_ref)
     except ObjectStorageError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -183,6 +240,10 @@ def _update_job(job_id: str, progress: int, stage: str):
 
 def _run_job(job_id: str):
     db = SessionLocal()
+    payload: dict = {}
+    preserve_uploads = False
+    uploaded_refs: list[str] = []
+    preserve_remote_refs = False
     try:
         job = db.get(AudioAnalysisJob, job_id)
         if not job:
@@ -203,13 +264,20 @@ def _run_job(job_id: str):
             payload.get("classroom_record_id"), payload["analysis_mode"], Path(payload["recording_path"]),
             payload["recording_name"], payload["recording_type"], Path(payload["reference_path"]) if payload.get("reference_path") else None,
             payload.get("reference_name"), payload.get("reference_type"), payload.get("reference_kind", "mixed"), report,
-            payload.get("consent_confirmed_at"))
+            payload.get("consent_confirmed_at"), uploaded_refs)
         db.refresh(job)
         if job.status == "cancelled":
             db.rollback()
+            cancelled_job = db.get(AudioAnalysisJob, job_id)
+            if cancelled_job:
+                cancelled_job.request_json = "{}"
+                db.commit()
             return
         job.analysis_id, job.status, job.progress, job.stage = analysis.id, "completed", 100, "分析完成，结果已保存"
+        job.request_json = "{}"
         db.commit()
+        preserve_uploads = db.bind.dialect.name == "sqlite"
+        preserve_remote_refs = True
         logger.info("audio_job_completed job_id=%s analysis_id=%s", job.id, analysis.id)
     except Exception as exc:
         logger.exception("audio_job_failed job_id=%s error=%s", job_id, exc)
@@ -217,8 +285,17 @@ def _run_job(job_id: str):
         job = db.get(AudioAnalysisJob, job_id)
         if job and job.status != "cancelled":
             job.status, job.stage, job.error_message = "failed", "音频分析失败", str(exc)[:500]
+            job.request_json = "{}"
+            db.commit()
+        elif job:
+            job.request_json = "{}"
             db.commit()
     finally:
+        if not preserve_remote_refs:
+            _cleanup_uncommitted_remote_files(uploaded_refs)
+        for key in ("recording_path", "reference_path"):
+            if not preserve_uploads:
+                _cleanup_uploaded_file(payload.get(key))
         db.close()
 
 
@@ -252,22 +329,31 @@ def analyze_audio(
         raise HTTPException(status_code=422, detail="分析课堂录音前，请确认已完成录音告知与处理授权")
     consent_confirmed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     song, classroom_record_id = _check_request(db, teacher, song_id, lesson_plan_id, classroom_record_id, analysis_mode, bool(original))
-    recording_path = save_upload(recording, f"recordings/{teacher.id}")
-    reference_path: Path | None = None
-    if original:
-        reference_path = save_upload(original, f"originals/{teacher.id}")
-    elif song.original_audio_path:
-        try:
-            reference_path = materialize_file(song.original_audio_path)
-        except ObjectStorageError:
-            reference_path = None
-    analysis, recording_asset, reference_asset = _build_analysis(db, teacher.id, song, lesson_plan_id, classroom_record_id,
-        analysis_mode, recording_path, recording.filename or recording_path.name, recording.content_type or "application/octet-stream",
-        reference_path, (original.filename if original else reference_path.name) if reference_path else None,
-        (original.content_type if original else "audio/mpeg") if reference_path else None, reference_kind,
-        consent_confirmed_at=consent_confirmed_at)
-    db.commit()
-    return _serialize_analysis(analysis, song, recording_asset, reference_asset)
+    recording_path, reference_path = _save_request_uploads(teacher.id, recording, original)
+    keep_local_uploads = False
+    uploaded_refs: list[str] = []
+    preserve_remote_refs = False
+    try:
+        if not original and song.original_audio_path:
+            try:
+                reference_path = materialize_file(song.original_audio_path)
+            except ObjectStorageError:
+                reference_path = None
+        analysis, recording_asset, reference_asset = _build_analysis(db, teacher.id, song, lesson_plan_id, classroom_record_id,
+            analysis_mode, recording_path, _private_audio_label(recording_path, "课堂录音"), recording.content_type or "application/octet-stream",
+            reference_path, _private_audio_label(reference_path, "参考音源") if reference_path else None,
+            (original.content_type if original else "audio/mpeg") if reference_path else None, reference_kind,
+            consent_confirmed_at=consent_confirmed_at, uploaded_refs=uploaded_refs)
+        db.commit()
+        keep_local_uploads = db.bind.dialect.name == "sqlite"
+        preserve_remote_refs = True
+        return _serialize_analysis(analysis, song, recording_asset, reference_asset)
+    finally:
+        if not preserve_remote_refs:
+            _cleanup_uncommitted_remote_files(uploaded_refs)
+        if not keep_local_uploads:
+            _cleanup_uploaded_file(recording_path)
+            _cleanup_uploaded_file(reference_path)
 
 
 @router.post("/jobs", status_code=202)
@@ -278,25 +364,39 @@ def create_audio_job(song_id: int = Form(...), lesson_plan_id: int | None = Form
         raise HTTPException(status_code=422, detail="分析课堂录音前，请确认已完成录音告知与处理授权")
     consent_confirmed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     song, classroom_record_id = _check_request(db, teacher, song_id, lesson_plan_id, classroom_record_id, analysis_mode, bool(original))
-    recording_path = save_upload(recording, f"recordings/{teacher.id}")
-    if original:
-        reference_path = save_upload(original, f"originals/{teacher.id}")
-    elif song.original_audio_path:
-        try:
-            reference_path = materialize_file(song.original_audio_path)
-        except ObjectStorageError:
-            reference_path = None
-    else:
-        reference_path = None
+    recording_path, reference_path = _save_request_uploads(teacher.id, recording, original)
+    try:
+        if not original and song.original_audio_path:
+            try:
+                reference_path = materialize_file(song.original_audio_path)
+            except ObjectStorageError:
+                reference_path = None
+    except Exception:
+        _cleanup_uploaded_file(recording_path)
+        _cleanup_uploaded_file(reference_path)
+        raise
     job = AudioAnalysisJob(id=str(uuid.uuid4()), teacher_id=teacher.id, status="pending", stage="音频已保存，等待后台分析", progress=3,
         request_json=json.dumps({"song_id": song.id, "lesson_plan_id": lesson_plan_id, "classroom_record_id": classroom_record_id,
-          "analysis_mode": analysis_mode, "recording_path": str(recording_path), "recording_name": recording.filename or recording_path.name,
+          "analysis_mode": analysis_mode, "recording_path": str(recording_path), "recording_name": _private_audio_label(recording_path, "课堂录音"),
           "recording_type": recording.content_type or "application/octet-stream", "reference_path": str(reference_path) if reference_path else None,
-          "reference_name": (original.filename if original else reference_path.name) if reference_path else None,
+          "reference_name": _private_audio_label(reference_path, "参考音源") if reference_path else None,
           "reference_type": (original.content_type if original else "audio/mpeg") if reference_path else None,
           "reference_kind": reference_kind, "consent_confirmed_at": consent_confirmed_at}, ensure_ascii=False))
-    db.add(job); db.commit()
-    audio_executor.submit(_run_job, job.id)
+    try:
+        db.add(job); db.commit()
+    except Exception:
+        db.rollback()
+        _cleanup_uploaded_file(recording_path)
+        _cleanup_uploaded_file(reference_path)
+        raise
+    try:
+        audio_executor.submit(_run_job, job.id)
+    except Exception:
+        db.delete(job)
+        db.commit()
+        _cleanup_uploaded_file(recording_path)
+        _cleanup_uploaded_file(reference_path)
+        raise
     return _serialize_job(job, db)
 
 

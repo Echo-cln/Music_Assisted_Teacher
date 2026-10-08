@@ -95,7 +95,7 @@ function bindClassDifferenceTags(root) {
 
 function openClassForm(existing, container) {
   const item = existing || { name: "", grade: 3, student_count: 30, province: "广东", learning_level: "中等", activity_level: "较高", cooperation: "喜欢分组合作", pitch_level: "音准不稳定", rhythm_level: "节奏偏弱", theory_level: "乐理理解较弱", preferred_method: "互动与分组合作", common_problems: "", teacher_notes: "" };
-  const root = showModal(`<div class="modal-head"><div><h2>${existing ? "编辑" : "新建"}班级画像</h2><p>画像字段将直接参与推荐与教案生成。</p></div><button class="close" data-close>×</button></div><form id="classForm" class="form-grid">
+  const root = showModal(`<div class="modal-head"><div><h2>${existing ? "编辑" : "新建"}班级画像</h2><p>班级整体特征会用于推荐与教案生成；教师教学感受只保存在档案，不发送给模型。请勿填写学生姓名、联系方式或可识别个人的信息。</p></div><button class="close" data-close>×</button></div><form id="classForm" class="form-grid">
     <label>班级名称<input name="name" value="${esc(item.name)}" required></label><label>年级<select name="grade" required>${[1,2,3,4,5,6].map(grade => `<option value="${grade}" ${Number(item.grade) === grade ? "selected" : ""}>${grade} 年级</option>`).join("")}</select></label>
     <label>学生人数<input name="student_count" type="number" min="1" max="100" value="${item.student_count}" required></label>${selectable("province", "所在省份", item.province)}
     ${selectable("learning_level", "整体基础", item.learning_level)}${selectable("activity_level", "课堂活跃度", item.activity_level)}

@@ -381,18 +381,30 @@ def build_base_preview(
     return _local_content(song, profile, duration, activity, requirements, _knowledge(db, song, profile, teacher_id))
 
 
+def _external_model_payload(content: dict) -> dict:
+    """Remove local identifiers and free-form private notes before calling a model vendor."""
+    payload = deepcopy(content)
+    context = payload.get("generation_context")
+    if isinstance(context, dict):
+        profile = context.get("class_profile")
+        if isinstance(profile, dict):
+            for field in ("name", "teacher_notes", "common_problems"):
+                profile.pop(field, None)
+    return payload
+
+
 def _chunks(base: dict, generation_strategy: str = "deep") -> tuple[str, Iterator[str]]:
     settings = get_settings()
     configured = bool(settings.ai_fast_api_key or settings.ai_api_key) if generation_strategy == "fast" else bool(settings.ai_api_key)
     if configured:
-        return "ai", stream_lesson_json(base, generation_strategy=generation_strategy)
+        return "ai", stream_lesson_json(_external_model_payload(base), generation_strategy=generation_strategy)
     content = json.dumps(base, ensure_ascii=False)
     return "rules", (content[i : i + 120] for i in range(0, len(content), 120))
 
 
 def _adjustment_chunks(content: dict, instruction: str) -> tuple[str, Iterator[str]]:
     if get_settings().ai_api_key:
-        return "ai", stream_adjusted_lesson_json(content, instruction)
+        return "ai", stream_adjusted_lesson_json(_external_model_payload(content), instruction)
     adjusted = json.loads(json.dumps(content, ensure_ascii=False))
     adjusted["teacher_requirements"] = instruction
     raw = json.dumps(adjusted, ensure_ascii=False)
