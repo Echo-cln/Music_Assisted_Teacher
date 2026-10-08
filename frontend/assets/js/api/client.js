@@ -18,8 +18,15 @@ async function responseError(response, path) {
     detail = detail.map(item => item?.msg || JSON.stringify(item)).join("；");
   }
   if (detail && typeof detail === "object") detail = JSON.stringify(detail);
-  if (response.status === 404 && API_ROOT === "/api" && location.hostname.endsWith(".edgeone.cool")) {
-    detail = "EdgeOne 当前只发布了静态前端，预览站点没有找到 /api 后端。请先部署 FastAPI 后端，并在 frontend/config.js 配置它的 HTTPS 地址。";
+  if (response.status === 404 && location.hostname.endsWith(".edgeone.cool")) {
+    const responseText = `${raw} ${JSON.stringify(body || {})}`.toLowerCase();
+    if (responseText.includes("the site does not exist") || responseText.includes("site not found")) {
+      detail = "EdgeOne 没有找到当前预览站点。请从该次成功部署记录重新打开预览链接。";
+    } else if (body?.detail === "Not Found") {
+      detail = "请求已到达 FastAPI，但后端没有匹配到这个接口。请检查云函数是否部署成功，以及 API 路径是否包含正确的 /api 前缀。";
+    } else {
+      detail = "EdgeOne 上的 /api 接口返回 404。请检查当前部署是否包含 Python 云函数、函数路由是否注册，以及请求路径是否正确。";
+    }
   } else if (!detail) {
     detail = raw && !raw.trimStart().startsWith("<")
       ? raw.slice(0, 240)
@@ -38,8 +45,8 @@ function networkError(cause, path) {
   const sameOrigin = API_ROOT.startsWith("/");
   const edgePreview = location.hostname.endsWith(".edgeone.cool");
   const hint = sameOrigin && edgePreview
-    ? "当前预览站仍使用同源 /api，但 EdgeOne 只发布了静态前端；需要部署后端并配置其 HTTPS API 地址。"
-    : "请检查后端是否运行、API 地址是否正确，以及后端 ALLOWED_ORIGINS 是否包含当前页面来源。";
+    ? "请检查 EdgeOne 当前部署是否包含 Python 云函数，以及函数是否能正常启动。若使用独立后端，再确认 frontend/config.js 中的 HTTPS API 地址。"
+    : "请检查后端是否运行、API 地址是否正确，以及跨域配置是否包含当前页面来源。";
   const err = new Error(`无法连接后端：${url}。 ${hint}`);
   err.cause = cause;
   err.endpoint = url;
