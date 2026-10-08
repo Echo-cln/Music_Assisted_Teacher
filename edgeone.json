@@ -5,8 +5,6 @@
   "installCommand": "echo 'Static frontend: no packages to install'",
   "outputDirectory": "frontend",
   "cloudFunctions": {
-    "python": {
-      "maxDuration": 120
-    }
+    "maxDuration": 120
   }
 }
