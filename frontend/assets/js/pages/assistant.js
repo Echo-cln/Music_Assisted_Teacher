@@ -50,7 +50,7 @@ export async function renderAssistant(container) {
             <label>授课班级<select id="classId">${classOptions(classes)}</select></label>
             <label>课时长度<select id="duration"><option value="40">40 分钟</option><option value="45">45 分钟</option><option value="30">30 分钟</option></select></label>
             <label>课堂偏好<select id="activity"><option>互动与分组合作</option><option>唱游与律动</option><option>地方文化体验</option><option>基础演唱训练</option></select></label>
-            <label>课堂设备<select id="classroomSetup"><option>电脑与音箱</option><option>手机与手机扬声器</option><option>电脑、投影与音箱</option><option>无电子设备（教师清唱与身体声势）</option></select></label>
+            ${equipmentControls("smart")}
             <label>生成模式<select id="strategy"><option value="fast">快速模式 · 更快生成完整教案</option><option value="deep" selected>深度模式 · 生成时间较长</option></select></label>
             <label class="full">本课要求（选填）<textarea id="requirements" placeholder="填写设备条件、学生基础或课堂重点"></textarea></label>
             <button class="btn primary" id="recommend">从数据库推荐歌曲</button>
@@ -60,7 +60,7 @@ export async function renderAssistant(container) {
             <label>授课班级<select id="manualClassId">${classOptions(classes, true)}</select></label>
             <label>课时长度<select id="manualDuration"><option value="40">40 分钟</option><option value="45">45 分钟</option></select></label>
             <label>课堂偏好<select id="manualActivity"><option>互动与分组合作</option><option>唱游与律动</option><option>地方文化体验</option></select></label>
-            <label>课堂设备<select id="manualClassroomSetup"><option>电脑与音箱</option><option>手机与手机扬声器</option><option>电脑、投影与音箱</option><option>无电子设备（教师清唱与身体声势）</option></select></label>
+            ${equipmentControls("manual")}
             <label>生成模式<select id="manualStrategy"><option value="fast">快速模式 · 更快生成完整教案</option><option value="deep" selected>深度模式 · 生成时间较长</option></select></label>
             <label class="full">本课要求（选填）<textarea id="manualRequirements" placeholder="填写设备条件、学生基础或课堂重点"></textarea></label>
             <button class="btn primary" id="manualGenerate">检索并生成教案</button>
@@ -74,6 +74,7 @@ export async function renderAssistant(container) {
       </aside>
     </div>`;
 
+  bindEquipmentControls(container);
   container.querySelectorAll("[data-mode]").forEach(button => button.onclick = () => {
     container.querySelectorAll("[data-mode]").forEach(item => item.classList.toggle("active", item === button));
     document.getElementById("smartForm").classList.toggle("hidden", button.dataset.mode !== "smart");
@@ -162,13 +163,58 @@ function bindSongCards(root) {
   });
 }
 
+function equipmentControls(id) {
+  return '<fieldset class="equipment-panel full" data-equipment-controls="' + id + '">' +
+    '<legend>课堂可用设备（可多选）</legend><p>只勾选本节确实能用的设备，教案会据此安排播放、投影或无设备替代活动。</p>' +
+    '<label class="equipment-preset">快速选择<select data-equipment-preset><option value="custom">自定义设备</option><option value="none">无电子设备</option><option value="phone">手机播放</option><option value="computer">电脑播放</option><option value="computer-speaker">电脑 + 音箱</option><option value="classroom">电脑 + 投影 + 音箱</option></select></label>' +
+    '<div class="equipment-options">' +
+    '<label class="check-pill"><input type="checkbox" data-equipment="phone"><span>手机 / 平板</span></label>' +
+    '<label class="check-pill"><input type="checkbox" data-equipment="computer"><span>电脑</span></label>' +
+    '<label class="check-pill"><input type="checkbox" data-equipment="speaker"><span>外接音箱</span></label>' +
+    '<label class="check-pill"><input type="checkbox" data-equipment="projector"><span>投影 / 大屏</span></label>' +
+    '<label class="check-pill"><input type="checkbox" data-equipment="instrument"><span>课堂乐器 / 节奏乐器</span></label>' +
+    '<label class="check-pill"><input type="checkbox" data-equipment="offline"><span>音频已下载，可离线播放</span></label>' +
+    '</div><input type="hidden" data-equipment-summary></fieldset>';
+}
+
+function bindEquipmentControls(root) {
+  const labels = { phone: "手机", computer: "电脑", speaker: "外接音箱", projector: "投影/大屏", instrument: "课堂乐器/节奏乐器", offline: "音频已下载可离线播放" };
+  const presets = {
+    none: [],
+    phone: ["phone", "offline"],
+    computer: ["computer", "offline"],
+    "computer-speaker": ["computer", "speaker", "offline"],
+    classroom: ["computer", "speaker", "projector", "offline"],
+  };
+  root.querySelectorAll("[data-equipment-controls]").forEach(panel => {
+    const boxes = [...panel.querySelectorAll("[data-equipment]")];
+    const summary = panel.querySelector("[data-equipment-summary]");
+    const preset = panel.querySelector("[data-equipment-preset]");
+    const syncSummary = () => {
+      const selected = boxes.filter(box => box.checked).map(box => labels[box.dataset.equipment]);
+      summary.value = selected.length ? selected.join("、") : "无电子设备（教师清唱与身体声势）";
+    };
+    boxes.forEach(box => box.addEventListener("change", () => {
+      preset.value = "custom";
+      syncSummary();
+    }));
+    preset.addEventListener("change", () => {
+      const chosen = presets[preset.value];
+      if (!chosen) return;
+      boxes.forEach(box => { box.checked = chosen.includes(box.dataset.equipment); });
+      syncSummary();
+    });
+    syncSummary();
+  });
+}
+
 async function generate(manual) {
   if (!selectedSong) return notify("请先选择歌曲");
   const classElement = document.getElementById(manual ? "manualClassId" : "classId");
   const durationElement = document.getElementById(manual ? "manualDuration" : "duration");
   const activityElement = document.getElementById(manual ? "manualActivity" : "activity");
   const requirementsElement = document.getElementById(manual ? "manualRequirements" : "requirements");
-  const equipmentElement = document.getElementById(manual ? "manualClassroomSetup" : "classroomSetup");
+  const equipmentElement = document.querySelector(`[data-equipment-controls="${manual ? "manual" : "smart"}"] [data-equipment-summary]`);
   const strategyElement = document.getElementById(manual ? "manualStrategy" : "strategy");
   disableActions(true);
   try {
@@ -177,7 +223,7 @@ async function generate(manual) {
       class_id: classElement.value ? Number(classElement.value) : null,
       duration_minutes: Number(durationElement.value),
       activity_preference: activityElement.value,
-      teacher_requirements: [requirementsElement.value.trim(), `[课堂设备条件：${equipmentElement.value}]`].filter(Boolean).join("\n"),
+      teacher_requirements: [requirementsElement.value.trim(), `[课堂设备条件：${equipmentElement.value || "无电子设备（教师清唱与身体声势）"}]`].filter(Boolean).join("\n"),
       generation_strategy: strategyElement.value,
     });
     currentPlan = job.preview;

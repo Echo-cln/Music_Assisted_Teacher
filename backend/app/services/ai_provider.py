@@ -34,7 +34,7 @@ def _build_messages(base: dict, instruction: str, *, adjustment: bool = False, g
     evidence = base.get("generation_context", {})
     contract = """
 【严格输出协议】只输出一个 JSON 对象，不要包装字段或 Markdown。必须包含 title、objectives（字符串数组）、key_points（字符串）、difficulties（字符串）、preparation（字符串）、timeline（对象数组）、theory_explanation（含 term、script）、mistake_practice（含 problem、correction）、differentiation（字符串数组）、assessment（字符串）。
-timeline 项数必须等于输入 lesson；每项只含 teacher 与 students 两个非空字符串。不要输出 summary、minutes、stage、generation_context。总正文控制在 3600 个汉字以内，JSON 结束后立即停止。
+timeline 项数必须等于输入 lesson；每项只含 teacher 与 students 两个非空字符串。不要输出 summary、minutes、stage、generation_context。设备与班级差异约束：lesson.classroom_setup 是设备白名单，只能使用其中明确列出的设备；没有外接音箱、投影或乐器时不得默认其存在；写有无电子设备时必须提供清唱、哼鸣或身体声势方案。evidence.class_profile.common_problems 与 teacher_notes 是群体层面的差异，应转成基础支持、核心任务和拓展任务，禁止编造个人情况。\n总正文控制在 3600 个汉字以内，JSON 结束后立即停止。
 """
     if adjustment:
         system_prompt = """
@@ -59,7 +59,7 @@ timeline 项数必须等于输入 lesson；每项只含 teacher 与 students 两
         # 深度模式是一次完整的“诊断→决策→落地”生成，而不是快速骨架的扩写版。
         system_prompt = """
 你是一名具有多年乡村小学音乐教学经验的优秀音乐教研员。
-根据班级画像、歌曲资料、知识库和教师补充要求，写出一份能直接带进课堂的教案。先选定一个最需要优先解决的学习问题，再把决定落实到目标、活动和评价中。
+根据班级画像、歌曲资料、知识库和教师补充要求，写出一份能直接带进课堂的教案。先选定一个最需要优先解决的学习问题，再把决定落实到目标、活动和评价中。classroom_setup 是本节可用设备白名单，只能安排其中明确出现的设备；未勾选投影、音箱或乐器时，不得假设存在。
 
 只输出合法 JSON，不要解释或推理过程。不得删除、合并、减少、调换 timeline 数组中的课堂环节；minutes 和 stage 由后端保留。
 
@@ -76,6 +76,8 @@ timeline 每一项的 teacher 与 students 均需与该项 stage 和 minutes 对
 3. mistake_practice 按“错误表现 → 可能原因 → 立刻纠正动作 → 教师提示语”写，并优先使用知识库给出的易错点。
 4. differentiation 明确基础、一般、进阶三类学生各自任务和教师支持，不能只是“多鼓励”“提高难度”。
 5. assessment 给出学生能拿出来的证据、一次自评/互评方式和教师下一课要记录的具体信息。
+7. 班级画像中的 common_problems 与 teacher_notes 表示群体层面的差异。把实际出现的音准、节奏、开口意愿、合作或注意力差异分别转成基础支持、核心任务、拓展任务；不臆测个人情况，也不只写“因材施教”。
+8. classroom_setup 是设备白名单：各环节动作只可使用明确列出的设备；若写有“无电子设备”，安排清唱、哼鸣、拍手、跺脚或桌面声势，不得要求播放或投影。
 6. teacher_requirements 是最高优先级：教师已有明确要求时，必须至少落实到两个相关环节或字段中。
 
 【事实边界】

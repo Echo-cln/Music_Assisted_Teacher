@@ -105,3 +105,50 @@ def test_device_selection_changes_visible_stage_instruction():
     assert "手机按乐句播放" in phone
     assert "投影当前歌词句" in projector
     assert "电脑分句播放" in computer
+
+
+def test_multiselect_equipment_generates_actions_without_assuming_unselected_devices():
+    from app.services.lesson_service import _device_action
+
+    selected = "手机、音频已下载可离线播放"
+    singing = _device_action("分句学唱", selected)
+    assert "手机" in singing
+    assert "投影" not in singing
+    assert "音箱" not in singing
+    no_audio = _device_action("情境导入", "课堂乐器/节奏乐器")
+    assert "清唱" in no_audio
+    assert "播放" not in no_audio
+
+
+def test_group_difference_profile_changes_tiered_tasks():
+    from types import SimpleNamespace
+    from app.services.lesson_service import _class_difference_tasks
+
+    rhythm_profile = SimpleNamespace(
+        common_problems="节奏差异明显、不太敢开口",
+        teacher_notes="小组合作需要教师带动",
+        pitch_level="音准基础一般",
+        rhythm_level="节奏基础一般",
+        cooperation="一般",
+    )
+    pitch_profile = SimpleNamespace(
+        common_problems="音准差异明显、高音容易喊唱",
+        teacher_notes="",
+        pitch_level="音准不稳定",
+        rhythm_level="节奏基础较好",
+        cooperation="合作意识较强",
+    )
+    rhythm_tasks = _class_difference_tasks(rhythm_profile)
+    pitch_tasks = _class_difference_tasks(pitch_profile)
+    assert "恒拍" in rhythm_tasks["focus"]
+    assert "轮换" in rhythm_tasks["core"]
+    assert "音高" in pitch_tasks["focus"]
+    assert rhythm_tasks["foundation"] != pitch_tasks["foundation"]
+
+
+def test_model_prompt_treats_equipment_as_whitelist_and_uses_group_differences():
+    from app.services.ai_provider import _build_messages
+
+    prompt = _build_messages(_base(), "", generation_strategy="fast")[0]["content"]
+    assert "设备白名单" in prompt
+    assert "群体层面的差异" in prompt

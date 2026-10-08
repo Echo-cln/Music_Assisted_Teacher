@@ -893,3 +893,24 @@ td small { color: var(--muted); }
   .run-recap-stages { grid-template-columns: 1fr; }
   .run-history-row { align-items: flex-start; }
 }
+
+
+/* Compact multi-select controls for available devices and class differences */
+.equipment-panel, .student-difference-field {
+  min-width: 0; margin: 0; padding: 12px 14px; border: 1px solid #ead9cb;
+  border-radius: 14px; background: #fffaf5;
+}
+.equipment-panel legend, .student-difference-field legend { padding: 0 6px; color: #574238; font-weight: 700; }
+.equipment-panel > p, .student-difference-field > p { margin: 0 0 9px; color: var(--muted); font-size: .82rem; line-height: 1.5; }
+.equipment-preset { display: grid; grid-template-columns: auto minmax(130px, 1fr); align-items: center; gap: 8px; max-width: 390px; margin: 0 0 10px; font-size: .82rem; }
+.equipment-preset select { min-width: 0; padding: 8px 10px; }
+.equipment-options, .student-difference-options { display: flex; flex-wrap: wrap; gap: 7px; }
+.check-pill { display: inline-flex; align-items: center; gap: 7px; margin: 0; padding: 7px 10px; border: 1px solid #e9d9cb; border-radius: 999px; background: #fff; color: #5f5148; font-size: .82rem; cursor: pointer; }
+.check-pill input { width: auto; min-width: 14px; margin: 0; accent-color: var(--brand); }
+.student-difference-field > input { margin-top: 9px; }
+.profile-difference-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 9px 0; }
+.profile-difference-tags .pill { font-size: .75rem; }
+@media (max-width: 620px) {
+  .equipment-preset { grid-template-columns: 1fr; max-width: none; }
+  .equipment-panel, .student-difference-field { padding: 10px; }
+}

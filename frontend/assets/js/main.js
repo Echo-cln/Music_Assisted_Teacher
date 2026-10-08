@@ -9,8 +9,8 @@ const app = document.getElementById("app");
 // 首页和其余功能在模块图阶段一起白屏。
 const routeLoaders = {
   home: () => import("./pages/home.js").then(m => m.renderHome),
-  assistant: () => import("./pages/assistant.js?v=20261007-2").then(m => m.renderAssistant),
-  classes: () => import("./pages/classes.js").then(m => m.renderClasses),
+  assistant: () => import("./pages/assistant.js?v=20261008-rural1").then(m => m.renderAssistant),
+  classes: () => import("./pages/classes.js?v=20261008-rural1").then(m => m.renderClasses),
   resources: () => import("./pages/resources.js").then(m => m.renderResources),
   workbench: () => import("./pages/workbench.js").then(m => m.renderWorkbench),
   lessons: () => import("./pages/lessons.js?v=20261007-6").then(m => m.renderLessons),
@@ -66,7 +66,7 @@ function initializeBackgroundPanels() {
 async function refreshStats() {
   try {
     const stats = await api.stats();
-    document.getElementById("serviceStatus").textContent = `${stats.songs} 首歌曲 · ${stats.games + stats.theory + stats.mistakes} 条教学知识 · 前端 2026.10.07`;
+    document.getElementById("serviceStatus").textContent = `${stats.songs} 首歌曲 · ${stats.games + stats.theory + stats.mistakes} 条教学知识 · 前端 2026.10.08`;
   } catch (error) {
     document.getElementById("serviceStatus").textContent = error.status === 401 ? "等待登录" : "后端未启动 · 前端 2026.10.07";
   }

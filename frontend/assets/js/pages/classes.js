@@ -11,8 +11,19 @@ const choices = {
   rhythm_level: ["节奏偏弱", "恒拍感不足", "节奏基础一般", "节奏基础较好"],
   theory_level: ["乐理理解较弱", "能理解基础术语", "乐理基础较好"],
   preferred_method: ["互动与分组合作", "唱游与律动", "地方文化体验", "基础演唱训练", "合作创编"],
-  common_problems: ["无明显问题", "后半节容易走神", "不太敢开口", "学生差异较大", "跟不上节奏", "高音容易喊唱"],
 };
+
+const differenceChoices = [
+  "音准差异明显", "节奏差异明显", "不太敢开口", "小组合作需要教师带动",
+  "后半节容易走神", "高音容易喊唱", "跟不上节奏", "无明显问题",
+];
+
+function differenceField(value = "") {
+  const saved = (value || "").split(/[、,，;；\n]+/).map(item => item.trim()).filter(Boolean);
+  const selected = differenceChoices.filter(option => saved.includes(option));
+  const custom = saved.filter(option => !differenceChoices.includes(option));
+  return `<fieldset class="student-difference-field full"><legend>需要关注的群体差异（可多选）</legend><p>选择后会进入教案分层任务与课堂观察点；不需要的信息可留空。</p><div class="student-difference-options">${differenceChoices.map(option => `<label class="check-pill"><input type="checkbox" data-student-difference value="${esc(option)}" ${selected.includes(option) ? "checked" : ""}><span>${esc(option)}</span></label>`).join("")}</div><input type="text" data-student-difference-custom placeholder="其他群体特点（可选，用顿号分隔）" value="${esc(custom.join("、"))}"></fieldset>`;
+}
 
 function selectable(name, label, value, required = true) {
   const listed = choices[name].includes(value);
@@ -44,7 +55,7 @@ export async function renderClasses(container) {
     if (document.getElementById("classSort").value === "name") classes.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
     document.getElementById("classSearchCount").textContent = `共 ${classes.length} 个${q ? "匹配班级" : "班级"}`;
     const grid = document.getElementById("classGrid");
-    grid.innerHTML = classes.map(item => `<article class="card"><div class="card-head"><span class="iconbox">${item.grade}</span><span class="pill">${esc(item.province)}</span></div><h3>${esc(item.name)}</h3><p class="muted">${item.student_count} 人 · ${esc(item.learning_level)}</p><div class="profile-grid"><div><small>课堂活跃度</small><b>${esc(item.activity_level)}</b></div><div><small>合作情况</small><b>${esc(item.cooperation)}</b></div><div><small>音准</small><b>${esc(item.pitch_level)}</b></div><div><small>节奏</small><b>${esc(item.rhythm_level)}</b></div></div><p class="insight">${esc(item.teacher_notes || "尚未填写教学感受")}</p><button class="btn block" data-edit-class="${item.id}">查看 / 编辑</button></article>`).join("") || '<div class="empty">没有找到匹配的班级画像</div>';
+    grid.innerHTML = classes.map(item => `<article class="card"><div class="card-head"><span class="iconbox">${item.grade}</span><span class="pill">${esc(item.province)}</span></div><h3>${esc(item.name)}</h3><p class="muted">${item.student_count} 人 · ${esc(item.learning_level)}</p><div class="profile-grid"><div><small>课堂活跃度</small><b>${esc(item.activity_level)}</b></div><div><small>合作情况</small><b>${esc(item.cooperation)}</b></div><div><small>音准</small><b>${esc(item.pitch_level)}</b></div><div><small>节奏</small><b>${esc(item.rhythm_level)}</b></div></div><div class="profile-difference-tags">${(item.common_problems || "").split(/[、,，;；\n]+/).map(value => value.trim()).filter(Boolean).slice(0, 4).map(value => `<span class="pill soft">${esc(value)}</span>`).join("")}</div><p class="insight">${esc(item.teacher_notes || "尚未填写教学感受")}</p><button class="btn block" data-edit-class="${item.id}">查看 / 编辑</button></article>`).join("") || '<div class="empty">没有找到匹配的班级画像</div>';
     grid.querySelectorAll("[data-edit-class]").forEach(button => {
       button.onclick = () => openClassForm(classes.find(item => item.id === Number(button.dataset.editClass)), container);
     });
@@ -59,10 +70,19 @@ function openClassForm(existing, container) {
     ${selectable("learning_level", "整体基础", item.learning_level)}${selectable("activity_level", "课堂活跃度", item.activity_level)}
     ${selectable("cooperation", "合作情况", item.cooperation)}${selectable("pitch_level", "音准情况", item.pitch_level)}
     ${selectable("rhythm_level", "节奏情况", item.rhythm_level)}${selectable("theory_level", "乐理基础", item.theory_level)}
-    ${selectable("preferred_method", "喜欢的课堂方式", item.preferred_method)}${selectable("common_problems", "常见问题", item.common_problems, false)}
+    ${selectable("preferred_method", "喜欢的课堂方式", item.preferred_method)}${differenceField(item.common_problems)}
     <label class="full">教师教学感受<textarea name="teacher_notes">${esc(item.teacher_notes)}</textarea></label>
     <div class="actions full"><button type="button" class="btn" data-close>取消</button><button class="btn primary">保存</button></div>
   </form>`);
+  const differenceBoxes = [...root.querySelectorAll("[data-student-difference]")];
+  differenceBoxes.forEach(box => box.addEventListener("change", () => {
+    if (box.value === "无明显问题" && box.checked) {
+      differenceBoxes.filter(other => other !== box).forEach(other => { other.checked = false; });
+    } else if (box.value !== "无明显问题" && box.checked) {
+      const none = differenceBoxes.find(other => other.value === "无明显问题");
+      if (none) none.checked = false;
+    }
+  }));
   root.querySelectorAll("[data-choice]").forEach(select => {
     select.onchange = () => {
       const input = root.querySelector(`[data-other="${select.dataset.choice}"]`);
@@ -80,6 +100,9 @@ function openClassForm(existing, container) {
         if (!payload[select.name]) return notify(`请填写“${select.closest("label").firstChild.textContent}”的其他内容`);
       }
     }
+    const differences = [...root.querySelectorAll("[data-student-difference]:checked")].map(input => input.value);
+    const customDifferences = root.querySelector("[data-student-difference-custom]").value.split(/[、,，;；\n]+/).map(value => value.trim()).filter(Boolean);
+    payload.common_problems = [...new Set([...differences, ...customDifferences])].join("、");
     payload.grade = Number(payload.grade);
     payload.student_count = Number(payload.student_count);
     if (existing) await api.updateClass(existing.id, payload);

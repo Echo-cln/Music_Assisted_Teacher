@@ -116,56 +116,125 @@ def _extract_classroom_setup(requirements: str) -> tuple[str, str]:
 
 
 def _device_action(stage: str, setup: str) -> str:
-    """把所选设备变成每个课堂环节里可直接执行的教学动作。"""
-    stage_actions = {
-        "情境导入": {
-            "无电子设备（教师清唱与身体声势）": "教师清唱或哼唱歌曲开头，学生用动作表达情绪并说出听到的线索。",
-            "手机与手机扬声器": "手机提前缓存歌曲开头，播放后立即暂停，请学生用动作表达情绪并说出听到的线索。",
-            "电脑、投影与音箱": "投影歌曲名称或歌词，音箱播放开头片段；播放后暂停，请学生指出听到的情绪线索。",
-            "电脑与音箱": "电脑本地播放歌曲开头，音箱放声；播放后暂停，请学生指出听到的情绪线索。",
+    """Generate an action from selected equipment; never assume unchecked hardware."""
+    setup = (setup or "").strip()
+    known = {
+        "无电子设备（教师清唱与身体声势）": {
+            "情境导入": "教师清唱歌曲开头，学生用动作表达情绪并说出听到的线索。",
+            "节奏游戏": "教师口读节奏并拍手给拍，学生用拍手、跺脚完成节奏接龙。",
+            "分句学唱": "教师逐句范唱，学生先哼鸣回声模唱，再轻声填词。",
+            "难点练习": "教师把难句拆成两拍口令与身体声势，逐步放慢后恢复原速。",
+            "展示评价": "小组无伴奏演唱或声势展示，同伴按观察点说出一条证据。",
         },
-        "节奏游戏": {
-            "无电子设备（教师清唱与身体声势）": "教师口读节奏并拍手给拍，学生分组用拍手、跺脚完成节奏接龙。",
-            "手机与手机扬声器": "手机播放短节奏片段，学生跟随手机扬声器拍手接龙；播放失效时由教师口读节奏。",
-            "电脑、投影与音箱": "投影节奏卡并播放节拍片段，学生依照卡片分组接龙。",
-            "电脑与音箱": "电脑播放节拍片段，学生听到约定起拍后分组接龙。",
+        "手机与手机扬声器": {
+            "情境导入": "手机提前缓存歌曲开头，播放后暂停，请学生表达情绪并指出听觉线索。",
+            "节奏游戏": "手机播放短节奏片段，学生跟随扬声器拍手接龙；播放失效时由教师口读节奏。",
+            "分句学唱": "手机按乐句播放并在句尾暂停，学生回声模唱；音频不清时改用教师范唱。",
+            "难点练习": "手机循环播放难句，学生标记起拍并逐次跟唱；设备不可用时用拍手替代。",
+            "展示评价": "小组跟随手机播放完成展示，同伴记录起拍和长音表现。",
         },
-        "分句学唱": {
-            "无电子设备（教师清唱与身体声势）": "教师逐句范唱，学生先哼鸣回声模唱，再轻声填词。",
-            "手机与手机扬声器": "手机按乐句播放并在句尾暂停，学生跟随模唱；没有清晰音频时改用教师范唱。",
-            "电脑、投影与音箱": "投影当前歌词句，电脑播放对应乐句，音箱停止后由学生回声模唱。",
-            "电脑与音箱": "电脑分句播放对应乐句，音箱停止后由学生回声模唱。",
+        "电脑、投影与音箱": {
+            "情境导入": "投影歌曲名称或歌词，音箱播放开头片段；暂停后请学生指出情绪线索。",
+            "节奏游戏": "投影节奏卡并播放节拍片段，学生依卡片分组接龙。",
+            "分句学唱": "投影当前歌词句，电脑按乐句播放，学生回声模唱。",
+            "难点练习": "投影难句歌词或节奏标记，电脑循环播放，学生逐次跟唱。",
+            "展示评价": "投影本课观察点，音箱播放伴奏供小组展示，同伴按观察点反馈。",
         },
-        "难点练习": {
-            "无电子设备（教师清唱与身体声势）": "教师把难句拆成两拍口令和身体声势，逐步放慢后恢复原速。",
-            "手机与手机扬声器": "手机循环播放难句，学生边听边标记起拍；设备不可用时用拍手和口令替代。",
-            "电脑、投影与音箱": "投影难句歌词或节奏标记，电脑循环播放难句，学生逐次跟唱。",
-            "电脑与音箱": "电脑循环播放难句，学生逐次跟唱；节奏偏差处暂停，用拍手确认起拍。",
-        },
-        "展示评价": {
-            "无电子设备（教师清唱与身体声势）": "小组无伴奏演唱或声势展示，同伴根据本课观察点说出一条证据。",
-            "手机与手机扬声器": "小组跟随手机播放完成展示，另一组记录起拍和长音表现。",
-            "电脑、投影与音箱": "投影本课评价观察点，音箱播放伴奏供小组展示，同伴按观察点反馈。",
-            "电脑与音箱": "电脑播放伴奏供小组展示，同伴根据本课观察点说出一条证据。",
+        "电脑与音箱": {
+            "情境导入": "电脑播放歌曲开头，音箱放声；暂停后请学生指出情绪线索。",
+            "节奏游戏": "电脑播放节拍片段，学生听到约定起拍后分组接龙。",
+            "分句学唱": "电脑分句播放对应乐句，音箱停止后由学生回声模唱。",
+            "难点练习": "电脑循环播放难句，学生逐次跟唱；节奏偏差处暂停确认起拍。",
+            "展示评价": "电脑播放伴奏供小组展示，同伴根据观察点说出一条证据。",
         },
     }
-    return stage_actions.get(stage, {}).get(setup.strip()) or "先确认设备能播放本课歌曲，再让学生完成本环节的听、唱或节奏任务。"
+    if setup in known:
+        return known[setup].get(stage, "使用已选设备完成本环节任务。")
+    phone = "手机" in setup
+    computer = "电脑" in setup
+    projector = any(word in setup for word in ("投影", "大屏"))
+    speaker = "音箱" in setup
+    instrument = any(word in setup for word in ("乐器", "电子琴", "键盘"))
+    if not (phone or computer):
+        return {
+            "情境导入": "教师清唱歌曲开头；学生用动作表现情绪，并说出听到的节奏或旋律线索。",
+            "节奏游戏": "教师拍出恒拍，学生用拍手、跺脚或已选节奏乐器接龙。",
+            "分句学唱": "教师逐句范唱并在句尾停顿；学生哼鸣回声模唱，再轻声填词。",
+            "难点练习": "教师把难句拆成两拍口令，先放慢示范，再带学生恢复原速。",
+            "展示评价": "小组无伴奏演唱或声势展示；同伴依据观察点说出具体证据。",
+        }.get(stage, "教师示范，学生用人声或身体声势完成任务。")
+    device = "手机" if phone and not computer else "电脑" if computer and not phone else "手机或电脑"
+    output = "外接音箱" if speaker else "设备自带扬声器"
+    display = "投影展示歌词或节奏卡，" if projector else ""
+    instrument_hint = "可用已选乐器给出起音，" if instrument else ""
+    plans = {
+        "情境导入": f"{display}{device}播放已缓存的歌曲开头，经{output}播放后暂停；学生表达情绪并指出听觉线索。",
+        "节奏游戏": f"{device}播放短节奏片段，经{output}播放；学生分组跟拍接龙，之后继续用身体声势保持恒拍。",
+        "分句学唱": f"{display}{instrument_hint}{device}按乐句播放已缓存音频，经{output}播放并在句尾暂停；学生回声模唱。",
+        "难点练习": f"{display}{instrument_hint}{device}循环播放难句，经{output}播放；学生标记起拍、逐次跟唱并比较差异。",
+        "展示评价": f"{display}{device}播放已缓存伴奏，经{output}播放供小组展示；同伴按观察点记录证据。",
+    }
+    return plans.get(stage, "使用已选设备完成听辨或回放；学生通过演唱、动作或节奏任务展示学习结果。")
 
 
 def _low_device_option(stage: str, setup: str) -> str:
-    """为同一教学目标提供不依赖乐器/投影的课堂替代做法。"""
-    if "无电子设备" in setup:
-        options = {
-            "情境导入": "教师清唱或哼唱一个乐句；学生用动作表现情绪，并口述听到的变化。",
-            "节奏游戏": "用拍手、跺脚或轻敲桌面完成节奏接龙，不使用电子鼓或音源。",
-            "分句学唱": "教师先唱短句，学生用哼鸣回声模唱，再轻声填词。",
-            "难点练习": "把难点拆成两拍口令与身体声势，放慢后逐步恢复原速。",
-            "展示评价": "小组无伴奏演唱或声势展示，同伴按本课观察点反馈。",
+    """提供随时可切换到的人声与身体声势方案。"""
+    options = {
+        "情境导入": "教师清唱或哼唱一个乐句；学生用动作表现情绪，并说出听到的一处变化。",
+        "节奏游戏": "教师口读节奏并拍出恒拍，学生用拍手、跺脚或轻敲桌面完成两轮接龙。",
+        "分句学唱": "教师先唱短句，学生用哼鸣回声模唱；音准不稳时先唱骨干音再填词。",
+        "难点练习": "把难句拆成两拍口令与身体声势，先放慢练习再逐步恢复原速。",
+        "展示评价": "小组无伴奏演唱或声势展示，同伴依据本课观察点说出一条具体证据。",
+    }
+    return options.get(stage, "教师示范，学生用人声、拍手或身体动作完成同一音乐任务。")
+
+
+def _class_difference_tasks(profile: ClassProfile | None) -> dict[str, str]:
+    """把班级画像中的群体差异转成不同层次的练习和支架。"""
+    if not profile:
+        return {
+            "focus": "稳定起唱与保持节拍",
+            "foundation": "跟随教师模唱短乐句，先完成起音和句尾观察点。",
+            "core": "与同伴轮换回唱完整乐句，按本课重点互评。",
+            "extension": "带领小组演唱，并说明如何表现歌曲情绪。",
         }
-        return options.get(stage, "教师示范，学生用人声、拍手或身体动作完成同一音乐任务。")
-    if "手机" in setup:
-        return "提前把音频下载到手机；播放失败时改为教师范唱，节奏用拍手或跺脚保持。"
-    return "投影或网络不可用时使用本机已下载音频；音频也不可用时教师范唱，学生以拍手和哼唱继续。"
+    signals = " ".join(filter(None, (
+        profile.common_problems or "", profile.teacher_notes or "", profile.pitch_level or "",
+        profile.rhythm_level or "", profile.cooperation or "",
+    )))
+    rhythm_issue = any(word in signals for word in ("节奏偏弱", "恒拍", "跟不上节奏", "拍点不稳", "节奏差异"))
+    pitch_issue = any(word in signals for word in ("音准差异", "音准不稳", "音准基础较弱", "音高", "跑调"))
+    confidence_issue = any(word in signals for word in ("不太敢开口", "不敢唱", "害羞", "开口少"))
+    teamwork_issue = any(word in signals for word in ("需要教师带动", "合作需要", "不善合作"))
+    high_register_issue = any(word in signals for word in ("高音容易喊唱", "喊唱", "高音挤压"))
+    focus_parts = []
+    if rhythm_issue:
+        focus_parts.append("恒拍与起拍")
+    if pitch_issue:
+        focus_parts.append("短句音高稳定")
+    if confidence_issue:
+        focus_parts.append("低压力开口")
+    if high_register_issue:
+        focus_parts.append("舒适音区与自然发声")
+    if teamwork_issue:
+        focus_parts.append("轮换合作")
+    if any(word in signals for word in ("后半节", "容易走神", "注意力")):
+        focus_parts.append("短任务与即时反馈")
+    focus = "、".join(focus_parts) if focus_parts else "起音、节拍与合作表现"
+    foundation = "教师给出起音和短句示范，学生先哼唱或小声跟唱；节奏困难时加拍手提示，不要求独唱。"
+    if rhythm_issue:
+        foundation = "先随教师拍稳四拍，再只唱短句骨干音；连续两轮稳定后才接歌词。"
+    if confidence_issue:
+        foundation += " 可先与同桌轻声合唱，再自愿在小组内展示。"
+    if high_register_issue:
+        foundation += " 高音处不要求喊唱，可降到舒适音区哼唱后再接回原旋律。"
+    core = "两人轮换回唱完整乐句，听者按起音、节奏、长音中本课重点给出一次反馈。"
+    if teamwork_issue:
+        core = "每组三人轮换领唱、跟唱、记录，教师先示范轮换口令，确保每人有明确角色。"
+    extension = "在保持原旋律和节拍的前提下担任小组领唱，自选动作表现歌曲情绪，并用一个音乐证据说明选择。"
+    if pitch_issue:
+        extension = "独立完成完整乐句后，示范如何保持起音与长音稳定，并带同伴比较两次演唱差异。"
+    return {"focus": focus, "foundation": foundation, "core": core, "extension": extension}
 
 
 def _local_content(
@@ -175,6 +244,7 @@ def _local_content(
     class_name = profile.name if profile else "通用班级"
     rhythm = profile.rhythm_level if profile else "节奏基础一般"
     pitch = profile.pitch_level if profile else "音准基础一般"
+    differentiation = _class_difference_tasks(profile)
     basis = _song_design_basis(song)
     parts = [max(3, round(duration * x)) for x in (0.1, 0.14, 0.32, 0.26)]
     parts.append(duration - sum(parts))
@@ -214,9 +284,9 @@ def _local_content(
             {
                 "minutes": parts[1],
                 "stage": knowledge["game"]["name"],
-                "teacher": knowledge["game"]["instructions"],
-                "students": "以小组形式完成节奏或声音模仿。",
-                "look_for": "小组能连续完成两轮节奏接龙，并在约定拍点同时开始。",
+                "teacher": f"{knowledge['game']['instructions']} 观察重点：{differentiation['focus']}。若第一轮失误，先停下示范一次再继续。",
+                "students": f"{differentiation['core']} 教师提示语：“先听准，再一起开始。”",
+                "look_for": f"记录学生在{differentiation['focus']}上的一个可见表现，并观察第二轮是否更稳定。",
                 "device_action": _device_action("节奏游戏", classroom_setup),
                 "low_device_option": _low_device_option("节奏游戏", classroom_setup),
             },
@@ -224,8 +294,8 @@ def _local_content(
                 "minutes": parts[2],
                 "stage": "分句学唱",
                 "teacher": f"{basis['practice']}；每两句停一次，重点观察学生能否在{song.range_note}内保持稳定起音与换气。",
-                "students": "先用 lu 回声模唱，再填词；基础较弱者先唱骨干音，同伴用“首拍、长音、情绪”三个词互听。",
-                "look_for": "随机抽一组回唱同一句，记录起音和长音是否能跟随示范。",
+                "students": f"{differentiation['foundation']} 完成后由同伴轮换回唱，按起音、节奏或长音中本课重点互听。",
+                "look_for": f"抽取同一句的前后两次回唱，记录{differentiation['focus']}是否改善；不记录学生姓名。",
                 "device_action": _device_action("分句学唱", classroom_setup),
                 "low_device_option": _low_device_option("分句学唱", classroom_setup),
             },
@@ -233,8 +303,8 @@ def _local_content(
                 "minutes": parts[3],
                 "stage": "难点练习",
                 "teacher": f"先回到本曲最需要处理的{basis['primary']}，再使用：{knowledge['mistake']['correction']}",
-                "students": "轮换练习并记录最容易出错的一句；能说清是首拍、音高、换气还是情绪表达需要再练。",
-                "look_for": "学生能指出本组反复练习的具体乐句，并说出一个改进前后的差异。",
+                "students": f"{differentiation['extension']} 练习者可选择复唱或带领同伴，不强迫公开独唱。",
+                "look_for": f"学生指出具体乐句，并用一次改唱说明{differentiation['focus']}的变化。",
                 "device_action": _device_action("难点练习", classroom_setup),
                 "low_device_option": _low_device_option("难点练习", classroom_setup),
             },
@@ -251,9 +321,9 @@ def _local_content(
         "theory_explanation": knowledge["theory"],
         "mistake_practice": knowledge["mistake"],
         "differentiation": [
-            "基础层：能跟随教师稳定唱完主要乐句。",
-            "提高层：加入声势伴奏或担任小组领唱。",
-            "支持策略：音准不稳者先轻声模唱，再逐步扩大到全班。",
+            f"基础支持：{differentiation['foundation']}",
+            f"核心任务：{differentiation['core']}",
+            f"拓展任务：{differentiation['extension']}",
         ],
         "assessment": "学生完成三颗星自评：节拍稳定、声音自然、合作完成。教师记录最容易出错的乐句。",
         "activity_preference": activity,
