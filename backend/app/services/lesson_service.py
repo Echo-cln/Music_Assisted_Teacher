@@ -384,6 +384,9 @@ def build_base_preview(
 def _external_model_payload(content: dict) -> dict:
     """Remove local identifiers and free-form private notes before calling a model vendor."""
     payload = deepcopy(content)
+    summary = payload.get("summary")
+    if isinstance(summary, dict):
+        summary.pop("class_name", None)
     context = payload.get("generation_context")
     if isinstance(context, dict):
         profile = context.get("class_profile")

@@ -43,6 +43,7 @@ def test_audio_upload_rejects_empty_and_oversized_files(tmp_path, monkeypatch):
 def test_external_lesson_model_payload_omits_class_name_and_teacher_notes():
     source = {
         "title": "音乐课",
+        "summary": {"class_name": "三年级一班", "duration": 40},
         "generation_context": {"class_profile": {
             "name": "三年级一班", "teacher_notes": "某学生姓名与观察",
             "grade": 3, "common_problems": "某学生姓名：小明，不敢开口",
@@ -51,6 +52,7 @@ def test_external_lesson_model_payload_omits_class_name_and_teacher_notes():
     }
     payload = _external_model_payload(source)
 
+    assert payload["summary"] == {"duration": 40}
     assert payload["generation_context"]["class_profile"] == {
         "grade": 3, "pitch_level": "音准基础一般",
     }
