@@ -927,3 +927,26 @@ td small { color: var(--muted); }
 .custom-tag-chip button:hover { background: #f2dfd2; color: #8a2f22; }
 .equipment-tag-editor { margin-top: 9px; }
 @media (max-width: 860px) { .form-grid > .student-difference-field.full { grid-column: auto; } }
+
+
+/* Direct editing for an unsaved lesson preview */
+.manual-plan-editor { max-height: min(68vh, 760px); overflow: auto; padding: 20px; border-top: 1px solid var(--line); }
+.manual-editor-intro { padding: 16px 18px; margin-bottom: 16px; border: 1px solid #ead8ca; border-radius: 15px; background: #fff8f1; }
+.manual-editor-intro h3 { margin: 4px 0; }
+.manual-editor-intro p, .manual-timeline-head p { margin: 0; color: var(--muted); font-size: .88rem; }
+.manual-plan-editor .form-grid { gap: 8px 14px; }
+.manual-plan-editor label { margin: 4px 0 10px; }
+.manual-plan-editor input, .manual-plan-editor textarea { background: #fffefa; }
+.manual-timeline-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin: 14px 0 10px; padding-top: 17px; border-top: 1px solid var(--line); }
+.manual-timeline-head h4 { margin: 0 0 3px; }
+.manual-timeline-list { display: grid; gap: 12px; }
+.manual-stage-editor { padding: 16px; border: 1px solid var(--line); border-radius: 15px; background: var(--paper-2); }
+.manual-stage-editor > header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.manual-stage-editor .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.manual-editor-actions { display: flex; justify-content: flex-end; gap: 10px; position: sticky; bottom: -20px; padding: 14px 0 2px; margin-top: 14px; background: linear-gradient(transparent, var(--paper) 20%); }
+@media (max-width: 700px) {
+  .manual-plan-editor { padding: 14px; }
+  .manual-timeline-head { align-items: flex-start; flex-direction: column; }
+  .manual-stage-editor .form-grid { grid-template-columns: 1fr; }
+  .manual-editor-actions { position: static; }
+}
