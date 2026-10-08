@@ -1,37 +1,26 @@
-"""EdgeOne Cloud Function adapter for the existing FastAPI application.
+"""EdgeOne Cloud Function entry for the existing FastAPI application.
 
-EdgeOne maps cloud-functions/api/[[default]].py to /api/* and passes the
-matched path to FastAPI without the /api prefix. The existing application
-keeps that prefix in its router, so this middleware restores it before routing.
+EdgeOne discovers Python route modules by finding an explicit framework
+instance assignment (for example, app = FastAPI(...)). The backend application
+is mounted here so its router, middleware, and configuration stay the single
+source of truth.
 """
-from pathlib import Path
-import sys
+from contextlib import asynccontextmanager
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-BACKEND_ROOT = REPOSITORY_ROOT / "backend"
-if str(BACKEND_ROOT) not in sys.path:
-    sys.path.insert(0, str(BACKEND_ROOT))
+from fastapi import FastAPI
 
-from app.main import app  # noqa: E402
+from app.main import app as backend_app
 
 
-class RestoreApiPrefixMiddleware:
-    """Restore the file-routing prefix removed by EdgeOne before FastAPI runs."""
-
-    def __init__(self, inner_app):
-        self.inner_app = inner_app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] in {"http", "websocket"}:
-            path = scope.get("path", "/")
-            if not path.startswith("/api/") and path != "/api":
-                scope = dict(scope)
-                suffix = "" if path == "/" else path
-                scope["path"] = f"/api{suffix}"
-                raw_path = scope.get("raw_path", path.encode("utf-8"))
-                raw_suffix = b"" if raw_path == b"/" else raw_path
-                scope["raw_path"] = b"/api" + raw_suffix
-        await self.inner_app(scope, receive, send)
+@asynccontextmanager
+async def lifespan(_app):
+    # Mounted ASGI apps do not own the outer application lifespan. Forward it
+    # explicitly so database initialization and startup cleanup still run.
+    async with backend_app.router.lifespan_context(backend_app):
+        yield
 
 
-app.add_middleware(RestoreApiPrefixMiddleware)
+# Keep an explicit FastAPI instance in this file: EdgeOne uses it to recognize
+# and register the catch-all /api/* function route.
+app = FastAPI(lifespan=lifespan)
+app.mount("/", backend_app)
