@@ -314,6 +314,9 @@ function manualEditorField(label, path, value, rows) {
   const text = Array.isArray(value) ? value.join("\n") : String(value ?? "");
   return '<label class="full">' + esc(label) + '<textarea data-content-path="' + esc(path) + '" rows="' + (rows || 3) + '">' + esc(text) + '</textarea></label>';
 }
+function manualStageField(label, key, value, rows) {
+  return '<label class="full">' + esc(label) + '<textarea data-stage-field="' + esc(key) + '" rows="' + (rows || 3) + '">' + esc(value == null ? "" : value) + '</textarea></label>';
+}
 function manualStageEditor(item, index) {
   item = item || {};
   const val = key => esc(item[key] == null ? "" : item[key]);
@@ -321,11 +324,11 @@ function manualStageEditor(item, index) {
     '<header><b>' + esc(item.stage || ("教学环节 " + (index + 1))) + '</b><button class="link danger-link" type="button" data-manual-remove-stage>移除此环节</button></header>' +
     '<div class="form-grid"><label>环节名称<input data-stage-field="stage" value="' + val("stage") + '"></label>' +
     '<label>计划时长（分钟）<input data-stage-field="minutes" type="number" min="1" max="120" value="' + esc(item.minutes == null ? 5 : item.minutes) + '"></label>' +
-    manualEditorField("教师活动", "teacher", item.teacher, 4) +
-    manualEditorField("学生活动", "students", item.students, 4) +
-    manualEditorField("设备安排", "device_action", item.device_action, 2) +
-    manualEditorField("本段观察", "look_for", item.look_for, 2) +
-    manualEditorField("设备不足时的替代做法", "low_device_option", item.low_device_option, 2) + '</div></article>';
+    manualStageField("教师活动", "teacher", item.teacher, 4) +
+    manualStageField("学生活动", "students", item.students, 4) +
+    manualStageField("设备安排", "device_action", item.device_action, 2) +
+    manualStageField("本段观察", "look_for", item.look_for, 2) +
+    manualStageField("设备不足时的替代做法", "low_device_option", item.low_device_option, 2) + '</div></article>';
 }
 function manualEditorMarkup(content) {
   content = content || {};
@@ -435,7 +438,6 @@ function renderPreview(area, generating = false, job = null) {
   });
   area.querySelector("[data-manual-add-stage]")?.addEventListener("click", () => {
     const list = area.querySelector("[data-manual-timeline]");
-    const count = list.querySelectorAll("[data-manual-stage]").length;
     list.insertAdjacentHTML("beforeend", manualStageEditor({ stage: "新教学环节", minutes: 5 }, -1));
   });
   area.querySelectorAll("[data-manual-remove-stage]").forEach(button => button.addEventListener("click", () => {
