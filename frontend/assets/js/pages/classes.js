@@ -22,7 +22,7 @@ function differenceField(value = "") {
   const saved = (value || "").split(/[、,，;；\n]+/).map(item => item.trim()).filter(Boolean);
   const selected = differenceChoices.filter(option => saved.includes(option));
   const custom = saved.filter(option => !differenceChoices.includes(option));
-  return `<fieldset class="student-difference-field full"><legend>需要关注的群体差异（可多选）</legend><p>选择后会进入教案分层任务与课堂观察点；不需要的信息可留空。</p><div class="student-difference-options">${differenceChoices.map(option => `<label class="check-pill"><input type="checkbox" data-student-difference value="${esc(option)}" ${selected.includes(option) ? "checked" : ""}><span>${esc(option)}</span></label>`).join("")}</div><input type="text" data-student-difference-custom placeholder="其他群体特点（可选，用顿号分隔）" value="${esc(custom.join("、"))}"></fieldset>`;
+  return `<fieldset class="student-difference-field full"><legend>需要关注的群体差异（可多选）</legend><p>选择后会进入教案分层任务与课堂观察点；不需要的信息可留空。</p><div class="student-difference-options">${differenceChoices.map(option => `<label class="check-pill"><input type="checkbox" data-student-difference value="${esc(option)}" ${selected.includes(option) ? "checked" : ""}><span>${esc(option)}</span></label>`).join("")}</div><div class="tag-editor" data-student-difference-editor><div class="tag-chip-list" data-tag-list>${custom.map(value => `<span class="custom-tag-chip">${esc(value)}<button type="button" data-remove-tag="${esc(value)}" aria-label="删除标签">×</button></span>`).join("")}</div><input type="text" data-tag-input placeholder="输入其他群体特点，按回车添加"><input type="hidden" data-student-difference-custom value="${esc(custom.join("、"))}"></div></fieldset>`;
 }
 
 function selectable(name, label, value, required = true) {
@@ -62,6 +62,37 @@ export async function renderClasses(container) {
   }
 }
 
+function bindClassDifferenceTags(root) {
+  const editor = root.querySelector("[data-student-difference-editor]");
+  if (!editor) return;
+  const input = editor.querySelector("[data-tag-input]");
+  const hidden = editor.querySelector("[data-student-difference-custom]");
+  const list = editor.querySelector("[data-tag-list]");
+  let tags = hidden.value.split(/[、,，;；\n]+/).map(value => value.trim()).filter(Boolean);
+  const render = () => {
+    hidden.value = tags.join("、");
+    list.innerHTML = tags.map(value => `<span class="custom-tag-chip">${esc(value)}<button type="button" data-remove-tag="${esc(value)}" aria-label="删除标签">×</button></span>`).join("");
+    list.querySelectorAll("[data-remove-tag]").forEach(button => button.onclick = () => {
+      tags = tags.filter(value => value !== button.dataset.removeTag);
+      render();
+    });
+  };
+  const add = raw => {
+    const values = raw.split(/[、,，;；\n]+/).map(value => value.trim()).filter(Boolean);
+    for (const value of values) if (!tags.includes(value) && value !== "无明显问题") tags.push(value);
+    input.value = "";
+    render();
+  };
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === "," || event.key === "，") {
+      event.preventDefault();
+      add(input.value);
+    }
+  });
+  input.addEventListener("blur", () => { if (input.value.trim()) add(input.value); });
+  render();
+}
+
 function openClassForm(existing, container) {
   const item = existing || { name: "", grade: 3, student_count: 30, province: "广东", learning_level: "中等", activity_level: "较高", cooperation: "喜欢分组合作", pitch_level: "音准不稳定", rhythm_level: "节奏偏弱", theory_level: "乐理理解较弱", preferred_method: "互动与分组合作", common_problems: "", teacher_notes: "" };
   const root = showModal(`<div class="modal-head"><div><h2>${existing ? "编辑" : "新建"}班级画像</h2><p>画像字段将直接参与推荐与教案生成。</p></div><button class="close" data-close>×</button></div><form id="classForm" class="form-grid">
@@ -74,6 +105,7 @@ function openClassForm(existing, container) {
     <label class="full">教师教学感受<textarea name="teacher_notes">${esc(item.teacher_notes)}</textarea></label>
     <div class="actions full"><button type="button" class="btn" data-close>取消</button><button class="btn primary">保存</button></div>
   </form>`);
+  bindClassDifferenceTags(root);
   const differenceBoxes = [...root.querySelectorAll("[data-student-difference]")];
   differenceBoxes.forEach(box => box.addEventListener("change", () => {
     if (box.value === "无明显问题" && box.checked) {

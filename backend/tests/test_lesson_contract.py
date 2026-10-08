@@ -152,3 +152,11 @@ def test_model_prompt_treats_equipment_as_whitelist_and_uses_group_differences()
     prompt = _build_messages(_base(), "", generation_strategy="fast")[0]["content"]
     assert "设备白名单" in prompt
     assert "群体层面的差异" in prompt
+
+
+def test_custom_instrument_tag_is_used_without_inventing_audio_playback():
+    from app.services.lesson_service import _device_action
+
+    action = _device_action("分句学唱", "古筝")
+    assert "已选古筝给出起音" in action
+    assert "播放" not in action

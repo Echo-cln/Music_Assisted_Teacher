@@ -174,7 +174,41 @@ function equipmentControls(id) {
     '<label class="check-pill"><input type="checkbox" data-equipment="projector"><span>投影 / 大屏</span></label>' +
     '<label class="check-pill"><input type="checkbox" data-equipment="instrument"><span>课堂乐器 / 节奏乐器</span></label>' +
     '<label class="check-pill"><input type="checkbox" data-equipment="offline"><span>音频已下载，可离线播放</span></label>' +
-    '</div><input type="hidden" data-equipment-summary></fieldset>';
+    '</div><div class="tag-editor equipment-tag-editor" data-equipment-tag-editor><div class="tag-chip-list" data-tag-list></div><input type="text" data-tag-input placeholder="其他设备或音源，按回车添加"><input type="hidden" data-equipment-custom-tags></div>' +
+    '<input type="hidden" data-equipment-summary></fieldset>';
+}
+
+function bindTagEditor(editor) {
+  const input = editor.querySelector("[data-tag-input]");
+  const list = editor.querySelector("[data-tag-list]");
+  const hidden = editor.querySelector("[data-equipment-custom-tags], [data-student-difference-custom]");
+  let tags = (hidden?.value || "").split(/[、,，;；\n]+/).map(value => value.trim()).filter(Boolean);
+  const render = () => {
+    if (hidden) hidden.value = tags.join("、");
+    list.innerHTML = tags.map(value => `<span class="custom-tag-chip">${esc(value)}<button type="button" data-remove-tag="${esc(value)}" aria-label="删除标签">×</button></span>`).join("");
+    list.querySelectorAll("[data-remove-tag]").forEach(button => button.onclick = () => {
+      tags = tags.filter(value => value !== button.dataset.removeTag);
+      render();
+      editor.dispatchEvent(new CustomEvent("tags:change"));
+    });
+  };
+  const add = raw => {
+    for (const value of raw.split(/[、,，;；\n]+/).map(item => item.trim()).filter(Boolean)) {
+      if (!tags.includes(value)) tags.push(value);
+    }
+    input.value = "";
+    render();
+    editor.dispatchEvent(new CustomEvent("tags:change"));
+  };
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === "," || event.key === "，") {
+      event.preventDefault();
+      add(input.value);
+    }
+  });
+  input.addEventListener("blur", () => { if (input.value.trim()) add(input.value); });
+  render();
+  return () => [...tags];
 }
 
 function bindEquipmentControls(root) {
@@ -190,14 +224,16 @@ function bindEquipmentControls(root) {
     const boxes = [...panel.querySelectorAll("[data-equipment]")];
     const summary = panel.querySelector("[data-equipment-summary]");
     const preset = panel.querySelector("[data-equipment-preset]");
+    const customTags = bindTagEditor(panel.querySelector("[data-equipment-tag-editor]"));
     const syncSummary = () => {
       const selected = boxes.filter(box => box.checked).map(box => labels[box.dataset.equipment]);
-      summary.value = selected.length ? selected.join("、") : "无电子设备（教师清唱与身体声势）";
+      summary.value = [...selected, ...customTags()].join("、") || "无电子设备（教师清唱与身体声势）";
     };
     boxes.forEach(box => box.addEventListener("change", () => {
       preset.value = "custom";
       syncSummary();
     }));
+    panel.querySelector("[data-equipment-tag-editor]").addEventListener("tags:change", syncSummary);
     preset.addEventListener("change", () => {
       const chosen = presets[preset.value];
       if (!chosen) return;

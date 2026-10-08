@@ -152,15 +152,21 @@ def _device_action(stage: str, setup: str) -> str:
         return known[setup].get(stage, "使用已选设备完成本环节任务。")
     phone = "手机" in setup
     computer = "电脑" in setup
-    projector = any(word in setup for word in ("投影", "大屏"))
-    speaker = "音箱" in setup
-    instrument = any(word in setup for word in ("乐器", "电子琴", "键盘"))
+    projector = any(word in setup for word in ("投影", "大屏", "投影仪"))
+    speaker = any(word in setup for word in ("音箱", "扬声器", "音响", "扩音器"))
+    instrument = any(word in setup for word in (
+        "乐器", "电子琴", "键盘", "钢琴", "古筝", "二胡", "小提琴", "吉他", "非洲鼓", "口风琴",
+    ))
     if not (phone or computer):
+        instrument_label = next((name for name in (
+            "电子琴", "键盘", "钢琴", "古筝", "二胡", "小提琴", "原声吉他", "吉他", "非洲鼓", "口风琴"
+        ) if name in setup), "课堂乐器")
+        lead = f"教师先用已选{instrument_label}给出起音，" if instrument else ""
         return {
             "情境导入": "教师清唱歌曲开头；学生用动作表现情绪，并说出听到的节奏或旋律线索。",
-            "节奏游戏": "教师拍出恒拍，学生用拍手、跺脚或已选节奏乐器接龙。",
-            "分句学唱": "教师逐句范唱并在句尾停顿；学生哼鸣回声模唱，再轻声填词。",
-            "难点练习": "教师把难句拆成两拍口令，先放慢示范，再带学生恢复原速。",
+            "节奏游戏": "教师拍出恒拍，学生用拍手、跺脚或已选打击乐器接龙。",
+            "分句学唱": f"{lead}再逐句范唱并在句尾停顿；学生哼鸣回声模唱，再轻声填词。",
+            "难点练习": f"{lead}教师把难句拆成两拍口令，先放慢示范，再带学生恢复原速。",
             "展示评价": "小组无伴奏演唱或声势展示；同伴依据观察点说出具体证据。",
         }.get(stage, "教师示范，学生用人声或身体声势完成任务。")
     device = "手机" if phone and not computer else "电脑" if computer and not phone else "手机或电脑"

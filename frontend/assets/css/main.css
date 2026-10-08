@@ -914,3 +914,16 @@ td small { color: var(--muted); }
   .equipment-preset { grid-template-columns: 1fr; max-width: none; }
   .equipment-panel, .student-difference-field { padding: 10px; }
 }
+
+
+/* Keep the class-difference editor aligned with the full form width and make custom labels removable chips. */
+.form-grid > .student-difference-field.full { grid-column: 1 / -1; }
+.tag-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; min-height: 46px; margin-top: 10px; padding: 6px 9px; border: 1px solid #ead9cb; border-radius: 12px; background: #fff; }
+.tag-editor:focus-within { border-color: #c16b4e; box-shadow: 0 0 0 3px rgba(193,107,78,.12); }
+.tag-editor > input[type="text"] { flex: 1 1 210px; min-width: 160px; width: auto; margin: 0; padding: 7px 5px; border: 0; outline: 0; box-shadow: none; background: transparent; }
+.tag-editor > input[type="text"]:focus { box-shadow: none; }
+.custom-tag-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px 5px 10px; border: 1px solid #e9d3c4; border-radius: 999px; background: #fbf1e9; color: #734330; font-size: .82rem; }
+.custom-tag-chip button { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #8a6656; line-height: 1; cursor: pointer; }
+.custom-tag-chip button:hover { background: #f2dfd2; color: #8a2f22; }
+.equipment-tag-editor { margin-top: 9px; }
+@media (max-width: 860px) { .form-grid > .student-difference-field.full { grid-column: auto; } }
