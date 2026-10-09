@@ -19,8 +19,16 @@ let dialogueSession = {
 };
 
 function normalizeText(value) {
-  if (Array.isArray(value)) return value.join("\n").replace(/\s+/g, " ").trim();
-  if (value && typeof value === "object") return JSON.stringify(value);
+  const labels = {
+    objective: "目标", evidence: "观察依据", stage: "环节", minutes: "用时",
+    teacher: "教师活动", students: "学生活动", low_device_option: "无设备做法",
+    device_action: "设备安排", summary: "摘要", title: "标题", status: "进展",
+  };
+  if (Array.isArray(value)) return value.map(normalizeText).filter(Boolean).join("；").replace(/\s+/g, " ").trim();
+  if (value && typeof value === "object") return Object.entries(value)
+    .filter(([, item]) => item !== null && item !== undefined && item !== "")
+    .map(([key, item]) => `${labels[key] || ""}${labels[key] ? "：" : ""}${normalizeText(item)}`)
+    .filter(Boolean).join("；");
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 function adjustmentChanges(before, after) {
@@ -297,8 +305,8 @@ function extractSongTitleFromTurn(message, waitingForSong = false) {
 async function answerDialogueQuestion(prompt) {
   const currentContent = currentPlan?.content || {};
   const response = await api.lessonDialogueReply({
-    message: prompt,
-    history: dialogueSession.history.slice(0, -1).slice(-8).map(item => ({ role: item.role, content: item.text })),
+    message: String(prompt || "").slice(0, 3500),
+    history: dialogueSession.history.slice(0, -1).slice(-8).map(item => ({ role: item.role, content: String(item.text || "").slice(0, 1800) })),
     context: {
       phase: dialogueSession.phase,
       waiting_for: dialogueSession.waitingFor,

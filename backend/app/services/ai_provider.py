@@ -5,6 +5,8 @@
 """
 
 import json
+import ast
+import re
 import time
 from collections.abc import Iterator
 
@@ -213,4 +215,95 @@ def reply_to_lesson_dialogue(message: str, history: list[dict], context: dict) -
     answer = answer.strip(" \t\r\n\"'“”")
     if not answer:
         raise ValueError("对话模型没有返回回答正文")
+    answer = _naturalize_dialogue_answer(answer)
     return answer[:1200]
+
+
+def _naturalize_dialogue_answer(answer: str) -> str:
+    """Remove accidental object dumps from model prose without inventing missing facts."""
+    text = re.sub(r"^```(?:json|python)?\s*|\s*```$", "", str(answer or "").strip(), flags=re.IGNORECASE)
+    labels = {
+        "class_name": "班级", "song_name": "歌曲", "duration_minutes": "课时",
+        "summary": "摘要", "teacher_requirements": "备课要求", "activity_preference": "课堂偏好",
+        "equipment_constraints": "设备条件", "region_element": "地区元素",
+    }
+
+    def describe(value):
+        if isinstance(value, dict):
+            parts = []
+            for key, item in value.items():
+                label = labels.get(str(key))
+                if label and item not in (None, "", [], {}):
+                    if isinstance(item, list):
+                        item = "、".join(str(part) for part in item if not isinstance(part, (dict, list)))
+                    if not isinstance(item, (dict, list)):
+                        parts.append(f"{label}：{item}")
+            return "；".join(parts) or "相关资料已列在下方来源中。"
+        if isinstance(value, list):
+            return "；".join(str(item) for item in value if isinstance(item, (str, int, float))) or "相关资料已列在下方来源中。"
+        return str(value).strip()
+
+    try:
+        parsed = json.loads(text)
+    except (TypeError, json.JSONDecodeError):
+        try:
+            parsed = ast.literal_eval(text)
+        except (ValueError, SyntaxError):
+            parsed = None
+    if isinstance(parsed, (dict, list)):
+        if isinstance(parsed, dict):
+            for key in ("reply", "answer", "message", "response", "text", "content"):
+                if isinstance(parsed.get(key), str) and parsed[key].strip():
+                    return parsed[key].strip()
+        return describe(parsed)
+
+    # Some providers prepend a sentence and then accidentally paste a Python dict.
+    # Scan balanced braces so nested JSON/Python objects are handled as one unit.
+    output = []
+    cursor = 0
+    while cursor < len(text):
+        start = text.find("{", cursor)
+        if start < 0:
+            output.append(text[cursor:])
+            break
+        output.append(text[cursor:start])
+        depth, quote, escaped, end = 0, None, False, None
+        for index in range(start, min(len(text), start + 4000)):
+            char = text[index]
+            if quote:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == quote:
+                    quote = None
+                continue
+            if char in {"'", '"'}:
+                quote = char
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    end = index + 1
+                    break
+        if end is None:
+            output.append(text[start])
+            cursor = start + 1
+            continue
+        raw = text[start:end]
+        try:
+            value = ast.literal_eval(raw)
+        except (ValueError, SyntaxError):
+            try:
+                value = json.loads(raw)
+            except (TypeError, json.JSONDecodeError):
+                output.append(raw)
+            else:
+                output.append(describe(value) if isinstance(value, (dict, list)) else raw)
+        else:
+            output.append(describe(value) if isinstance(value, (dict, list)) else raw)
+        cursor = end
+    text = "".join(output)
+    text = re.sub(r"\s+", " ", text).strip(" ：:，,；;")
+    return text or "我找到了一些相关内容，已经整理在下方来源里。你可以告诉我想先看哪一条。"

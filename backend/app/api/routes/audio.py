@@ -420,11 +420,17 @@ def get_audio_job(job_id: str, db: Session = Depends(get_db), teacher: Teacher =
     return _serialize_job(job, db)
 
 
-def _serialize_analysis(item: AudioAnalysis, song: Song, recording: AudioAsset, reference: AudioAsset | None) -> dict:
-    result = json.loads(item.result_json or "{}")
+def _serialize_analysis(item: AudioAnalysis, song: Song, recording: AudioAsset, reference: AudioAsset | None, class_id: int | None = None) -> dict:
+    try:
+        result = json.loads(item.result_json or "{}")
+    except (TypeError, json.JSONDecodeError):
+        result = {}
+    if not isinstance(result, dict):
+        result = {}
     return {
         **result, "id": item.id, "created_at": item.created_at.isoformat(timespec="seconds"),
-        "lesson_plan_id": item.lesson_plan_id,
+        "lesson_plan_id": item.lesson_plan_id, "song_id": item.song_id,
+        "classroom_record_id": item.classroom_record_id, "class_id": class_id,
         "recording_url": f"/api/audio/assets/{recording.id}/stream",
         "reference_url": f"/api/audio/assets/{reference.id}/stream" if reference else None,
         "recording_filename": recording.original_filename,
@@ -442,7 +448,14 @@ def list_analyses(db: Session = Depends(get_db), teacher: Teacher = Depends(get_
         recording = db.get(AudioAsset, item.recording_asset_id)
         reference = db.get(AudioAsset, item.reference_asset_id) if item.reference_asset_id else None
         if song and recording:
-            output.append(_serialize_analysis(item, song, recording, reference))
+            class_record = db.get(ClassroomRecord, item.classroom_record_id) if item.classroom_record_id else None
+            if class_record is None and recording.classroom_record_id:
+                class_record = db.get(ClassroomRecord, recording.classroom_record_id)
+            if class_record is None and item.lesson_plan_id:
+                plan = db.get(LessonPlan, item.lesson_plan_id)
+                output.append(_serialize_analysis(item, song, recording, reference, plan.class_id if plan else None))
+            else:
+                output.append(_serialize_analysis(item, song, recording, reference, class_record.class_id if class_record else None))
     return output
 
 
@@ -455,7 +468,15 @@ def get_analysis(analysis_id: int, db: Session = Depends(get_db), teacher: Teach
     reference = db.get(AudioAsset, item.reference_asset_id) if item.reference_asset_id else None
     if not song or not recording:
         raise HTTPException(status_code=404, detail="音频文件或歌曲已不存在")
-    return _serialize_analysis(item, song, recording, reference)
+    class_record = db.get(ClassroomRecord, item.classroom_record_id) if item.classroom_record_id else None
+    if class_record is None and recording.classroom_record_id:
+        class_record = db.get(ClassroomRecord, recording.classroom_record_id)
+    if class_record is not None:
+        class_id = class_record.class_id
+    else:
+        plan = db.get(LessonPlan, item.lesson_plan_id) if item.lesson_plan_id else None
+        class_id = plan.class_id if plan else None
+    return _serialize_analysis(item, song, recording, reference, class_id)
 
 
 @router.get("/assets/{asset_id}/stream")

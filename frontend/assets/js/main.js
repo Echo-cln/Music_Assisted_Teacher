@@ -9,13 +9,13 @@ const app = document.getElementById("app");
 // 首页和其余功能在模块图阶段一起白屏。
 const routeLoaders = {
   home: () => import("./pages/home.js").then(m => m.renderHome),
-  teachingAssistant: () => import("./pages/teaching_assistant.js?v=20261009-teaching-assistant").then(m => m.renderTeachingAssistant),
-  assistant: () => import("./pages/assistant.js?v=20261009-teaching-assistant").then(m => m.renderAssistant),
+  teachingAssistant: () => import("./pages/teaching_assistant.js?v=20261009-teaching-assistant-2").then(m => m.renderTeachingAssistant),
+  assistant: () => import("./pages/assistant.js?v=20261009-dialogue-readable-2").then(m => m.renderAssistant),
   classes: () => import("./pages/classes.js?v=20261009-dbtrend-persist").then(m => m.renderClasses),
   resources: () => import("./pages/resources.js").then(m => m.renderResources),
   workbench: () => import("./pages/workbench.js").then(m => m.renderWorkbench),
-  lessons: () => import("./pages/lessons.js?v=20261007-6").then(m => m.renderLessons),
-  feedback: () => import("./pages/feedback.js?v=20261007-5").then(m => m.renderFeedback),
+  lessons: () => import("./pages/lessons.js?v=20261009-audio-link-2").then(m => m.renderLessons),
+  feedback: () => import("./pages/feedback.js?v=20261009-audio-link-2").then(m => m.renderFeedback),
   audio: () => import("./pages/audio.js?v=20261007-pilot1").then(m => m.renderAudio),
   admin: () => import("./pages/admin.js").then(m => m.renderAdmin),
 };

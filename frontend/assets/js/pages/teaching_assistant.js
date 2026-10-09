@@ -22,6 +22,14 @@ export async function renderTeachingAssistant(container) {
   } else if (conversations.length) {
     activeConversation = await api.assistantConversation(conversations[0].id);
   }
+  if (activeConversation?.context?.class_id && !activeConversation.context.class_name) {
+    const profile = classes.find(item => Number(item.id) === Number(activeConversation.context.class_id));
+    if (profile) {
+      activeConversation = await api.updateAssistantConversation(activeConversation.id, {
+        context: { ...activeConversation.context, class_name: profile.name },
+      });
+    }
+  }
 
   container.innerHTML = pageHeader(
     "教学助手",
@@ -134,10 +142,20 @@ export async function renderTeachingAssistant(container) {
       const messageIndex = [...chat.querySelectorAll(".assistant-hub-message")].indexOf(messageNode);
       const assistantItem = messages[messageIndex];
       const lastUser = [...messages.slice(0, messageIndex)].reverse().find(item => item.role === "user")?.content || "";
-      const sourceText = assistantItem?.sources?.map(item => item.kind + "：" + item.label + "。" + item.detail).join("\n") || "";
+      const sourceText = (assistantItem?.sources || []).slice(0, 3).map(item => {
+        const detail = String(item.detail || "").replace(/\s+/g, " ").slice(0, 100);
+        return `${item.kind}《${item.label}》${detail ? `：${detail}` : ""}`;
+      }).join("；");
       const pickedSong = button.dataset.songName;
+      const seedPrompt = [
+        pickedSong ? `我想围绕《${pickedSong}》备课。` : "请带我继续准备教案。",
+        lastUser ? `我的要求：${lastUser.slice(0, 420)}` : "",
+        context.class_name ? `班级：${context.class_name}` : "",
+        sourceText ? `可参考资料：${sourceText}` : "",
+        "请先和我确认需求，再决定是否生成；不要直接套用或覆盖旧教案。",
+      ].filter(Boolean).join("\n").slice(0, 950);
       localStorage.setItem("assistantLessonSeed", JSON.stringify({
-        prompt: `${pickedSong ? `我想围绕《${pickedSong}》备课。` : "请先参考以下资料，并与我确认准备怎样处理，再继续。"}\n我的要求：${lastUser}\n参考资料：\n${sourceText}`,
+        prompt: seedPrompt,
         context: { ...context, ...(pickedSong ? { song_name: pickedSong } : {}) },
       }));
       window.dispatchEvent(new CustomEvent("app:navigate", { detail: "assistant" }));
@@ -146,8 +164,10 @@ export async function renderTeachingAssistant(container) {
 
   function bindShell() {
     document.getElementById("newTeachingConversation").onclick = async () => {
+      const classId = Number(document.getElementById("assistantClass").value) || null;
+      const profile = classes.find(item => Number(item.id) === classId);
       activeConversation = await api.createAssistantConversation({
-        context: { class_id: Number(document.getElementById("assistantClass").value) || null },
+        context: { class_id: classId, class_name: profile?.name || null },
       });
       conversations.unshift(activeConversation);
       renderConversationList();
@@ -191,8 +211,10 @@ export async function renderTeachingAssistant(container) {
       input.disabled = true;
       try {
         if (!activeConversation) {
+          const classId = Number(document.getElementById("assistantClass").value) || null;
+          const profile = classes.find(item => Number(item.id) === classId);
           activeConversation = await api.createAssistantConversation({
-            context: { class_id: Number(document.getElementById("assistantClass").value) || null },
+            context: { class_id: classId, class_name: profile?.name || null },
           });
         }
         // Paint the user's turn immediately; the server response remains the source of truth.

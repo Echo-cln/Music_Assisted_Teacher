@@ -6,10 +6,54 @@ from sqlalchemy.orm import Session
 
 from app.core.security import get_current_teacher
 from app.db.session import get_db
-from app.models.entities import AudioAnalysis, ClassProfile, ClassroomRecord, Feedback, LessonPlan, Song, Teacher
+from app.models.entities import AudioAnalysis, AudioAsset, ClassProfile, ClassroomRecord, Feedback, LessonPlan, Song, Teacher
 from app.schemas.feedback import FeedbackCreate
 
 router = APIRouter(prefix="/feedback", tags=["课后反馈"])
+
+
+def _audio_link_mismatch(
+    analysis: AudioAnalysis | None,
+    plan: LessonPlan | None,
+    record: ClassroomRecord | None,
+    recording: AudioAsset | None = None,
+) -> bool:
+    """Treat a legacy or incomplete association as untrusted until it matches this lesson."""
+    return bool(
+        not analysis or not plan or not record
+        or plan.class_id != record.class_id
+        or analysis.song_id != plan.song_id
+        or analysis.lesson_plan_id not in (None, plan.id)
+        or analysis.classroom_record_id not in (None, record.id)
+        or not recording
+        or (recording and (
+            recording.song_id != plan.song_id
+            or recording.classroom_record_id not in (None, record.id)
+        ))
+    )
+
+
+def _validate_audio_link(analysis: AudioAnalysis, plan: LessonPlan, record: ClassroomRecord, recording: AudioAsset | None = None) -> None:
+    if plan.class_id != record.class_id:
+        raise HTTPException(status_code=422, detail="当前教案与课堂记录所属班级不一致，暂不能关联音频")
+    if analysis.song_id != plan.song_id:
+        raise HTTPException(status_code=422, detail="音频分析对应的歌曲与当前教案不一致，请重新选择同一首歌的分析记录")
+    if analysis.lesson_plan_id not in (None, plan.id):
+        raise HTTPException(status_code=422, detail="这条音频分析已关联另一份教案，请先解除原关联")
+    if analysis.classroom_record_id not in (None, record.id):
+        raise HTTPException(status_code=422, detail="这条音频分析属于另一节课堂记录，不能关联到当前反馈")
+    if recording:
+        if recording.song_id != plan.song_id:
+            raise HTTPException(status_code=422, detail="音频文件登记的歌曲与当前教案不一致，不能关联")
+        if recording.classroom_record_id not in (None, record.id):
+            raise HTTPException(status_code=422, detail="音频文件属于另一节课堂记录，不能关联到当前反馈")
+
+
+def _recording_for_analysis(db: Session, analysis: AudioAnalysis, teacher_id: int) -> AudioAsset | None:
+    return db.scalar(select(AudioAsset).where(
+        AudioAsset.id == analysis.recording_asset_id,
+        AudioAsset.teacher_id == teacher_id,
+    ))
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -33,10 +77,14 @@ def create_feedback(
         analysis = db.scalar(select(AudioAnalysis).where(AudioAnalysis.id == payload.audio_analysis_id, AudioAnalysis.teacher_id == teacher.id))
         if not analysis:
             raise HTTPException(status_code=404, detail="音频分析记录不存在")
-        if analysis.lesson_plan_id not in (None, plan.id):
-            raise HTTPException(status_code=422, detail="这条音频分析已关联另一份教案，请先解除原关联") 
+        recording = _recording_for_analysis(db, analysis, teacher.id)
+        if not recording:
+            raise HTTPException(status_code=404, detail="音频分析对应的录音文件不存在")
+        _validate_audio_link(analysis, plan, record, recording)
         if analysis.lesson_plan_id is None:
             analysis.lesson_plan_id = plan.id
+        if analysis.classroom_record_id is None:
+            analysis.classroom_record_id = record.id
     item = Feedback(
         teacher_id=teacher.id,
         classroom_record_id=record.id,
@@ -65,9 +113,25 @@ def list_feedback(db: Session = Depends(get_db), teacher: Teacher = Depends(get_
         record = db.get(ClassroomRecord, item.classroom_record_id)
         plan = db.get(LessonPlan, record.lesson_plan_id) if record else None
         song = db.get(Song, plan.song_id) if plan else None
-        analysis = json.loads(item.analysis_json or "{}")
+        linked_analysis = db.scalar(select(AudioAnalysis).where(
+            AudioAnalysis.id == item.audio_analysis_id,
+            AudioAnalysis.teacher_id == teacher.id,
+        )) if item.audio_analysis_id else None
+        linked_recording = _recording_for_analysis(db, linked_analysis, teacher.id) if linked_analysis else None
+        audio_link_mismatch = bool(item.audio_analysis_id and _audio_link_mismatch(linked_analysis, plan, record, linked_recording))
+        try:
+            analysis = json.loads(item.analysis_json or "{}")
+        except (TypeError, json.JSONDecodeError):
+            analysis = {}
+        if not isinstance(analysis, dict):
+            analysis = {}
         if plan and not analysis.get("goal_observations"):
-            content = json.loads(plan.content_json or "{}")
+            try:
+                content = json.loads(plan.content_json or "{}")
+            except (TypeError, json.JSONDecodeError):
+                content = {}
+            if not isinstance(content, dict):
+                content = {}
             objectives = content.get("objective_evidence") or [
                 {"objective": objective, "evidence": ""} for objective in content.get("objectives", [])
             ]
@@ -75,6 +139,17 @@ def list_feedback(db: Session = Depends(get_db), teacher: Teacher = Depends(get_
                 {"objective": entry.get("objective", ""), "evidence": entry.get("evidence", ""), "status": ""}
                 for entry in objectives if entry.get("objective")
             ]
+        safe_analysis = {
+            "goal_observations": analysis.get("goal_observations", []),
+            "class_observations": analysis.get("class_observations", {}),
+        }
+        if linked_analysis and not audio_link_mismatch:
+            try:
+                analysis_result = json.loads(linked_analysis.result_json or "{}")
+            except (TypeError, json.JSONDecodeError):
+                analysis_result = {}
+            if isinstance(analysis_result, dict):
+                safe_analysis["analysis_mode_label"] = analysis_result.get("analysis_mode_label", "课堂音频分析")
         output.append({
             "id": item.id, "lesson_plan_id": plan.id if plan else None,
             "lesson_title": plan.title if plan else "已删除教案",
@@ -83,8 +158,10 @@ def list_feedback(db: Session = Depends(get_db), teacher: Teacher = Depends(get_
             "song_name": song.name if song else "—",
             "overall_effect": item.overall_effect, "highlights": item.highlights,
             "problems": item.problems, "improvement": item.improvement,
-            "audio_summary": item.audio_summary, "analysis": analysis,
-            "audio_analysis_id": item.audio_analysis_id,
+            "audio_summary": item.audio_summary, "analysis": safe_analysis,
+            "audio_analysis_id": None if audio_link_mismatch else item.audio_analysis_id,
+            "audio_link_mismatch": audio_link_mismatch,
+            "audio_analysis_song_name": db.get(Song, linked_analysis.song_id).name if linked_analysis and db.get(Song, linked_analysis.song_id) else None,
             "created_at": item.created_at.isoformat(timespec="seconds"),
         })
     return output
@@ -103,10 +180,16 @@ def update_feedback(feedback_id: int, payload: FeedbackCreate, db: Session = Dep
             AudioAnalysis.id == payload.audio_analysis_id,
             AudioAnalysis.teacher_id == teacher.id,
         ))
-        if not analysis or analysis.lesson_plan_id not in (None, plan.id):
-            raise HTTPException(status_code=422, detail="音频分析记录不存在，或已关联另一份教案")
+        if not analysis:
+            raise HTTPException(status_code=404, detail="音频分析记录不存在")
+        recording = _recording_for_analysis(db, analysis, teacher.id)
+        if not recording:
+            raise HTTPException(status_code=404, detail="音频分析对应的录音文件不存在")
+        _validate_audio_link(analysis, plan, record, recording)
         if analysis.lesson_plan_id is None:
             analysis.lesson_plan_id = plan.id
+        if analysis.classroom_record_id is None:
+            analysis.classroom_record_id = record.id
     for key in ("overall_effect", "highlights", "problems", "improvement", "audio_summary", "audio_analysis_id"):
         setattr(item, key, getattr(payload, key))
     item.analysis_json = json.dumps(payload.analysis, ensure_ascii=False)

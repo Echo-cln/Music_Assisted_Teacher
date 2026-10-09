@@ -5,11 +5,11 @@ from pydantic import BaseModel, Field
 
 class LessonDialogueMessage(BaseModel):
     role: Literal["user", "assistant"]
-    content: str = Field(min_length=1, max_length=1200)
+    content: str = Field(min_length=1, max_length=4000)
 
 
 class LessonDialogueReplyRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=1200)
+    message: str = Field(min_length=1, max_length=4000)
     history: list[LessonDialogueMessage] = Field(default_factory=list, max_length=12)
     context: dict[str, Any] = Field(default_factory=dict)
 
