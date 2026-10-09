@@ -11,9 +11,12 @@ export async function renderLessons(container) {
     <div id="archiveContent"></div>`;
   container.querySelectorAll("[data-archive]").forEach(button => button.onclick = () => openArchive(button.dataset.archive));
   let startupDeepLink = null;
+  let initialArchiveTab = "";
   try { startupDeepLink = JSON.parse(localStorage.getItem("audioArchiveDeepLink") || "null"); }
   catch (_) { localStorage.removeItem("audioArchiveDeepLink"); }
-  await openArchive(startupDeepLink?.id ? "audio" : "lessons");
+  try { initialArchiveTab = localStorage.getItem("classroomFeedbackInitialTab") || ""; }
+  finally { localStorage.removeItem("classroomFeedbackInitialTab"); }
+  await openArchive(startupDeepLink?.id ? "audio" : initialArchiveTab === "feedback" ? "feedback" : "lessons");
 
   async function openArchive(kind) {
     container.querySelectorAll("[data-archive]").forEach(button => button.classList.toggle("active", button.dataset.archive === kind));

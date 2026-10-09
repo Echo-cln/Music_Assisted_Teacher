@@ -12,16 +12,25 @@ function openAudioAnalysis(id) {
 export async function renderFeedback(container) {
   const lessons = await api.lessons();
   const analyses = await api.audioAnalyses();
+  let assistantSeed = null;
+  try { assistantSeed = JSON.parse(localStorage.getItem("feedbackAssistantSeed") || "null"); }
+  catch (_) { localStorage.removeItem("feedbackAssistantSeed"); }
+  localStorage.removeItem("feedbackAssistantSeed");
+  const seededPlan = lessons.find(plan => Number(plan.id) === Number(assistantSeed?.lesson_id));
+  const seededClassName = seededPlan?.class_name
+    || lessons.find(plan => Number(plan.class_id) === Number(assistantSeed?.class_id))?.class_name;
   const pointer = JSON.parse(localStorage.getItem("audioAnalysisForFeedback") || "null");
   let imported = null;
   if (pointer?.id) {
     try { imported = await api.audioAnalysis(pointer.id); } catch (_) { localStorage.removeItem("audioAnalysisForFeedback"); }
   }
   let importedMismatch = false;
-  container.innerHTML = pageHeader("课堂反馈", "沉淀教师观察；音频分析会作为可编辑的课堂证据写入反馈正文。") + `
+  container.innerHTML = pageHeader("课堂反馈", seededClassName
+    ? `正在为${esc(seededClassName)}整理课堂反馈。请先选择对应教案，再填写本节课实际观察到的情况。`
+    : "沉淀教师观察；音频分析会作为可编辑的课堂证据写入反馈正文。") + `
     <div class="feedback-layout">
       <section class="card"><span class="eyebrow">TEACHER REFLECTION</span><h2>本课观察与改进</h2>
-        <label>对应教案<select id="lessonId"><option value="">请选择已保存教案</option>${lessons.map(plan => `<option value="${plan.id}" ${imported?.lesson_plan_id === plan.id ? "selected" : ""}>${esc(plan.title)} · ${esc(plan.class_name)}</option>`).join("")}</select></label>
+        <label>对应教案<select id="lessonId"><option value="">请选择已保存教案</option>${lessons.map(plan => `<option value="${plan.id}" ${Number(imported?.lesson_plan_id || assistantSeed?.lesson_id) === Number(plan.id) ? "selected" : ""}>${esc(plan.title)} · ${esc(plan.class_name)}</option>`).join("")}</select></label>
         <label>关联音频分析（选填）<select id="audioAnalysisId"><option value="">不带入音频分析</option></select><small>显示已关联本教案或尚未关联教案的分析；保存后会自动关联，摘要仍可编辑。</small></label>
         <section class="goal-observation-module" id="goalObservations"><div class="module-head"><div><span class="eyebrow">LEARNING EVIDENCE</span><h3>本课目标观察</h3></div><span class="status info">课后记录</span></div><p class="muted">根据学生实际表现记录进展；未观察到的目标可以留空。</p><div id="goalObservationRows"></div></section>
         <label>整体效果<select id="effect"><option>很好</option><option selected>较好</option><option>一般</option><option>较差</option></select></label>

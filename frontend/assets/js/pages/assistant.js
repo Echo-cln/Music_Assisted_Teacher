@@ -107,7 +107,7 @@ export async function renderAssistant(container) {
             <div id="dialogueMessages" class="dialogue-messages" aria-live="polite">
               <div class="dialogue-message assistant"><span class="dialogue-avatar">助</span><div class="dialogue-bubble"><b>备课助手</b><p>你好。你可以直接说说准备给哪个班上什么内容、希望课堂怎么进行。如果我发现关键信息还不够，会接着问；信息齐了就开始备课。教案出来后，也可以继续告诉我哪里需要调整。</p><small>例如：给三年级1班上《茉莉花》，40分钟，孩子们最近节拍容易越唱越快。教室没有投影，只有钢琴，希望多安排学生参与的活动。</small></div></div>
             </div>
-            <div class="dialogue-composer"><label class="sr-only" for="lessonBrief">描述本课需求</label><textarea id="lessonBrief" rows="2" placeholder="描述课堂需求，或直接回答我刚才的问题…（Enter 发送）"></textarea><button class="btn primary" id="extractLessonBrief" aria-label="发送备课需求">发送</button></div>
+            <div class="dialogue-composer"><textarea id="lessonBrief" rows="2" aria-label="继续对话备课" placeholder="接着说说你的想法，或回答我刚才的问题…（Enter 发送）"></textarea><button class="btn primary" id="extractLessonBrief" aria-label="发送备课需求">发送</button></div>
             <p class="dialogue-privacy-note">你不需要填写条件表。生成后可在下方预览教案，继续发消息修改，或保存到教学档案。</p>
           </div>
           <div id="recommendations"></div>

@@ -9,7 +9,11 @@ from app.models.entities import ArrangementProject, ClassProfile, ClassroomRecor
 from fastapi import HTTPException
 
 from app.api.routes.feedback import _audio_link_mismatch, _validate_audio_link
-from app.api.routes.teaching_assistant import _analysis_detail, _is_lesson_action, _is_lookup, _plain, _present, _retrieve, _terms
+from app.api.routes.teaching_assistant import (
+    _analysis_detail, _class_scope_suggestions, _is_blank_feedback_form_request,
+    _is_feedback_creation_request, _is_observation_offer, _is_lesson_action, _is_lookup,
+    _is_all_class_request, _plain, _present, _requires_class_scope, _retrieve, _terms,
+)
 from app.services.ai_provider import _naturalize_dialogue_answer
 
 
@@ -20,6 +24,29 @@ def test_intent_guards_keep_lookup_separate_from_lesson_actions():
     assert "茉莉花" in _terms("请找《茉莉花》节奏练习的历史教案")
     assert "古筝" in _terms("四年级1班想找古筝编曲")
     assert "class_name" not in _plain("{'class_name': '三年级1班', 'duration': 40}")
+
+
+def test_assistant_asks_for_class_instead_of_guessing_feedback_scope():
+    profiles = [SimpleNamespace(id=11, name="三年级1班"), SimpleNamespace(id=12, name="四年级1班")]
+    query = "看看这个班最近的课堂反馈里，节奏方面反复出现什么情况"
+    assert _requires_class_scope(query, {}, profiles)
+    assert not _requires_class_scope("看看四年级1班最近的课堂反馈", {}, profiles)
+    assert not _requires_class_scope("查看所有班级的课堂反馈", {}, profiles)
+    assert _is_all_class_request("查看所有班级的课堂反馈")
+    assert not _requires_class_scope(query, {"class_id": 11}, profiles)
+    options = _class_scope_suggestions(profiles, query)
+    assert options[0]["class_id"] == 11
+    assert "三年级1班" in options[0]["message"]
+    assert options[-1]["label"] == "查看全部班级"
+
+
+def test_feedback_generation_clarifies_intent_and_blank_form_is_explicit():
+    assert _is_feedback_creation_request("为我生成课堂反馈")
+    assert _is_feedback_creation_request("帮我整理成课后反馈")
+    assert not _is_feedback_creation_request("看看最近的课堂反馈")
+    assert _is_observation_offer("我会提供本节课实际观察")
+    assert _is_blank_feedback_form_request("打开空白课堂反馈表")
+    assert not _is_blank_feedback_form_request("为我生成课堂反馈")
 
 
 def test_assistant_formats_structured_model_output_as_readable_chinese():

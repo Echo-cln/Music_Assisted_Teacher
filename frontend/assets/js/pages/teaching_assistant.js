@@ -103,20 +103,23 @@ export async function renderTeachingAssistant(container) {
   }
 
   function showWelcome() {
+    const context = activeConversation?.context || {};
+    const selectedClass = contextLabel(context);
     document.getElementById("assistantChat").innerHTML = `
       <div class="assistant-welcome">
-        <span class="assistant-welcome-mark">乡</span>
-        <h2>今天想从哪件事开始？</h2>
-        <p>你可以问我问题，也可以让我帮你翻找已有资料。需要改教案时，我会先把相关内容带过去，不会在这里悄悄改动。</p>
+        <span class="assistant-welcome-mark">助</span>
+        <p class="assistant-role-label">你的备课与资料整理搭档</p>
+        <h2>今天想先聊哪件事？</h2>
+        <p>我可以陪你找旧教案、看班级反馈、整理教学资源，或一起准备新课。${selectedClass ? `这次先围绕<strong>${esc(selectedClass)}</strong>聊。` : "目前还没有指定班级；如果问题涉及某个班，我会先问清楚，不会替你默认选择。"}需要记录真实课堂表现时，我也会等你提供观察内容。</p>
         <div class="assistant-suggestions">
-          <button data-suggestion="找一下之前给四年级1班做过的音乐教案">找一份历史教案</button>
-          <button data-suggestion="看看这个班最近的课堂反馈里，节奏方面反复出现什么情况">回看班级反馈</button>
+          <button data-suggestion="找一份之前保存的音乐教案">找一份历史教案</button>
+          <button data-suggestion="回看某个班最近的课堂反馈">回看班级反馈</button>
           <button data-suggestion="教学资源库里有没有适合节奏练习的音乐游戏">查找教学资源</button>
         </div>
       </div>`;
     document.querySelectorAll("[data-suggestion]").forEach(button => button.onclick = () => {
       document.getElementById("assistantHubInput").value = button.dataset.suggestion;
-      document.getElementById("assistantHubInput").focus();
+      document.getElementById("assistantHubForm").requestSubmit();
     });
   }
 
@@ -127,13 +130,18 @@ export async function renderTeachingAssistant(container) {
       context.source_label ? `正在参考：${context.source_label}` : (contextLabel(context) ? `班级：${contextLabel(context)}` : "");
     const chat = document.getElementById("assistantChat");
     const messages = activeConversation.messages || [];
+    if (!messages.length) {
+      showWelcome();
+      return;
+    }
     chat.innerHTML = messages.map(item => `
       <article class="assistant-hub-message ${item.role === "user" ? "user" : "assistant"}">
         <span class="assistant-hub-avatar">${item.role === "user" ? "我" : "助"}</span>
         <div class="assistant-hub-message-body"><div class="assistant-hub-message-content">${esc(item.content).replace(/\n/g, "<br>")}</div>
         ${item.sources?.length ? `<details class="assistant-source-list"><summary>参考了 ${item.sources.length} 条资料</summary><div>${item.sources.map(source => `
           <div class="assistant-source-card"><span>${esc(source.kind)}</span><b>${esc(source.label)}</b><p>${esc(source.detail)}</p><small>${source.updated_at ? "记录时间：" + esc(source.updated_at) : "来自项目现有资料"}</small></div>`).join("")}</div></details>` : ""}
-        ${item.actions?.map(action => `<button class="btn soft assistant-action" data-assistant-action="${esc(action.type)}" data-song-name="${esc(action.song_name || "")}">${esc(action.label)}</button>`).join("") || ""}
+        ${item.actions?.map(action => `<button class="btn soft assistant-action" data-assistant-action="${esc(action.type)}" data-song-name="${esc(action.song_name || "")}" data-class-id="${action.class_id || ""}" data-lesson-id="${action.lesson_id || ""}">${esc(action.label)}</button>`).join("") || ""}
+        ${item.suggestions?.length ? `<div class="assistant-reply-suggestions" aria-label="接下来可以做什么">${item.suggestions.map(suggestion => `<button type="button" class="assistant-reply-chip" data-suggestion-message="${esc(suggestion.message)}" data-suggestion-class="${suggestion.class_id || ""}">${esc(suggestion.label)}</button>`).join("")}</div>` : ""}
         </div>
       </article>`).join("");
     chat.scrollTop = chat.scrollHeight;
@@ -159,6 +167,30 @@ export async function renderTeachingAssistant(container) {
         context: { ...context, ...(pickedSong ? { song_name: pickedSong } : {}) },
       }));
       window.dispatchEvent(new CustomEvent("app:navigate", { detail: "assistant" }));
+    });
+    chat.querySelectorAll('[data-assistant-action="open_feedback_form"]').forEach(button => button.onclick = () => {
+      localStorage.setItem("feedbackAssistantSeed", JSON.stringify({
+        class_id: Number(button.dataset.classId) || context.class_id || null,
+        lesson_id: Number(button.dataset.lessonId) || context.lesson_id || null,
+      }));
+      window.dispatchEvent(new CustomEvent("app:navigate", { detail: "feedback" }));
+    });
+    chat.querySelectorAll('[data-assistant-action="open_feedback_archive"]').forEach(button => button.onclick = () => {
+      localStorage.setItem("classroomFeedbackInitialTab", "feedback");
+      window.dispatchEvent(new CustomEvent("app:navigate", { detail: "lessons" }));
+    });
+    chat.querySelectorAll("[data-suggestion-message]").forEach(button => button.onclick = async () => {
+      const classId = Number(button.dataset.suggestionClass) || null;
+      if (classId && activeConversation) {
+        const profile = classes.find(item => Number(item.id) === classId);
+        activeConversation = await api.updateAssistantConversation(activeConversation.id, {
+          context: { ...(activeConversation.context || {}), class_id: classId, class_name: profile?.name || null },
+        });
+        document.getElementById("assistantClass").value = String(classId);
+      }
+      const input = document.getElementById("assistantHubInput");
+      input.value = button.dataset.suggestionMessage;
+      document.getElementById("assistantHubForm").requestSubmit();
     });
   }
 

@@ -244,6 +244,25 @@ def _present(row: AssistantConversation, include_messages: bool = False) -> dict
                 item["content"] = str(raw.get("content") or "")
                 if item["role"] == "assistant":
                     item["content"] = _naturalize_dialogue_answer(item["content"])
+                    suggestions = raw.get("suggestions")
+                    if isinstance(suggestions, list):
+                        safe_suggestions = []
+                        for suggestion in suggestions[:6]:
+                            if isinstance(suggestion, str):
+                                label = _plain(suggestion, 70)
+                                if label:
+                                    safe_suggestions.append({"label": label, "message": label})
+                            elif isinstance(suggestion, dict):
+                                label = _plain(suggestion.get("label"), 70)
+                                message = _plain(suggestion.get("message"), 180)
+                                class_id = suggestion.get("class_id")
+                                if label and message:
+                                    item_suggestion = {"label": label, "message": message}
+                                    if isinstance(class_id, int) and class_id > 0:
+                                        item_suggestion["class_id"] = class_id
+                                    safe_suggestions.append(item_suggestion)
+                        if safe_suggestions:
+                            item["suggestions"] = safe_suggestions
                     sources = raw.get("sources")
                     if isinstance(sources, list):
                         safe_sources = []
@@ -264,13 +283,27 @@ def _present(row: AssistantConversation, include_messages: bool = False) -> dict
                             item["sources"] = safe_sources
                     actions = raw.get("actions")
                     if isinstance(actions, list):
-                        item["actions"] = [{
-                            "type": "open_lesson_planner",
-                            "label": _plain(action.get("label"), 60) or "带入教案助手",
-                            "song_id": action.get("song_id") if isinstance(action.get("song_id"), int) else None,
-                            "song_name": _plain(action.get("song_name"), 80),
-                        } for action in actions[:3] if isinstance(action, dict)
-                          and action.get("type") == "open_lesson_planner"]
+                        safe_actions = []
+                        for action in actions[:3]:
+                            if not isinstance(action, dict):
+                                continue
+                            action_type = action.get("type")
+                            if action_type == "open_lesson_planner":
+                                safe_actions.append({
+                                    "type": action_type,
+                                    "label": _plain(action.get("label"), 60) or "带入教案助手",
+                                    "song_id": action.get("song_id") if isinstance(action.get("song_id"), int) else None,
+                                    "song_name": _plain(action.get("song_name"), 80),
+                                })
+                            elif action_type in {"open_feedback_form", "open_feedback_archive"}:
+                                safe_actions.append({
+                                    "type": action_type,
+                                    "label": _plain(action.get("label"), 60) or ("打开课堂反馈页" if action_type == "open_feedback_form" else "查看已有反馈"),
+                                    "class_id": action.get("class_id") if isinstance(action.get("class_id"), int) else None,
+                                    "lesson_id": action.get("lesson_id") if isinstance(action.get("lesson_id"), int) else None,
+                                })
+                        if safe_actions:
+                            item["actions"] = safe_actions
                 clean_messages.append(item)
         result["messages"] = clean_messages
     return result
@@ -667,6 +700,85 @@ def _is_song_recommendation(message: str) -> bool:
     return any(word in message for word in ("推荐歌曲", "推荐几首歌", "推荐一首歌", "适合的歌曲", "选什么歌", "选一首歌"))
 
 
+def _is_all_class_request(message: str) -> bool:
+    return any(word in message for word in ("所有班级", "全部班级", "各个班", "各班", "跨班", "班级整体对比", "整体对比"))
+
+
+def _requires_class_scope(message: str, context: dict, profiles: list[ClassProfile]) -> bool:
+    """Class evidence is never inferred from whichever record happens to be newest."""
+    if any(context.get(key) for key in ("class_id", "lesson_id", "feedback_id")) or _is_all_class_request(message):
+        return False
+    if any(item.name and item.name in message for item in profiles):
+        return False
+    class_sensitive = (
+        "这个班", "这班", "本班", "该班", "这个班级", "这个班最近", "班级最近",
+        "班级画像", "班级反馈", "课堂反馈里", "课堂反馈中", "课后反馈里", "课后反馈中",
+        "反馈里反复", "反馈中反复", "反复出现", "最近的课堂反馈", "最近课堂反馈", "某个班",
+    )
+    refers_to_feedback_history = any(word in message for word in ("课堂反馈", "课后反馈", "反馈记录")) and any(
+        word in message for word in ("查看", "看看", "最近", "之前", "情况", "总结", "查", "找", "反复")
+    )
+    return any(phrase in message for phrase in class_sensitive) or (len(profiles) > 1 and refers_to_feedback_history)
+
+
+def _class_scope_suggestions(profiles: list[ClassProfile], message: str) -> list[dict]:
+    def scoped_query(name: str) -> str:
+        query = message
+        for phrase in ("这个班级", "这个班", "这班", "本班", "该班", "某个班"):
+            query = query.replace(phrase, name)
+        return query
+
+    suggestions = [{"label": item.name, "message": scoped_query(item.name), "class_id": int(item.id)}
+                   for item in profiles[:5] if item.name]
+    if len(profiles) > 1:
+        all_query = message
+        for phrase in ("这个班级", "这个班", "这班", "本班", "该班", "某个班"):
+            all_query = all_query.replace(phrase, "所有班级")
+        if not _is_all_class_request(all_query):
+            all_query = f"查看所有班级的课堂反馈：{all_query}"
+        suggestions.append({"label": "查看全部班级", "message": all_query})
+    return suggestions
+
+
+def _is_feedback_creation_request(message: str) -> bool:
+    feedback_words = ("课堂反馈", "课后反馈", "反馈记录")
+    creation_words = ("生成", "写一份", "帮我写", "整理成", "新建", "填写", "做一份")
+    return any(word in message for word in feedback_words) and any(word in message for word in creation_words)
+
+
+def _is_observation_offer(message: str) -> bool:
+    return any(phrase in message for phrase in (
+        "我会提供本节课实际观察", "我来补充课堂观察", "我提供课堂观察", "我来提供实际观察",
+    ))
+
+
+def _is_blank_feedback_form_request(message: str) -> bool:
+    return any(word in message for word in ("空白反馈表", "空白课堂反馈", "打开反馈表", "打开课堂反馈页", "填写课堂反馈表"))
+
+
+def _follow_up_suggestions(message: str, sources: list[dict], actions: list[dict]) -> list[dict]:
+    """Offer a few relevant next moves without turning every reply into a checklist."""
+    if actions:
+        return []
+    if any(word in message for word in ("课堂反馈", "课后反馈", "反馈", "课堂表现")):
+        return [
+            {"label": "按班级继续查看", "message": "我想按班级继续查看课堂反馈"},
+            {"label": "根据反馈准备教案", "message": "根据刚才找到的课堂反馈，和我一起准备一份教案"},
+            {"label": "打开课堂反馈页", "message": "打开空白课堂反馈表"},
+        ]
+    if any(item.get("kind") in {"歌曲资源", "音乐游戏", "乐理资源", "易错纠正"} for item in sources):
+        return [
+            {"label": "围绕这些资源备课", "message": "请结合刚才找到的资源，和我一起准备一节课"},
+            {"label": "换个条件再找", "message": "换一个年级或课堂目标再帮我找找"},
+        ]
+    if sources:
+        return [
+            {"label": "继续看这条资料", "message": "请把刚才最相关的资料展开说明"},
+            {"label": "带着资料准备教案", "message": "结合刚才找到的资料，和我一起准备一份教案"},
+        ]
+    return []
+
+
 def _should_retrieve(message: str, context: dict) -> bool:
     if any(context.get(key) for key in ("class_id", "lesson_id", "feedback_id", "audio_analysis_id", "teacher_observations")):
         return True
@@ -714,7 +826,10 @@ def _recommendation_response(db: Session, teacher_id: int, message: str, context
 
 
 def _is_lesson_action(message: str, context: dict | None = None) -> bool:
-    action = any(word in message for word in ("生成教案", "备一份教案", "新建教案", "修改教案", "调整教案", "根据反馈改", "按反馈调整"))
+    action = any(word in message for word in (
+        "生成教案", "备一份教案", "新建教案", "修改教案", "调整教案", "根据反馈改", "按反馈调整",
+        "准备教案", "准备一份教案", "一起备课", "一起准备一节课", "准备新课",
+    ))
     contextual_edit = bool((context or {}).get("lesson_id") or (context or {}).get("type") in {"feedback", "feedback_draft"}) and any(
         word in message for word in ("改成", "调整", "修改", "删掉", "增加", "补充", "保留")
     )
@@ -823,14 +938,65 @@ def send_message(
         raise HTTPException(status_code=422, detail="请先写下想讨论的内容")
     context = _json(row.context_json, {})
     history = _json(row.messages_json, [])
+    suggestions: list[dict] = []
     try:
-        sources = _retrieve(db, teacher.id, message, context) if _should_retrieve(message, context) else []
-        if _is_song_recommendation(message):
+        profiles = db.scalars(select(ClassProfile).where(ClassProfile.teacher_id == teacher.id)).all()
+        if _is_blank_feedback_form_request(message):
+            sources = []
+            actions = [{
+                "type": "open_feedback_form", "label": "打开课堂反馈页",
+                "class_id": context.get("class_id") if isinstance(context.get("class_id"), int) else None,
+                "lesson_id": context.get("lesson_id") if isinstance(context.get("lesson_id"), int) else None,
+            }]
+            reply = "好，我带你打开课堂反馈页。那里可以先选择已保存教案，再记录本节课实际观察到的情况；没有提供的课堂表现我不会替你补写。"
+        elif _is_feedback_creation_request(message):
+            sources, actions = [], []
+            if context.get("class_id") or context.get("lesson_id"):
+                actions.append({
+                    "type": "open_feedback_form", "label": "打开课堂反馈页",
+                    "class_id": context.get("class_id") if isinstance(context.get("class_id"), int) else None,
+                    "lesson_id": context.get("lesson_id") if isinstance(context.get("lesson_id"), int) else None,
+                })
+            actions.append({"type": "open_feedback_archive", "label": "查看已有反馈"})
+            reply = (
+                "可以，我们先把要做的事分清楚：你是想打开一份空白反馈表，查看已有课堂反馈，"
+                "还是把你记录的课堂观察整理成反馈？如果是整理内容，请把实际观察告诉我；我不会根据旧教案或别的班级记录编造课堂表现。"
+            )
+            suggestions = [
+                {"label": "打开空白反馈表", "message": "打开空白课堂反馈表"},
+                {"label": "查看已有反馈", "message": "查看所有班级的已有课堂反馈记录"},
+                {"label": "我来补充课堂观察", "message": "我会提供本节课实际观察"},
+            ]
+        elif _is_observation_offer(message):
+            sources, actions = [], []
+            reply = (
+                "好，你可以直接把这节课实际看到的情况发给我，比如学生在哪个环节跟上了、哪里遇到困难、你准备怎样调整。"
+                "也请告诉我对应的班级或教案。收到后我会先把你的原始观察整理成待核对内容，再由你决定是否带到课堂反馈页保存。"
+            )
+            suggestions = []
+        elif _requires_class_scope(message, context, profiles):
+            sources, actions = [], []
+            available = "、".join(item.name for item in profiles if item.name) or "目前没有可选班级"
+            reply = (
+                f"可以帮你梳理这部分记录。为了不把不同班级的情况混在一起，我先确认一下：你想看哪个班？目前可查看：{available}。"
+                "选定后我会只根据该班已有记录回答；如果要看整体情况，也可以选择查看全部班级。"
+            )
+            suggestions = _class_scope_suggestions(profiles, message)
+        elif _is_song_recommendation(message):
+            sources = _retrieve(db, teacher.id, message, context) if _should_retrieve(message, context) else []
             reply, sources, actions = _recommendation_response(db, teacher.id, message, context)
+            if not actions and "哪个班" in reply:
+                suggestions = [{
+                    "label": profile.name,
+                    "message": f"给{profile.name}推荐几首适合的歌曲",
+                    "class_id": int(profile.id),
+                } for profile in profiles[:5] if profile.name]
         elif _is_lookup(message):
+            sources = _retrieve(db, teacher.id, message, context) if _should_retrieve(message, context) else []
             reply = _lookup_reply(sources)
             actions = []
         elif _is_lesson_action(message, context):
+            sources = _retrieve(db, teacher.id, message, context) if _should_retrieve(message, context) else []
             source_text = _compact_sources(sources)
             reply = (
                 (f"我找到了可参考的资料：{source_text}。" if source_text else "我记下了这次备课方向，目前没有找到可直接引用的历史记录。")
@@ -838,10 +1004,15 @@ def send_message(
             )
             actions = [{"type": "open_lesson_planner", "label": "带入教案助手"}]
         else:
+            sources = _retrieve(db, teacher.id, message, context) if _should_retrieve(message, context) else []
             retrieval_context = {
                 "entry_context": context,
                 "retrieved_records": sources,
-                "response_style": "温暖自然，先回应本轮问题；不套固定格式，不重复用户原话；只引用检索到的事实。",
+                "response_style": (
+                    "温暖自然，先回应本轮问题；不套固定格式，不重复用户原话。只引用本轮检索到且范围匹配的事实。"
+                    "不得根据最近记录猜测用户指的是哪个班，不得把教案计划写成已发生的课堂事实，也不得编造日期、学生表现、反馈或音频结论。"
+                    "信息不足或指代不清时，先用一句自然的话询问关键条件；不要自行生成教案或课堂反馈，也不要声称已保存或已修改。"
+                ),
             }
             reply = reply_to_lesson_dialogue(
                 message,
@@ -858,10 +1029,13 @@ def send_message(
         logger.exception("teaching_assistant_message_failed teacher_id=%s conversation_id=%s", teacher.id, row.id)
         raise HTTPException(status_code=502, detail="这条消息暂时没有处理好，原有对话和资料都已保留；可以稍后重试。") from exc
 
+    if not suggestions:
+        suggestions = _follow_up_suggestions(message, sources, actions)
+
     user_item = {"role": "user", "content": message, "created_at": datetime.utcnow().isoformat(timespec="seconds")}
     assistant_item = {
         "role": "assistant", "content": reply,
-        "sources": sources, "actions": actions,
+        "sources": sources, "actions": actions, "suggestions": suggestions,
         "created_at": datetime.utcnow().isoformat(timespec="seconds"),
     }
     history.extend([user_item, assistant_item])
