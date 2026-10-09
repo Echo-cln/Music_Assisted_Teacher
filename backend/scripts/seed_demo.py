@@ -43,24 +43,58 @@ CLASS_SPECS = [
 
 TREND_SERIES = {
     "三年级1班": {
-        "pitch_stability": [58, 63, 69, 74],
-        "rhythm_regularness": [46, 52, 61, 68],
-        "participation": ["参与一般", "参与一般", "参与积极", "参与积极"],
-        "cooperation": ["合作一般", "合作一般", "主动合作", "主动合作"],
+        "pitch_stability": [58, 63, 69, 74, 76, 78, 80, 82, 84, 86],
+        "rhythm_regularness": [46, 52, 61, 68, 70, 72, 75, 77, 80, 82],
+        "participation": ["参与一般", "参与一般", "参与积极", "参与积极", "参与积极", "参与一般", "参与积极", "参与积极", "参与积极", "参与积极"],
+        "cooperation": ["合作一般", "合作一般", "主动合作", "主动合作", "主动合作", "合作一般", "主动合作", "主动合作", "主动合作", "主动合作"],
     },
     "三年级2班": {
-        "pitch_stability": [45, 50, 56, 62],
-        "rhythm_regularness": [39, 47, 53, 60],
-        "participation": ["需要带动", "参与一般", "参与一般", "参与积极"],
-        "cooperation": ["需要教师带动", "合作一般", "合作一般", "主动合作"],
+        "pitch_stability": [45, 50, 56, 62, 63, 66, 68, 71, 69, 74],
+        "rhythm_regularness": [39, 47, 53, 60, 61, 64, 67, 66, 71, 73],
+        "participation": ["需要带动", "参与一般", "参与一般", "参与积极", "参与一般", "参与积极", "参与积极", "参与一般", "参与积极", "参与积极"],
+        "cooperation": ["需要教师带动", "合作一般", "合作一般", "主动合作", "合作一般", "主动合作", "主动合作", "合作一般", "主动合作", "主动合作"],
     },
     "四年级1班": {
-        "pitch_stability": [72, 76, 80, 83],
-        "rhythm_regularness": [68, 73, 78, 82],
-        "participation": ["参与积极", "参与积极", "参与积极", "参与积极"],
-        "cooperation": ["主动合作", "主动合作", "主动合作", "主动合作"],
+        "pitch_stability": [72, 76, 80, 83, 85, 83, 87, 88, 86, 90],
+        "rhythm_regularness": [68, 73, 78, 82, 84, 82, 86, 88, 87, 91],
+        "participation": ["参与积极", "参与积极", "参与积极", "参与积极", "参与积极", "参与一般", "参与积极", "参与积极", "参与积极", "参与积极"],
+        "cooperation": ["主动合作", "主动合作", "主动合作", "主动合作", "主动合作", "合作一般", "主动合作", "主动合作", "主动合作", "主动合作"],
     },
 }
+
+# 每条记录是演示课堂表现，不代表真实课堂测量。
+EXTRA_DEMO_SESSIONS = {
+    "三年级1班": [
+        ("分句换气与句尾收音", "乐句间换气较前次整齐。", "高音处音量上冲，句尾拖长。", "轻声模唱高音，用手势统一收音。", ["听辨乐句结束", "稳定气息"]),
+        ("强弱拍与节奏接龙", "多数学生能稳拍并跟随手势换组。", "换组时有人抢拍，弱拍偏重。", "先做两拍身体声势，再轮换领拍。", ["保持恒拍", "区分强弱拍"]),
+        ("五声音阶听唱", "小组接唱更连贯。", "相邻音高处偶有滑音。", "将易混音程拆成短句，先听后唱。", ["模唱旋律", "听辨相邻音高"]),
+        ("歌词节奏与呼吸", "能按乐句分组歌词并标记呼吸点。", "短句中换气会打断歌词。", "先按节奏朗读，再用手势标呼吸。", ["清晰咬字", "按乐句呼吸"]),
+        ("领唱齐唱与音量", "领唱后回到齐唱更均衡。", "领唱音量偏大，后排较弱。", "安排轻声领唱和回应唱，练习聆听。", ["控制音量", "衔接领唱与齐唱"]),
+        ("完整演唱与自评", "多数学生能完整演唱并指出稳定乐句。", "结尾收音不齐，少数组节拍略快。", "手势控制速度，让学生说出一项改进。", ["完整演唱", "提出一项改进"]),
+    ],
+    "三年级2班": [
+        ("恒拍模仿与节奏接龙", "示范和同伴带领下更多学生完成四拍模仿。", "独立开始易提前进入，少数不愿领拍。", "先全班齐做，再两人互相提示。", ["跟随稳定拍点", "同伴支持下模仿"]),
+        ("短句模唱与音高方向", "能用手势表示旋律上行、下行。", "连续跳进处易滑音，起音依赖提示。", "长句拆成短动机，教师示范后全班回应。", ["判断旋律走向", "模唱短句"]),
+        ("歌词朗读与节奏", "小组合作拍出歌词节奏，参与提高。", "切分节奏容易平均分拍，速度渐快。", "先走步定速，再拍手读词，安排同伴提醒。", ["稳定速度", "歌词节奏对应"]),
+        ("小组轮唱与倾听", "固定分组后大部分学生愿意接唱。", "临时换组影响秩序，聆听同伴不足。", "保持固定分组，用手势提示轮次。", ["按轮次接唱", "听后回应"]),
+        ("节奏稳定与音准", "给拍后能完成短句，出错后愿意再试。", "没有拍点时速度波动，弱声音高不稳。", "用拍手提供恒拍，分层安排跟唱领唱。", ["恒拍支持下演唱", "轻声保持音准"]),
+        ("歌曲复习与小组展示", "每组完成展示，更多学生参与歌唱或节奏。", "轮候较长，最后乐句仍需提示。", "缩短轮候，安排全班同步准备和互评。", ["参与展示", "掌握最后乐句进入"]),
+    ],
+    "四年级1班": [
+        ("旋律分句与呼吸", "学生能自主划分乐句并解释呼吸位置。", "个别学生压迫高音，音色变紧。", "加入轻声哼鸣，先保证松弛与句法。", ["划分乐句", "自然完成高音"]),
+        ("节奏变奏与合作", "小组能在原节奏上创编并保持拍点。", "速度偏快，变奏后回主题不稳。", "每组只变化一个元素，先说规则再回主题。", ["恒拍创编", "衔接主题变奏"]),
+        ("二声部倾听与平衡", "分声部问答演唱，互相倾听较好。", "高声部偶尔过强，低声部被遮盖。", "轮换主导和伴随，用手势控制声部比例。", ["保持声部独立", "平衡主旋律与伴随"]),
+        ("地方旋律比较", "能比较节奏情绪并尝试说明判断依据。", "讨论停留在好听与否，音乐要素不足。", "从节奏、音高、速度引用听到的证据。", ["比较旋律", "用音乐要素表达"]),
+        ("歌曲结构与编配", "小组能辨认重复乐句并设计简单伴奏。", "伴奏偶尔盖过人声，进入不统一。", "限制音量和密度，由手势统一进入。", ["识别重复乐句", "选择伴奏密度"]),
+        ("表现与同伴反馈", "能完整演唱，并对音准、节奏或合作反馈。", "建议有时未指出对应乐句。", "用具体乐句、听到的现象、下次尝试组织反馈。", ["完整表现", "依据证据提出建议"]),
+    ],
+}
+
+DEMO_SESSION_DATES = [
+    datetime(2026, 10, 2, 10, 0), datetime(2026, 10, 3, 10, 0),
+    datetime(2026, 10, 5, 10, 0), datetime(2026, 10, 7, 10, 0),
+    datetime(2026, 10, 8, 10, 0), datetime(2026, 10, 9, 10, 0),
+]
 
 
 def normalized(value: str) -> str:
@@ -68,7 +102,14 @@ def normalized(value: str) -> str:
 
 
 def get_or_create_demo_song(db: Session, teacher: Teacher) -> Song:
-    song = db.scalar(select(Song).where(Song.name == "茉莉花"))
+    song = db.scalar(
+        select(Song)
+        .where(Song.name == "茉莉花", Song.owner_teacher_id == teacher.id)
+        .order_by(Song.id)
+    )
+    if song:
+        return song
+    song = db.scalar(select(Song).where(Song.name == "茉莉花").order_by(Song.id))
     if song:
         return song
     song = db.scalar(select(Song).order_by(Song.id).limit(1))
@@ -146,12 +187,21 @@ def seed() -> tuple[int, int]:
         for spec in CLASS_SPECS:
             profile = class_by_name[normalized(spec["name"])]
             series = TREND_SERIES[normalized(spec["name"])]
-            for index in range(4):
+            for index in range(10):
                 sample_number = index + 1
                 if (profile.id, sample_number) in seeded_keys:
                     continue
-                taught_at = datetime(2026, 9, 9, 10, 0) + timedelta(days=index * 7)
-                title = f"【演示记录】《{song.name}》歌唱与节奏练习 · 第 {sample_number} 次"
+                if sample_number <= 4:
+                    taught_at = datetime(2026, 9, 9, 10, 0) + timedelta(days=index * 7)
+                    detail = ("歌唱与节奏练习", "演示记录：跟唱练习与节奏活动。",
+                              "演示记录：用于展示趋势变化，不代表真实班级情况。",
+                              "请用本班真实课堂观察替换演示信息。",
+                              ["练习稳定音高与恒拍", "参与小组演唱与合作"])
+                else:
+                    detail = EXTRA_DEMO_SESSIONS[normalized(spec["name"])][index - 4]
+                    taught_at = DEMO_SESSION_DATES[index - 4]
+                focus, highlights, problems, improvement, goals = detail
+                title = f"【演示记录】《{song.name}》{focus} · 第 {sample_number} 次"
                 lesson = LessonPlan(
                     teacher_id=teacher.id,
                     title=title,
@@ -161,10 +211,11 @@ def seed() -> tuple[int, int]:
                     teacher_requirements="数据库中的趋势演示记录；非真实课堂观察。",
                     content_json=json.dumps({
                         "title": title,
-                        "summary": "用于展示班级学情趋势图的数据样例，不代表真实课堂结果。",
-                        "objectives": ["练习稳定音高与恒拍", "参与小组演唱与合作"],
+                        "summary": f"演示数据：{focus}。不代表真实课堂观察。",
+                        "objectives": goals,
                         "timeline": [],
                         "teacher_requirements": "演示数据，非真实课堂观察。",
+                        "demo_sample_index": sample_number,
                     }, ensure_ascii=False),
                     generation_mode="demo",
                     created_at=taught_at,
@@ -189,14 +240,15 @@ def seed() -> tuple[int, int]:
                     "demo_trend_sample_index": sample_number,
                     "demo_notice": "数据库演示记录，不代表真实课堂观察。",
                     "class_observations": class_observations,
+                    "goal_observations": goals,
                 }
                 db.add(Feedback(
                     teacher_id=teacher.id,
                     classroom_record_id=record.id,
                     overall_effect="演示样例",
-                    highlights="演示记录：跟唱练习与节奏活动。",
-                    problems="演示记录：用于展示趋势变化，不代表真实班级情况。",
-                    improvement="请用本班真实课堂观察替换演示信息。",
+                    highlights=highlights,
+                    problems=problems,
+                    improvement=improvement,
                     audio_summary="未关联真实录音；音准与节奏分值为演示观察值。",
                     analysis_json=json.dumps(analysis, ensure_ascii=False),
                     created_at=taught_at,

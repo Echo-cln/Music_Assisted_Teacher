@@ -3,6 +3,17 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class LessonDialogueMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=1200)
+
+
+class LessonDialogueReplyRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=1200)
+    history: list[LessonDialogueMessage] = Field(default_factory=list, max_length=12)
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
 class LessonBriefExtractRequest(BaseModel):
     prompt: str = Field(min_length=8, max_length=2000)
     class_id: int | None = None

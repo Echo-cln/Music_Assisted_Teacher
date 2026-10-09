@@ -1,4 +1,4 @@
-import { api } from "../api/client.js?v=20261009-dialogue-chat";
+import { api } from "../api/client.js?v=20261009-dialogue-conversation";
 import { lessonView } from "../components/lesson.js?v=20261007-2";
 import { cancelActiveGeneration, getGenerationJob, refreshGeneration, startGeneration } from "../state/generation.js";
 import { esc, notify, pageHeader } from "../utils/dom.js";
@@ -240,6 +240,62 @@ function resolveClassFromText(text, classes) {
   return classes.find(item => value.includes(normalizedClassName(item.name)));
 }
 
+function isDialogueQuestion(message) {
+  const text = String(message || "").trim();
+  const changeVerb = "(?:调整|修改|改成|改为|改|换成|换为|换|增加|减少|删掉|删除|补充|安排|重写|缩短|延长|加入|替换)";
+  const explicitObjectChange = new RegExp(`(?:把|将).{0,45}${changeVerb}`).test(text)
+    || new RegExp(`^${changeVerb}`).test(text);
+  if (explicitObjectChange) return false;
+
+  const asksHow = /(?:告诉我|解释|说明|为什么|怎么|如何).{0,24}(?:调整|修改|改|换|增加|减少|添加|删除|删|补充|生成|保存|使用|区别|模式)/.test(text);
+  if (asksHow) return true;
+
+  const directRequest = new RegExp(`(?:帮我|请|希望|需要|想要|能不能|可以|可否|能否).{0,45}${changeVerb}`).test(text);
+  if (directRequest) return false;
+  return /[?？]|(?:什么|哪些|哪种|为什么|怎么|如何|区别|是否|有没有|能不能|可以吗|是什么|多少|还有什么)/.test(text);
+}
+
+function extractSongTitleFromTurn(message, waitingForSong = false) {
+  const text = String(message || "").trim();
+  const explicit = text.match(/(?:歌曲(?:名(?:字|称)?)?|歌名(?:字|称)?|曲目(?:名(?:字|称)?)?)\s*(?:就是|是|叫|为|：|:)\s*[《「“]?\s*([^》」”\s，,。！？!?；;]+)/);
+  const bracketed = text.match(/《([^》]+)》/)?.[1];
+  const raw = explicit?.[1] || bracketed || (waitingForSong
+    ? text.replace(/^(?:不是[，,。\s]*)?(?:我的意思是|我是说|我想用|歌曲(?:是|叫)?|那就用|换成|改成|用|选)\s*/, "")
+    : "");
+  return String(raw || "").replace(/[《》「」“”]/g, "").replace(/[，,。！？!?；;]+$/, "").trim();
+}
+
+async function answerDialogueQuestion(prompt) {
+  const currentContent = currentPlan?.content || {};
+  const response = await api.lessonDialogueReply({
+    message: prompt,
+    history: dialogueSession.history.slice(0, -1).slice(-8).map(item => ({ role: item.role, content: item.text })),
+    context: {
+      phase: dialogueSession.phase,
+      waiting_for: dialogueSession.waitingFor,
+      settings: {
+        class_name: dialogueSession.settings.class_name || null,
+        song_name: dialogueSession.settings.song_name || null,
+        duration_minutes: dialogueSession.settings.duration_minutes || null,
+        equipment_constraints: dialogueSession.settings.equipment_constraints || [],
+        generation_strategy: dialogueSession.settings.generation_strategy || "fast",
+      },
+      plan: currentPlan ? {
+        title: currentPlan.title || currentContent.title || "",
+        song_name: currentPlan.song_name || "",
+        class_name: currentPlan.class_name || "",
+        duration_minutes: currentPlan.duration_minutes || null,
+        generation_mode: currentPlan.generation_mode || "",
+        objectives: currentContent.objectives || [],
+        timeline: (currentContent.timeline || []).slice(0, 8).map(item => ({
+          stage: item.stage, minutes: item.minutes,
+        })),
+      } : null,
+    },
+  });
+  return String(response.reply || "").trim();
+}
+
 async function sendDialogueMessage(classes) {
   const input = document.getElementById("lessonBrief");
   const prompt = input.value.trim();
@@ -261,6 +317,14 @@ async function sendDialogueMessage(classes) {
   const pending = appendDialogueMessage("assistant", "我来看看还需要确认什么…", { pending: true });
 
   try {
+    if (isDialogueQuestion(prompt)) {
+      pending && (pending.querySelector(".dialogue-bubble p").textContent = "我先回答你的问题，不会把提问当作教案修改。");
+      const answer = await answerDialogueQuestion(prompt);
+      pending?.remove();
+      rememberAssistantMessage(answer || "我没能整理出可靠的回答。你可以换个说法，或告诉我你希望修改教案的哪一部分。");
+      return;
+    }
+
     if (dialogueSession.phase === "ready" && currentPlan) {
       dialogueSession.phase = "adjusting";
       pending && (pending.querySelector(".dialogue-bubble p").textContent = "我按你的要求调整教案，并保留其他未提及的内容。");
@@ -273,16 +337,20 @@ async function sendDialogueMessage(classes) {
       return;
     }
 
-    const contextPrompt = waitingFor
-      ? "教师对备课助手的补充回答：" + prompt
-      : dialogueSession.userTurns.join("\n").slice(-1900);
-    const response = await api.extractLessonBrief({
-      prompt: contextPrompt.length >= 8 ? contextPrompt : `教师补充说明：${contextPrompt}`,
-      class_id: dialogueSession.settings.class_id || null,
-    });
+    const directSong = extractSongTitleFromTurn(prompt, waitingFor === "song");
+    const directSongCorrection = Boolean(directSong && (waitingFor === "song" || waitingFor === "song_resource"));
+    const contextPrompt = "教师本轮消息（只提取本轮明确补充；如果是在纠正上一轮，以本轮说法为准）：" + prompt;
+    const response = directSongCorrection
+      ? { parsed: {} }
+      : await api.extractLessonBrief({
+          prompt: contextPrompt.length >= 8 ? contextPrompt : `教师补充说明：${contextPrompt}`,
+          class_id: dialogueSession.settings.class_id || null,
+        });
     pending?.remove();
     const parsed = response.parsed || {};
     const settings = dialogueSession.settings;
+    if (/深度(?:模式|思考)?|用深度|切到深度/.test(prompt)) settings.generation_strategy = "deep";
+    if (/快速(?:模式)?|用快速|切到快速/.test(prompt)) settings.generation_strategy = "fast";
     const normalized = value => String(value || "").replace(/[《》\s]/g, "").toLowerCase();
     const explicitGeneral = /通用模式|不指定班级|不绑定班级|没有对应班级/.test(prompt);
 
@@ -312,10 +380,16 @@ async function sendDialogueMessage(classes) {
 
     const parsedSong = parsed.song_name && !/^(null|无|未指定|尚未指定)$/i.test(String(parsed.song_name))
       ? String(parsed.song_name).trim() : "";
-    const directSong = prompt.match(/《([^》]+)》/)?.[1]
-      || prompt.replace(/^(歌曲(是|叫)?|那就用|选|用)\s*/, "").replace(/[吧。！!]+$/, "").trim();
-    if (waitingFor === "song" && prompt.length < 120 && directSong) settings.song_name = directSong;
-    else if (parsedSong) settings.song_name = parsedSong;
+    const confirmsResourceAdded = waitingFor === "song_resource" && /(?:已|已经|刚刚|刚才)?(?:添加|加入|录入|补充)(?:好了|完成|成功)?|我加好了/.test(prompt);
+    const asksToChangeSong = waitingFor === "song_resource" && /(?:换一首|换歌|换个歌曲|不加了)/.test(prompt) && !directSong;
+    if (asksToChangeSong) {
+      settings.song_name = "";
+      dialogueSession.waitingFor = "song";
+      rememberAssistantMessage("好，那我们换一首。你想用哪首歌？可以直接说歌名，我会核对资源库。");
+      return;
+    }
+    if (directSong && (waitingFor === "song" || waitingFor === "song_resource" || !settings.song_name)) settings.song_name = directSong;
+    else if (!confirmsResourceAdded && parsedSong && (waitingFor === "song" || !settings.song_name)) settings.song_name = parsedSong;
 
     const parsedDuration = Number(parsed.duration_minutes);
     if (Number.isFinite(parsedDuration) && parsedDuration >= 20 && parsedDuration <= 90) settings.duration_minutes = parsedDuration;
@@ -357,18 +431,17 @@ async function sendDialogueMessage(classes) {
     const songs = await api.songs({ q: settings.song_name });
     const exactSong = songs.find(item => normalized(item.name) === normalized(settings.song_name));
     if (!exactSong) {
-      dialogueSession.waitingFor = "song";
+      dialogueSession.waitingFor = "song_resource";
+      const missingTitle = settings.song_name;
       const nearby = songs.slice(0, 4).map(item => `《${item.name}》`).join("、");
       rememberAssistantMessage(nearby
-        ? `资源库里没有找到《${settings.song_name}》这个准确曲目。搜到的相近曲目有：${nearby}。你想用哪一首？也可以先去资源库添加这首歌。`
-        : `资源库里暂时没有《${settings.song_name}》。你可以换一首已有曲目，或先到教学资源库添加后再回来。你想怎么做？`);
+        ? `明白了，歌名是《${missingTitle}》。资源库暂时没有这首歌；可以直接换成已有曲目（例如${nearby}），或先去教学资源库添加后告诉我“已添加”。`
+        : `明白了，歌名是《${missingTitle}》。资源库暂时没有这首歌。你可以先去教学资源库添加，完成后告诉我“已添加”；也可以直接告诉我换成哪首已收录的歌曲。`);
       return;
     }
-
     selectedSong = exactSong;
     const profile = settings.class_id ? classes.find(item => item.id === settings.class_id) : null;
-    const allTeacherText = dialogueSession.userTurns.join(" ");
-    const generationStrategy = /深度/.test(allTeacherText) ? "deep" : "fast";
+    const generationStrategy = settings.generation_strategy || "fast";
     const activity = settings.activity_preference || profile?.preferred_method || "互动与分组合作";
     const requirements = [
       settings.teacher_requirements,

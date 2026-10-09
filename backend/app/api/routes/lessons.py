@@ -15,6 +15,7 @@ from app.repositories.song_repository import SongRepository
 from app.schemas.lesson import (
     LessonAdjustRequest,
     LessonBriefExtractRequest,
+    LessonDialogueReplyRequest,
     LessonGenerateRequest,
     LessonPlanRead,
     LessonPreviewAdjustRequest,
@@ -25,7 +26,7 @@ from app.schemas.lesson import (
     LessonRunRevisionRequest,
 )
 from app.services.lesson_run_service import apply_lesson_run_event, build_run_stages, interrupt_stale_lesson_run, serialize_lesson_run
-from app.services.ai_provider import extract_lesson_brief
+from app.services.ai_provider import extract_lesson_brief, reply_to_lesson_dialogue
 from app.services.lesson_service import (
     save_preview,
     serialize_plan,
@@ -267,6 +268,24 @@ def _profile_for_teacher(db: Session, teacher_id: int, class_id: int | None):
         return None
     return db.scalar(select(ClassProfile).where(ClassProfile.id == class_id, ClassProfile.teacher_id == teacher_id))
 
+
+
+
+@router.post("/dialogue/reply")
+def lesson_dialogue_reply(
+    payload: LessonDialogueReplyRequest,
+    teacher: Teacher = Depends(get_current_teacher),
+):
+    try:
+        reply = reply_to_lesson_dialogue(
+            payload.message,
+            [item.model_dump() for item in payload.history],
+            payload.context,
+        )
+        return {"reply": reply}
+    except Exception as exc:
+        logger.exception("lesson_dialogue_reply_failed teacher_id=%s", teacher.id)
+        raise HTTPException(status_code=502, detail=f"暂时无法回答：{exc}") from exc
 
 @router.post("/brief/extract")
 def extract_brief(

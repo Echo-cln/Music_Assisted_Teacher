@@ -167,3 +167,50 @@ teacher_requirements（其余明确的课堂要求，字符串）。
         except (TypeError, ValueError):
             result["duration_minutes"] = None
     return result
+
+
+def reply_to_lesson_dialogue(message: str, history: list[dict], context: dict) -> str:
+    """Answer teacher questions in the lesson-planning conversation without mutating a lesson."""
+    text = str(message or "").strip()
+    asks_mode = (
+        "模式" in text
+        and any(word in text for word in ("还有", "什么", "哪些", "几种", "区别", "可以选"))
+        and not any(word in text for word in ("调式", "调性", "曲式", "音阶"))
+    )
+    names_planning_mode = any(word in text for word in ("快速模式", "深度模式", "表单备课", "对话备课"))
+    is_mode_question = asks_mode or (
+        names_planning_mode and any(word in text for word in ("区别", "还有", "是什么", "怎么选"))
+    )
+    if is_mode_question:
+        return (
+            "目前教案生成有快速和深度两种，差别是生成所需时间，教案的内容完整度不应因此缩水。"
+            "“表单备课”和“对话备课”是两种输入方式，不是额外的生成模式；对话备课可以直接问答、生成后继续提出修改。"
+        )
+
+    safe_history = []
+    for item in (history or [])[-8:]:
+        if not isinstance(item, dict) or item.get("role") not in {"user", "assistant"}:
+            continue
+        content = str(item.get("content") or "").strip()
+        if content:
+            safe_history.append({"role": item["role"], "content": content[:1200]})
+    safe_context = context if isinstance(context, dict) else {}
+    system_prompt = """你是音乐教师备课助手。你正在与教师进行连续对话，但本次调用只负责回答问题，不生成、保存或改写教案。
+先准确回应教师本轮的问题；若消息是在纠正你之前的理解，必须以教师本轮明确的纠正为准，并简短承认误解。结合对话历史、当前备课条件或已有教案回答，不要把普通提问解释为修改指令，也不要声称已经修改、生成或保存。
+只使用上下文中有依据的信息；不确定的事实要直接说明，并提出一个简短、具体的澄清问题。回答用自然中文，先给直接结论，再补必要说明，通常不超过 120 字。不要重复教案全文，不要输出 JSON 或 Markdown 表格。"""
+    messages = [
+        {"role": "system", "content": system_prompt},
+        *safe_history,
+        {
+            "role": "user",
+            "content": json.dumps(
+                {"本轮问题": text, "当前备课上下文": safe_context},
+                ensure_ascii=False,
+            ),
+        },
+    ]
+    answer = "".join(_retry_stream(messages, get_settings().ai_fast_model, "fast")).strip()
+    answer = answer.strip(" \t\r\n\"'“”")
+    if not answer:
+        raise ValueError("对话模型没有返回回答正文")
+    return answer[:1200]

@@ -167,6 +167,7 @@ export const api = {
   lessons: (q = "") => request(`/lessons?${new URLSearchParams({ q })}`),
   generateLesson: payload => request("/lessons/generate", { method: "POST", body: JSON.stringify(payload) }),
   extractLessonBrief: payload => request("/lessons/brief/extract", { method: "POST", body: JSON.stringify(payload) }),
+  lessonDialogueReply: payload => request("/lessons/dialogue/reply", { method: "POST", body: JSON.stringify(payload) }),
   generateLessonStream: (payload, onEvent) => streamRequest("/lessons/generate/stream", payload, onEvent),
   createGenerationJob: payload => request("/generation-jobs", { method: "POST", body: JSON.stringify(payload) }),
   generationJobs: (limit = 10) => request(`/generation-jobs?${new URLSearchParams({ limit })}`),
