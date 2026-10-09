@@ -1,4 +1,4 @@
-import { api } from "../api/client.js?v=20261009-dialogue-trends";
+import { api } from "../api/client.js?v=20261009-dialogue-chat";
 import { lessonView } from "../components/lesson.js?v=20261007-2";
 import { cancelActiveGeneration, getGenerationJob, refreshGeneration, startGeneration } from "../state/generation.js";
 import { esc, notify, pageHeader } from "../utils/dom.js";
@@ -8,6 +8,15 @@ let selectedSong = null;
 let currentPlan = null;
 let recommendedSongs = [];
 let activeGenerationJobId = null;
+let dialogueSession = {
+  history: [],
+  userTurns: [],
+  settings: {},
+  waitingFor: null,
+  phase: "collecting",
+  activeJobId: null,
+  completedJobId: null,
+};
 
 function normalizeText(value) {
   if (Array.isArray(value)) return value.join("\n").replace(/\s+/g, " ").trim();
@@ -41,7 +50,7 @@ function classOptions(classes, includeGeneral = false) {
 
 export async function renderAssistant(container) {
   const classes = await api.classes();
-  container.innerHTML = pageHeader("教案助手", "按班级推荐歌曲，或手动选择歌曲生成教案。") + `
+  container.innerHTML = pageHeader("教案助手", "表单备课保留逐项设置；对话备课可直接描述需求、生成教案并继续修改。") + `
     <div class="grid two">
       <div class="grid">
         <section class="card planner-card">
@@ -77,23 +86,24 @@ export async function renderAssistant(container) {
           </div>
           </div>
           <div id="dialogueModePanel" class="dialogue-planning hidden">
-            <div class="dialogue-intro"><span class="eyebrow">对话备课</span><h3>说说这节课怎么上</h3><p>可以从这节课最想解决的问题说起。班级、歌曲、课时或设备，想到哪项就先告诉我；我会结合班级画像梳理，再和你一起确认。</p></div>
+            <div class="dialogue-intro"><span class="eyebrow">对话备课</span><h3>像讨论备课一样聊这节课</h3><p>先说你的想法即可。我会结合班级画像；遇到班级、歌曲或设备等关键信息不清楚时，会直接问你。条件齐全后就开始生成，不会再让你填写确认表。</p></div>
             <div id="dialogueMessages" class="dialogue-messages" aria-live="polite">
-              <div class="dialogue-message assistant"><span class="dialogue-avatar">助</span><div class="dialogue-bubble"><b>备课助手</b><p>你好，我是你的备课小助手。你可以先说说这节课最想解决什么，也可以告诉我班级、歌曲、时间和设备情况。我会参考已有班级画像整理条件，生成前先请你核对。</p><small>比如：三年级的孩子最近拍子总容易快。我想用《茉莉花》上一节40分钟的课，尽量多让他们动起来；教室没有投影，只有一台钢琴。</small></div></div>
+              <div class="dialogue-message assistant"><span class="dialogue-avatar">助</span><div class="dialogue-bubble"><b>备课助手</b><p>你好。你可以直接说说准备给哪个班上什么内容、希望课堂怎么进行。如果我发现关键信息还不够，会接着问；信息齐了就开始备课。教案出来后，也可以继续告诉我哪里需要调整。</p><small>例如：给三年级1班上《茉莉花》，40分钟，孩子们最近节拍容易越唱越快。教室没有投影，只有钢琴，希望多安排学生参与的活动。</small></div></div>
             </div>
-            <div class="dialogue-composer"><label class="sr-only" for="lessonBrief">描述本课需求</label><textarea id="lessonBrief" rows="2" placeholder="写下这节课的想法或限制…（Enter 发送，Shift + Enter 换行）"></textarea><button class="btn primary" id="extractLessonBrief" aria-label="发送备课需求">发送</button></div>
-            <p class="dialogue-privacy-note">生成前会先展示识别出的条件，确认后才开始生成。</p>
+            <div class="dialogue-composer"><label class="sr-only" for="lessonBrief">描述本课需求</label><textarea id="lessonBrief" rows="2" placeholder="描述课堂需求，或直接回答我刚才的问题…（Enter 发送）"></textarea><button class="btn primary" id="extractLessonBrief" aria-label="发送备课需求">发送</button></div>
+            <p class="dialogue-privacy-note">你不需要填写条件表。生成后可在下方预览教案，继续发消息修改，或保存到教学档案。</p>
           </div>
           <div id="recommendations"></div>
         </section>
         <div id="lessonArea"></div>
       </div>
       <aside class="side-stack">
-        <section class="card"><h3>调整与保存</h3><p class="muted">生成期间可在右下角查看进度，也可以切换到其他页面。</p><label>调整要求<textarea id="adjustment" placeholder="写下希望修改的部分"></textarea></label><small class="muted">调整要求也会发送给配置的模型服务；请勿填写学生姓名或其他可识别个人的信息。</small><button class="btn block" id="adjustPlan" disabled>按要求调整预览</button><button class="btn primary block" id="savePlan" disabled>保存教案</button><button class="btn block" id="printPlan" disabled>打印 / 导出 PDF</button></section>
+        <section class="card" id="lessonActionsPanel"><h3>教案预览与保存</h3><p class="muted" id="lessonActionsHint">生成期间可查看进度。对话备课时，直接在聊天框提出修改要求。</p><label id="manualAdjustmentField">调整要求<textarea id="adjustment" placeholder="写下希望修改的部分"></textarea></label><small class="muted">请勿填写学生姓名、联系方式或其他可识别个人的信息。</small><button class="btn block" id="adjustPlan" disabled>按要求调整预览</button><button class="btn primary block" id="savePlan" disabled>保存教案</button><button class="btn block" id="printPlan" disabled>打印 / 导出 PDF</button></section>
       </aside>
     </div>`;
 
   bindEquipmentControls(container);
+  restoreDialogueHistory();
   container.querySelectorAll("[data-planner-mode]").forEach(button => button.onclick=()=>{
     const dialog=button.dataset.plannerMode==="dialogue";
     container.querySelectorAll("[data-planner-mode]").forEach(item=>{const active=item===button;item.classList.toggle("active",active);item.setAttribute("aria-selected",String(active));});
@@ -103,9 +113,14 @@ export async function renderAssistant(container) {
     document.getElementById("manualForm").classList.toggle("hidden",!dialog&&smart);
     document.getElementById("recommendations").classList.toggle("hidden",dialog);
     document.getElementById("dialogueModePanel").classList.toggle("hidden",!dialog);
+    document.getElementById("manualAdjustmentField").classList.toggle("hidden",dialog);
+    document.getElementById("adjustPlan").classList.toggle("hidden",dialog);
+    document.getElementById("lessonActionsHint").textContent = dialog
+      ? "生成后在下方查看教案；需要调整时直接在聊天框告诉我。保存按钮会保存新教案或更新已有教案。"
+      : "生成期间可在右下角查看进度，也可以切换到其他页面。";
   });
-  document.getElementById("extractLessonBrief").onclick=()=>extractBrief(classes);
-  document.getElementById("lessonBrief").addEventListener("keydown", event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();extractBrief(classes);}});
+  document.getElementById("extractLessonBrief").onclick=()=>sendDialogueMessage(classes);
+  document.getElementById("lessonBrief").addEventListener("keydown", event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();sendDialogueMessage(classes);}});
   container.querySelectorAll("[data-mode]").forEach(button => button.onclick = () => {
     container.querySelectorAll("[data-mode]").forEach(item => {const active=item===button;item.classList.toggle("active",active);item.setAttribute("aria-selected",String(active));});
     document.getElementById("smartForm").classList.toggle("hidden", button.dataset.mode !== "smart");
@@ -139,26 +154,32 @@ export async function renderAssistant(container) {
   };
 
   document.getElementById("savePlan").onclick = async () => {
-    if (!currentPlan || currentPlan.is_saved) return;
+    if (!currentPlan || (currentPlan.is_saved && !currentPlan._dirty)) return;
     const button = document.getElementById("savePlan");
     button.disabled = true;
-    button.textContent = "正在保存…";
+    const editingSaved = Boolean(currentPlan.id);
+    button.textContent = editingSaved ? "正在保存修改…" : "正在保存…";
     try {
-      currentPlan = await api.saveLesson({
+      const payload = {
         song_id: currentPlan.song_id,
         class_id: currentPlan.class_id,
         duration_minutes: currentPlan.duration_minutes,
         teacher_requirements: currentPlan.content.teacher_requirements || "",
         generation_mode: currentPlan.generation_mode,
         content: currentPlan.content,
-      });
+      };
+      currentPlan = editingSaved
+        ? await api.updateLesson(currentPlan.id, payload)
+        : await api.saveLesson(payload);
+      delete currentPlan._dirty;
       renderPreview(document.getElementById("lessonArea"), false);
       button.textContent = "已保存到教案与课堂记录";
       document.getElementById("adjustPlan").disabled = true;
-      notify("教案已保存，现在可在“教案与课堂记录”中查看");
+      if (dialogueSession.phase === "ready") rememberAssistantMessage("教案已保存到教学档案。之后还可以继续告诉我修改意见；保存修改时会更新这条教案记录。");
+      notify(editingSaved ? "教案修改已保存" : "教案已保存，现在可在“教学档案”中查看");
     } catch (error) {
       button.disabled = false;
-      button.textContent = "保存教案";
+      button.textContent = editingSaved ? "保存修改" : "保存教案";
       const prefix = error?.status ? `保存失败（HTTP ${error.status}）：` : "保存教案失败：";
       notify(`${prefix}${error.message || "请检查后端日志后重试"}`, "error");
     }
@@ -196,99 +217,185 @@ function appendDialogueMessage(role, content, options = {}) {
   return message;
 }
 
-async function extractBrief(classes) {
+function restoreDialogueHistory() {
+  const transcript = document.getElementById("dialogueMessages");
+  if (!transcript || !dialogueSession.history.length) return;
+  transcript.firstElementChild?.remove();
+  dialogueSession.history.forEach(item => appendDialogueMessage(item.role, item.text));
+}
+
+function rememberAssistantMessage(text) {
+  if (!text) return;
+  dialogueSession.history.push({ role: "assistant", text });
+  appendDialogueMessage("assistant", text);
+}
+
+function normalizedClassName(value) {
+  const digits = { "一":"1", "二":"2", "三":"3", "四":"4", "五":"5", "六":"6" };
+  return String(value || "").replace(/\s/g, "").replace(/[一二三四五六]/g, digit => digits[digit]).toLowerCase();
+}
+
+function resolveClassFromText(text, classes) {
+  const value = normalizedClassName(text);
+  return classes.find(item => value.includes(normalizedClassName(item.name)));
+}
+
+async function sendDialogueMessage(classes) {
   const input = document.getElementById("lessonBrief");
   const prompt = input.value.trim();
-  if (prompt.length < 8) return notify("请先描述歌曲、班级或课堂需求");
-  const selectedClassId = Number(document.getElementById("classId").value || document.getElementById("manualClassId").value) || null;
-  const button = document.getElementById("extractLessonBrief");
-  button.disabled = true;
-  button.textContent = "整理中…";
-  document.querySelectorAll(".brief-confirmation").forEach(item => item.remove());
+  if (!prompt) return;
+  if (dialogueSession.phase === "generating" || dialogueSession.phase === "adjusting") {
+    rememberAssistantMessage(dialogueSession.phase === "generating"
+      ? "教案还在生成，等预览出来后再发修改意见，我会接着调整。"
+      : "我正在更新预览，稍等片刻就可以继续讨论。");
+    return;
+  }
+
+  const waitingFor = dialogueSession.waitingFor;
+  dialogueSession.history.push({ role: "user", text: prompt });
+  dialogueSession.userTurns.push(prompt);
   appendDialogueMessage("user", prompt);
   input.value = "";
-  const pending = appendDialogueMessage("assistant", "我先把班级、歌曲、课时和设备要求整理出来…", { pending: true });
+  const sendButton = document.getElementById("extractLessonBrief");
+  sendButton.disabled = true;
+  const pending = appendDialogueMessage("assistant", "我来看看还需要确认什么…", { pending: true });
+
   try {
-    const response = await api.extractLessonBrief({ prompt, class_id: selectedClassId });
+    if (dialogueSession.phase === "ready" && currentPlan) {
+      dialogueSession.phase = "adjusting";
+      pending && (pending.querySelector(".dialogue-bubble p").textContent = "我按你的要求调整教案，并保留其他未提及的内容。");
+      const ok = await streamPreviewAdjustment(document.getElementById("lessonArea"), prompt);
+      pending?.remove();
+      dialogueSession.phase = "ready";
+      rememberAssistantMessage(ok
+        ? "已经调整好，更新后的内容在下方预览。你可以继续提出修改，或保存教案。"
+        : "这次没有完成调整，原预览仍保留。你可以换一种说法再试一次。");
+      return;
+    }
+
+    const contextPrompt = waitingFor
+      ? "教师对备课助手的补充回答：" + prompt
+      : dialogueSession.userTurns.join("\n").slice(-1900);
+    const response = await api.extractLessonBrief({
+      prompt: contextPrompt.length >= 8 ? contextPrompt : `教师补充说明：${contextPrompt}`,
+      class_id: dialogueSession.settings.class_id || null,
+    });
     pending?.remove();
     const parsed = response.parsed || {};
-    const normalized = value => String(value || "").replace(/\s/g, "").toLowerCase();
-    let chosenClass = parsed.class_name ? classes.find(item => normalized(item.name) === normalized(parsed.class_name)) : null;
-    if (!chosenClass) chosenClass = classes.find(item => item.id === selectedClassId) || classes[0] || null;
-    const profile = classes.find(item => item.id === chosenClass?.id) || response.class_profile || {};
-    const classMismatch = parsed.class_name && !classes.some(item => normalized(item.name) === normalized(parsed.class_name));
-    const currentClass = classes.find(item => item.id === selectedClassId);
-    const classConflict = chosenClass && currentClass && chosenClass.id !== currentClass.id;
-    const profileText = profile ? [profile.grade ? profile.grade + "年级" : "", profile.province, profile.learning_level, "音准：" + profile.pitch_level, "节奏：" + profile.rhythm_level, "合作：" + profile.cooperation, profile.common_problems].filter(Boolean).join(" · ") : "尚未选择班级画像";
-    const currentDuration = Number(document.getElementById("duration").value || document.getElementById("manualDuration").value) || 40;
-    const currentActivity = document.getElementById("activity").value || document.getElementById("manualActivity").value;
-    const songFallback = selectedSong?.name || document.getElementById("songName").value.trim() || "";
-    const regionFallback = profile.province || document.getElementById("region").value;
-    const options = classes.map(item => `<option value="${item.id}" ${item.id === chosenClass?.id ? "selected" : ""}>${esc(item.name)} · ${esc(item.grade)}年级 · ${esc(item.province)}</option>`).join("");
-    const parsedDevices = Array.isArray(parsed.equipment_constraints) ? parsed.equipment_constraints.join("、") : String(parsed.equipment_constraints || "");
-    const activeMode = document.querySelector("#sourceModeTabs [data-mode].active")?.dataset.mode;
-    const currentDevicePanel = document.querySelector(`[data-equipment-controls="${activeMode === "manual" ? "manual" : "smart"}"] [data-equipment-summary]`);
-    const devices = parsedDevices || currentDevicePanel?.value || "";
-    const currentRequirements = document.getElementById("requirements").value.trim() || document.getElementById("manualRequirements").value.trim();
-    const requirements = String(parsed.teacher_requirements || currentRequirements || "");
-    const strategyFallback = document.getElementById("strategy").value || document.getElementById("manualStrategy").value || "deep";
-    const song = parsed.song_name || songFallback || "尚未指定";
-    const className = chosenClass?.name || "通用模式";
-    const duration = Number(parsed.duration_minutes) || currentDuration;
-    const activity = parsed.activity_preference || profile.preferred_method || currentActivity || "互动与分组合作";
-    const chips = [className, song === "尚未指定" ? song : `《${song}》`, `${duration} 分钟`, activity].map(item => `<span class="dialogue-condition-chip">${esc(item)}</span>`).join("");
-    const warning = classMismatch ? `<div class="notice">识别到“${esc(parsed.class_name)}”，但教师档案中没有同名班级。请选择已有班级，或选通用模式。</div>` : "";
-    const conflict = classConflict ? `<div class="notice">对话中识别为“${esc(chosenClass.name)}”，与表单当前选择的“${esc(currentClass.name)}”不同。请核对下面已预选的班级。</div>` : "";
-    const confirmationHtml = `<div class="brief-confirmation">
-      <div class="brief-confirmation-head"><div><span class="eyebrow">备课条件已整理</span><h3>这节课我理解的是</h3></div><span class="status info">请确认</span></div>
-      <div class="dialogue-condition-chips">${chips}</div>
-      <p class="dialogue-response-copy">我会结合班级画像安排活动，并把设备限制写进具体教学环节。请确认条件；需要调整时可以展开编辑。</p>
-      ${warning}${conflict}
-      <div class="brief-profile-context"><b>班级画像参考</b><span>${esc(profileText || "尚未选择班级画像")}</span></div>
-      <details class="brief-edit-details"><summary>检查或修改备课条件</summary>
-        <div class="form-grid brief-fields">
-          <label>授课班级<select id="briefClassId"><option value="">通用模式（不指定班级）</option>${options}</select></label>
-          <label>歌曲<input id="briefSong" value="${esc(parsed.song_name || songFallback)}" placeholder="请输入歌名"></label>
-          <label>课时（分钟）<input id="briefDuration" type="number" min="20" max="90" value="${Number(parsed.duration_minutes) || currentDuration}"></label>
-          <label>课堂偏好<input id="briefActivity" value="${esc(activity)}"></label>
-          <label>地区 / 文化元素<input id="briefRegion" value="${esc(parsed.region_element || regionFallback || "")}" placeholder="没有明确要求可留空"></label>
-          <label>设备条件与限制<input id="briefDevices" value="${esc(devices)}" placeholder="例如：无投影、无音箱"></label>
-          <label class="full">其他课堂要求<textarea id="briefRequirements" rows="2">${esc(requirements)}</textarea></label>
-          <label>生成模式<select id="briefStrategy"><option value="fast" ${strategyFallback === "fast" ? "selected" : ""}>快速模式</option><option value="deep" ${strategyFallback !== "fast" ? "selected" : ""}>深度模式</option></select></label>
-        </div>
-      </details>
-      <p class="muted brief-sync-note">确认后会同步到表单备课条件。</p>
-      <button class="btn primary" id="confirmBriefGenerate">确认条件并生成教案</button>
-    </div>`;
-    appendDialogueMessage("assistant", confirmationHtml, { html: true });
-    bindBriefSettings(classes);
-    bindDialogToForms();
-    document.getElementById("confirmBriefGenerate").onclick = async () => {
-      const classId = Number(document.getElementById("briefClassId").value) || null;
-      const songName = document.getElementById("briefSong").value.trim();
-      if (!songName) return notify("请补充歌曲名称");
-      const songs = await api.songs({ q: songName });
-      if (!songs.length) return notify(`资源库中未找到《${songName}》，请先到教学资源库添加歌曲`);
-      selectedSong = songs.find(songItem => normalized(songItem.name) === normalized(songName));
-      if (!selectedSong) return notify(`检索到了相近歌曲（${songs.slice(0, 4).map(songItem => songItem.name).join("、")}），请把输入名称改成资源库中的准确歌名后再生成`);
-      const duration = Math.max(20, Math.min(90, Number(document.getElementById("briefDuration").value) || 40));
-      const confirmedActivity = document.getElementById("briefActivity").value.trim() || profile.preferred_method || "互动与分组合作";
-      const region = document.getElementById("briefRegion").value.trim();
-      const device = document.getElementById("briefDevices").value.trim() || "未额外指定设备";
-      const extra = document.getElementById("briefRequirements").value.trim();
-      const strategy = document.getElementById("briefStrategy").value;
-      const teacherRequirements = [extra, region ? `地区/文化元素：${region}` : "", `课堂设备条件：${device}`].filter(Boolean).join("\n");
-      applyBriefToForms({ classId, songName, duration, activity: confirmedActivity, teacherRequirements, strategy, region });
-      await generate(false, { song_id: selectedSong.id, class_id: classId, duration_minutes: duration, activity_preference: confirmedActivity, teacher_requirements: teacherRequirements, generation_strategy: strategy });
+    const settings = dialogueSession.settings;
+    const normalized = value => String(value || "").replace(/[《》\s]/g, "").toLowerCase();
+    const explicitGeneral = /通用模式|不指定班级|不绑定班级|没有对应班级/.test(prompt);
+
+    if (explicitGeneral || (waitingFor === "class" && /通用|不指定|不绑定/.test(prompt))) {
+      settings.general_class = true;
+      settings.class_id = null;
+      settings.class_name = "通用模式";
+      settings.unresolved_class = "";
+    } else {
+      const className = parsed.class_name && !/^(null|无|未指定)$/i.test(String(parsed.class_name))
+        ? String(parsed.class_name) : "";
+      const matchedClass = (waitingFor === "class" ? resolveClassFromText(prompt, classes) : null)
+        || (className && classes.find(item => normalizedClassName(item.name) === normalizedClassName(className)))
+        || resolveClassFromText(prompt, classes);
+      if (matchedClass) {
+        settings.class_id = matchedClass.id;
+        settings.class_name = matchedClass.name;
+        settings.general_class = false;
+        settings.unresolved_class = "";
+      } else if (className) {
+        settings.class_id = null;
+        settings.class_name = "";
+        settings.general_class = false;
+        settings.unresolved_class = className;
+      }
+    }
+
+    const parsedSong = parsed.song_name && !/^(null|无|未指定|尚未指定)$/i.test(String(parsed.song_name))
+      ? String(parsed.song_name).trim() : "";
+    const directSong = prompt.match(/《([^》]+)》/)?.[1]
+      || prompt.replace(/^(歌曲(是|叫)?|那就用|选|用)\s*/, "").replace(/[吧。！!]+$/, "").trim();
+    if (waitingFor === "song" && prompt.length < 120 && directSong) settings.song_name = directSong;
+    else if (parsedSong) settings.song_name = parsedSong;
+
+    const parsedDuration = Number(parsed.duration_minutes);
+    if (Number.isFinite(parsedDuration) && parsedDuration >= 20 && parsedDuration <= 90) settings.duration_minutes = parsedDuration;
+    if (parsed.activity_preference) settings.activity_preference = String(parsed.activity_preference).trim();
+    if (parsed.region_element) settings.region_element = String(parsed.region_element).trim();
+    if (parsed.teacher_requirements) settings.teacher_requirements = String(parsed.teacher_requirements).trim();
+    if (waitingFor === "equipment") {
+      settings.equipment_constraints = Array.isArray(parsed.equipment_constraints) && parsed.equipment_constraints.length
+        ? parsed.equipment_constraints.map(value => String(value).trim()).filter(Boolean)
+        : [prompt];
+      settings.equipment_known = true;
+    } else if (Array.isArray(parsed.equipment_constraints) && parsed.equipment_constraints.length) {
+      settings.equipment_constraints = parsed.equipment_constraints.map(value => String(value).trim()).filter(Boolean);
+      settings.equipment_known = true;
+    } else if (/设备|投影|音箱|钢琴|乐器|普通教室|无电子/.test(prompt)) {
+      settings.equipment_constraints = [prompt];
+      settings.equipment_known = true;
+    }
+
+    if (!settings.class_id && !settings.general_class) {
+      dialogueSession.waitingFor = "class";
+      const reply = settings.unresolved_class
+        ? `我没在班级画像里找到“${settings.unresolved_class}”。目前可选：${classes.map(item => item.name).join("、")}。你想用哪个班？也可以说“通用模式”。`
+        : "这节课准备给哪个班上？我会结合该班画像安排内容；如果不需要绑定具体班级，也可以说“通用模式”。";
+      rememberAssistantMessage(reply);
+      return;
+    }
+    if (!settings.song_name) {
+      dialogueSession.waitingFor = "song";
+      rememberAssistantMessage("这节课准备教哪首歌？我会先到教学资源库核对，找到后就继续备课。");
+      return;
+    }
+    if (!settings.equipment_known) {
+      dialogueSession.waitingFor = "equipment";
+      rememberAssistantMessage("这个班的教室目前能用哪些设备？比如钢琴、音箱或投影；如果都没有，告诉我“无电子设备”。");
+      return;
+    }
+
+    const songs = await api.songs({ q: settings.song_name });
+    const exactSong = songs.find(item => normalized(item.name) === normalized(settings.song_name));
+    if (!exactSong) {
+      dialogueSession.waitingFor = "song";
+      const nearby = songs.slice(0, 4).map(item => `《${item.name}》`).join("、");
+      rememberAssistantMessage(nearby
+        ? `资源库里没有找到《${settings.song_name}》这个准确曲目。搜到的相近曲目有：${nearby}。你想用哪一首？也可以先去资源库添加这首歌。`
+        : `资源库里暂时没有《${settings.song_name}》。你可以换一首已有曲目，或先到教学资源库添加后再回来。你想怎么做？`);
+      return;
+    }
+
+    selectedSong = exactSong;
+    const profile = settings.class_id ? classes.find(item => item.id === settings.class_id) : null;
+    const allTeacherText = dialogueSession.userTurns.join(" ");
+    const generationStrategy = /深度/.test(allTeacherText) ? "deep" : "fast";
+    const activity = settings.activity_preference || profile?.preferred_method || "互动与分组合作";
+    const requirements = [
+      settings.teacher_requirements,
+      settings.region_element ? `地区 / 文化元素：${settings.region_element}` : "",
+      `课堂可用设备与限制：${settings.equipment_constraints.join("、")}`,
+    ].filter(Boolean).join("\n");
+    const payload = {
+      song_id: exactSong.id,
+      class_id: settings.class_id || null,
+      duration_minutes: settings.duration_minutes || 40,
+      activity_preference: activity,
+      teacher_requirements: requirements,
+      generation_strategy: generationStrategy,
     };
+    dialogueSession.waitingFor = null;
+    dialogueSession.phase = "collecting";
+    rememberAssistantMessage(`条件已经清楚：${settings.class_name || "通用模式"}、《${exactSong.name}》、${payload.duration_minutes}分钟。我先按${generationStrategy === "fast" ? "快速" : "深度"}模式生成一份完整教案；生成后你可以继续在这里提出修改。`);
+    const started = await generate(false, payload);
+    if (!started) dialogueSession.phase = "collecting";
   } catch (error) {
     pending?.remove();
-    input.value = prompt;
-    appendDialogueMessage("assistant", `这次没有整理成功：${error.message || "请检查连接后重试"}`);
-    console.error("备课条件整理失败", error);
+    if (waitingFor) dialogueSession.waitingFor = waitingFor;
+    rememberAssistantMessage(`这一步没有完成：${error.message || "暂时无法处理"}。刚才的消息已保留，你可以补充或换种说法。`);
+    console.error("对话备课处理失败", error);
   } finally {
-    button.disabled = false;
-    button.textContent = "发送";
+    pending?.remove();
+    sendButton.disabled = false;
   }
 }
 
@@ -489,10 +596,17 @@ async function generate(manual, override = null) {
     activeGenerationJobId = job.id || job.job_id || null;
     currentPlan = job.preview;
     renderPreview(document.getElementById("lessonArea"), true, job);
-    notify(strategyElement.value === "fast" ? "正在快速生成完整教案" : "正在生成完整教案（深度模式）");
+    if (!document.getElementById("dialogueModePanel").classList.contains("hidden")) {
+      dialogueSession.phase = "generating";
+      dialogueSession.activeJobId = activeGenerationJobId;
+    }
+    const strategy = payload.generation_strategy || strategyElement.value;
+    notify(strategy === "fast" ? "正在快速生成完整教案" : "正在生成完整教案（深度模式）");
+    return true;
   } catch (error) {
     disableActions(false);
     document.getElementById("lessonArea").innerHTML = `<div class="notice">${esc(error.message)}</div>`;
+    return false;
   }
 }
 
@@ -506,6 +620,13 @@ function restoreJob(job, restoredFromCenter = false) {
   const previousResult = restoredFromCenter || (activeGenerationJobId && job.id && job.id !== activeGenerationJobId);
   if (job.status === "completed" && job.result) {
     currentPlan = job.result;
+    if (dialogueSession.activeJobId && dialogueSession.activeJobId === job.id) {
+      dialogueSession.phase = "ready";
+      if (dialogueSession.completedJobId !== job.id) {
+        dialogueSession.completedJobId = job.id;
+        rememberAssistantMessage("教案已生成，完整预览在下方。你可以继续告诉我具体要怎么调整，也可以在右侧保存到教学档案。");
+      }
+    }
     renderPreview(area, false, job);
     if(previousResult){
       area.insertAdjacentHTML("afterbegin",`<div class="notice previous-plan-notice"><b>上次生成结果</b><span>对应：${esc(currentPlan.class_name||"通用模式")} · ${Number(currentPlan.duration_minutes)||"—"} 分钟。本条不是当前设置下的新结果；请核对班级和课时后再决定是否保存。</span></div>`);
@@ -515,6 +636,7 @@ function restoreJob(job, restoredFromCenter = false) {
     return;
   }
   if (job.status === "failed") {
+    if (dialogueSession.activeJobId === job.id) dialogueSession.phase = "collecting";
     currentPlan = job.preview || null;
     if (currentPlan) renderPreview(area, false, job);
     if(previousResult) area.insertAdjacentHTML("afterbegin",`<div class="notice previous-plan-notice">上次生成任务对应：${esc(currentPlan?.class_name||"未指定班级")}，不是当前设置的结果。</div>`);
@@ -539,7 +661,11 @@ function disableActions(generating) {
   adjust.disabled = generating || !currentPlan;
   save.disabled = generating || !currentPlan || currentPlan.is_saved;
   print.disabled = !currentPlan;
-  save.textContent = currentPlan?.is_saved ? "已保存到教案与课堂记录" : generating ? "完善完成后可保存" : "保存教案";
+  save.textContent = currentPlan?.is_saved && !currentPlan?._dirty
+    ? "已保存到教案与课堂记录"
+    : currentPlan?.id
+      ? generating ? "生成完成后可保存修改" : "保存修改"
+      : generating ? "完善完成后可保存" : "保存教案";
 }
 
 
@@ -655,7 +781,9 @@ function renderPreview(area, generating = false, job = null) {
     ? "已保存到教案与课堂记录"
     : generating
       ? "当前显示教案初稿，完善完成后会自动更新"
-      : "未保存：可手动编辑，也可填写调整要求；完成后点击右侧“保存教案”";
+      : currentPlan.id
+        ? "这份已保存的教案有未保存修改；确认预览后点击右侧“保存修改”"
+        : "尚未保存：可预览并继续调整，确认后点击右侧“保存教案”";
   area.innerHTML = status + '<section class="card lesson-preview-card"><div class="card-head"><div><h3>教案预览</h3><p class="muted">' + hint + '</p></div>' + editButton + '</div>' + previewBody + '</section>';
   area.querySelector("#cancelGenerationInPage")?.addEventListener("click", async () => {
     try { await cancelActiveGeneration(); } catch (error) { notify(error.message); }
@@ -695,17 +823,19 @@ async function streamPreviewAdjustment(area, instruction) {
     area.innerHTML = `<section class="card lesson-stream-panel"><h3>正在调整教案</h3><p class="muted">正在根据你的要求调整教案。</p><div class="loading">正在根据你的要求调整教案<i></i><i></i><i></i></div></section>`;
     await api.adjustPreviewStream({ content: currentPlan.content, instruction }, event => {
       if (event.type === "complete") {
-        const nextPlan = { ...metadata, ...event.preview, is_saved: false };
+        const nextPlan = { ...metadata, ...event.preview, is_saved: false, _dirty: Boolean(metadata.id) };
         currentPlan = { ...nextPlan, adjustment_changes: adjustmentChanges(metadata, nextPlan) };
         renderPreview(area, false);
       }
     });
     disableActions(false);
     notify("已按要求更新预览；“本次调整重点”已标出实际变更内容，尚未保存。");
+    return true;
   } catch (error) {
     currentPlan = metadata;
     renderPreview(area, false);
     disableActions(false);
     notify(error.message);
+    return false;
   }
 }
