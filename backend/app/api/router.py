@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import admin, audio, auth, classes, feedback, generation_jobs, health, lessons, resources, songs, workbench
+from app.api.routes import admin, audio, auth, classes, feedback, generation_jobs, health, lessons, resources, songs, teaching_assistant, workbench
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(health.router)
@@ -13,4 +13,5 @@ api_router.include_router(lessons.router)
 api_router.include_router(generation_jobs.router)
 api_router.include_router(audio.router)
 api_router.include_router(feedback.router)
+api_router.include_router(teaching_assistant.router)
 api_router.include_router(workbench.router)

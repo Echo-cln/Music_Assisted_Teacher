@@ -9,7 +9,8 @@ const app = document.getElementById("app");
 // 首页和其余功能在模块图阶段一起白屏。
 const routeLoaders = {
   home: () => import("./pages/home.js").then(m => m.renderHome),
-  assistant: () => import("./pages/assistant.js?v=20261009-dialogue-conversation").then(m => m.renderAssistant),
+  teachingAssistant: () => import("./pages/teaching_assistant.js?v=20261009-teaching-assistant").then(m => m.renderTeachingAssistant),
+  assistant: () => import("./pages/assistant.js?v=20261009-teaching-assistant").then(m => m.renderAssistant),
   classes: () => import("./pages/classes.js?v=20261009-dbtrend-persist").then(m => m.renderClasses),
   resources: () => import("./pages/resources.js").then(m => m.renderResources),
   workbench: () => import("./pages/workbench.js").then(m => m.renderWorkbench),

@@ -1,4 +1,5 @@
 from app.models.entities import (
+    AssistantConversation,
     AudioAnalysis,
     AudioAnalysisJob,
     AudioAsset,
@@ -14,6 +15,7 @@ from app.models.entities import (
 )
 
 __all__ = [
+    "AssistantConversation",
     "Song",
     "TeachingGame",
     "MusicTheory",

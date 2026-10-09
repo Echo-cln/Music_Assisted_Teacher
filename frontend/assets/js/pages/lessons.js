@@ -19,25 +19,35 @@ export async function renderLessons(container) {
     container.querySelectorAll("[data-archive]").forEach(button => button.classList.toggle("active", button.dataset.archive === kind));
     const archive = document.getElementById("archiveContent");
     if (kind !== "lessons") return renderArchive(archive, kind);
+    const classProfiles = await api.classes();
     archive.innerHTML = `
-      <section class="list-search"><label class="search-field"><span>⌕</span><input id="lessonSearch" type="search" placeholder="搜索教案标题、歌曲名称或班级"></label><div class="list-filters"><select id="lessonSort"><option value="newest">最新创建</option><option value="oldest">最早创建</option><option value="title">教案标题</option></select></div><small id="lessonSearchCount"></small></section>
+      <section class="list-search"><label class="search-field"><span>⌕</span><input id="lessonSearch" type="search" placeholder="搜索教案标题、歌曲名称或班级"></label><div class="list-filters"><select id="lessonClassFilter" aria-label="按班级筛选教案"><option value="">全部班级</option>${classProfiles.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join("")}</select><select id="lessonSort"><option value="newest">最新创建</option><option value="oldest">最早创建</option><option value="title">教案标题</option></select></div><small id="lessonSearchCount"></small></section>
       <section class="card table-wrap"><table><thead><tr><th>教案</th><th>班级</th><th>时长</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody id="lessonRows"></tbody></table></section>`;
     let searchTimer;
     document.getElementById("lessonSearch").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadLessons, 220); };
     document.getElementById("lessonSort").onchange = loadLessons;
+    document.getElementById("lessonClassFilter").onchange = loadLessons;
     await loadLessons();
   }
 
   async function loadLessons() {
     const q = document.getElementById("lessonSearch").value.trim();
-    const plans = await api.lessons(q);
+    const allPlans = await api.lessons(q);
+    const selectedClass = document.getElementById("lessonClassFilter")?.value || "";
+    const plans = selectedClass ? allPlans.filter(plan => Number(plan.class_id) === Number(selectedClass)) : allPlans;
     const sort = document.getElementById("lessonSort").value;
     if (sort === "oldest") plans.reverse();
     if (sort === "title") plans.sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
     document.getElementById("lessonSearchCount").textContent = `共 ${plans.length} 份${q ? "匹配教案" : "教案记录"}`;
     const rows = document.getElementById("lessonRows");
-    rows.innerHTML = plans.length ? plans.map(plan => `<tr><td><b>${esc(plan.title)}</b><br><small>${esc(plan.song_name)}</small></td><td>${esc(plan.class_name)}</td><td>${plan.duration_minutes} 分钟</td><td><span class="status ${plan.generation_mode === "ai" ? "ok" : "info"}">${plan.generation_mode === "ai" ? "已完善" : "基础教案"}</span></td><td>${esc(plan.created_at)}</td><td class="lesson-actions"><button class="link" data-view="${plan.id}">查看</button><button class="link" data-edit="${plan.id}">编辑</button><button class="link" data-pdf="${plan.id}">PDF</button><button class="link danger-link" data-delete-lesson="${plan.id}">删除</button><button class="link" data-word="${plan.id}">Word</button></td></tr>`).join("") : '<tr><td colspan="6" class="empty">没有找到匹配的教案记录</td></tr>';
+    rows.innerHTML = plans.length ? plans.map(plan => `<tr><td><b>${esc(plan.title)}</b><br><small>${esc(plan.song_name)}</small></td><td>${esc(plan.class_name)}</td><td>${plan.duration_minutes} 分钟</td><td><span class="status ${plan.generation_mode === "ai" ? "ok" : "info"}">${plan.generation_mode === "ai" ? "已完善" : "基础教案"}</span></td><td>${esc(plan.created_at)}</td><td class="lesson-actions"><button class="link" data-view="${plan.id}">查看</button><button class="link" data-assistant-lesson="${plan.id}">问教学助手</button><button class="link" data-edit="${plan.id}">编辑</button><button class="link" data-pdf="${plan.id}">PDF</button><button class="link danger-link" data-delete-lesson="${plan.id}">删除</button><button class="link" data-word="${plan.id}">Word</button></td></tr>`).join("") : '<tr><td colspan="6" class="empty">没有找到匹配的教案记录</td></tr>';
     rows.querySelectorAll("button[data-view]").forEach(button => button.onclick = () => viewPlan(plans.find(p => p.id === Number(button.dataset.view))));
+    rows.querySelectorAll("button[data-assistant-lesson]").forEach(button => button.onclick = () => {
+      const plan = plans.find(item => item.id === Number(button.dataset.assistantLesson));
+      if (!plan) return;
+      localStorage.setItem("teachingAssistantContext", JSON.stringify({ type: "lesson", lesson_id: plan.id, class_id: plan.class_id || null, class_name: plan.class_name, source_label: plan.title }));
+      window.dispatchEvent(new CustomEvent("app:navigate", { detail: "teachingAssistant" }));
+    });
     rows.querySelectorAll("button[data-edit]").forEach(button => button.onclick = () => editPlan(plans.find(p => p.id === Number(button.dataset.edit)), container));
     rows.querySelectorAll("button[data-pdf]").forEach(button => button.onclick = () => exportLessonPdf(plans.find(p => p.id === Number(button.dataset.pdf))));
     rows.querySelectorAll("button[data-word]").forEach(button => button.onclick = () => exportLessonWord(plans.find(p => p.id === Number(button.dataset.word))));
@@ -116,10 +126,12 @@ async function renderArchive(container, kind) {
     return;
   }
   const rows = await api.feedbackRecords();
-  container.innerHTML = `<section class="list-search archive-toolbar"><label class="search-field"><span>⌕</span><input id="feedbackSearch" type="search" placeholder="搜索教案、歌曲、反馈内容或日期"></label><div class="list-filters"><select id="feedbackSort" aria-label="课堂反馈排序"><option value="newest">最新反馈</option><option value="oldest">最早反馈</option><option value="lesson">教案名称</option></select></div></section><small class="archive-count" id="feedbackCount"></small><section class="archive-list" id="feedbackRows"></section>`;
+  const classProfiles = await api.classes();
+  container.innerHTML = `<section class="list-search archive-toolbar"><label class="search-field"><span>⌕</span><input id="feedbackSearch" type="search" placeholder="搜索教案、歌曲、反馈内容或日期"></label><div class="list-filters"><select id="feedbackClassFilter" aria-label="按班级筛选课堂反馈"><option value="">全部班级</option>${classProfiles.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join("")}<option value="unassigned">未关联班级</option></select><select id="feedbackSort" aria-label="反馈时间顺序"><option value="newest">最新反馈</option><option value="oldest">最早反馈</option><option value="lesson">教案名称</option></select></div></section><small class="archive-count" id="feedbackCount"></small><section class="archive-list" id="feedbackRows"></section>`;
   const paintFeedback = () => {
     const query = document.getElementById("feedbackSearch").value.trim().toLocaleLowerCase();
-    const matching = rows.filter(item => [item.lesson_title, item.song_name, item.overall_effect, item.created_at, item.audio_summary, item.highlights, item.problems, item.improvement].filter(Boolean).join(" ").toLocaleLowerCase().includes(query));
+    const selectedClass = document.getElementById("feedbackClassFilter").value;
+    const matching = rows.filter(item => (!selectedClass || (selectedClass === "unassigned" ? !item.class_id : Number(item.class_id) === Number(selectedClass))) && [item.lesson_title, item.song_name, item.class_name, item.overall_effect, item.created_at, item.audio_summary, item.highlights, item.problems, item.improvement].filter(Boolean).join(" ").toLocaleLowerCase().includes(query));
     const sorted = [...matching];
     const sort = document.getElementById("feedbackSort").value;
     if (sort === "oldest") sorted.reverse();
@@ -127,10 +139,20 @@ async function renderArchive(container, kind) {
     document.getElementById("feedbackRows").innerHTML = sorted.length ? sorted.map(item => {
       const goals = item.analysis?.goal_observations || [];
       const goalLabel = status => status === "achieved" ? "已达到" : status === "developing" ? "正在形成" : status === "not_observed" ? "本次未观察到" : "暂未记录";
-      return `<article class="card archive-item feedback-archive-item"><div><span class="eyebrow">CLASSROOM FEEDBACK</span><h3>${esc(item.lesson_title)}</h3><p>${esc(item.song_name)} · ${esc(item.created_at)} · 整体效果：${esc(item.overall_effect)}</p><dl><dt>音频分析总结</dt><dd>${esc(item.audio_summary || "未带入音频分析")}</dd><dt>课堂亮点</dt><dd>${esc(item.highlights || "—")}</dd><dt>存在问题</dt><dd>${esc(item.problems || "—")}</dd><dt>下次改进</dt><dd>${esc(item.improvement || "—")}</dd></dl>${goals.length ? `<section class="archived-goal-observations"><b>本课目标观察</b><ul>${goals.map(goal => `<li><span>${esc(goal.objective)}</span><small>${goalLabel(goal.status)}</small></li>`).join("")}</ul></section>` : ""}<details class="feedback-inline-edit"><summary>编辑这条反馈</summary><div class="feedback-edit-grid"><label>整体效果<select data-edit-field="overall_effect"><option ${item.overall_effect === "很好" ? "selected" : ""}>很好</option><option ${item.overall_effect === "较好" ? "selected" : ""}>较好</option><option ${item.overall_effect === "一般" ? "selected" : ""}>一般</option><option ${item.overall_effect === "较差" ? "selected" : ""}>较差</option></select></label><label>音频分析总结<textarea data-edit-field="audio_summary">${esc(item.audio_summary || "")}</textarea></label><label>课堂亮点<textarea data-edit-field="highlights">${esc(item.highlights || "")}</textarea></label><label>存在问题<textarea data-edit-field="problems">${esc(item.problems || "")}</textarea></label><label>下次改进<textarea data-edit-field="improvement">${esc(item.improvement || "")}</textarea></label></div>${goals.length ? `<div class="feedback-edit-goals"><b>目标观察</b>${goals.map((goal, index) => `<label><span>${esc(goal.objective)}</span><select data-edit-goal="${index}"><option value="" ${!goal.status ? "selected" : ""}>暂未记录</option><option value="achieved" ${goal.status === "achieved" ? "selected" : ""}>已达到</option><option value="developing" ${goal.status === "developing" ? "selected" : ""}>正在形成</option><option value="not_observed" ${goal.status === "not_observed" ? "selected" : ""}>本次未观察到</option></select></label>`).join("")}</div>` : ""}<button class="btn primary" type="button" data-save-feedback-edit="${item.id}">保存反馈修改</button></details><div class="archive-record-actions"><button class="btn danger" data-delete-feedback="${item.id}">删除这条反馈</button></div></div>${item.audio_analysis_id ? `<aside class="feedback-audio-link"><b>已关联音频记录</b><span>${esc(item.analysis?.analysis_mode_label || "课堂音频分析")}</span><button class="btn soft" data-open-feedback-audio="${item.audio_analysis_id}">查看完整分析</button><small>包含分段证据、建议与录音回听</small></aside>` : ""}</article>`;
+      return `<article class="card archive-item feedback-archive-item"><div><span class="eyebrow">CLASSROOM FEEDBACK</span><h3>${esc(item.lesson_title)}</h3><p>${esc(item.song_name)} · ${esc(item.created_at)} · 整体效果：${esc(item.overall_effect)}</p><dl><dt>音频分析总结</dt><dd>${esc(item.audio_summary || "未带入音频分析")}</dd><dt>课堂亮点</dt><dd>${esc(item.highlights || "—")}</dd><dt>存在问题</dt><dd>${esc(item.problems || "—")}</dd><dt>下次改进</dt><dd>${esc(item.improvement || "—")}</dd></dl>${goals.length ? `<section class="archived-goal-observations"><b>本课目标观察</b><ul>${goals.map(goal => `<li><span>${esc(goal.objective)}</span><small>${goalLabel(goal.status)}</small></li>`).join("")}</ul></section>` : ""}<details class="feedback-inline-edit"><summary>编辑这条反馈</summary><div class="feedback-edit-grid"><label>整体效果<select data-edit-field="overall_effect"><option ${item.overall_effect === "很好" ? "selected" : ""}>很好</option><option ${item.overall_effect === "较好" ? "selected" : ""}>较好</option><option ${item.overall_effect === "一般" ? "selected" : ""}>一般</option><option ${item.overall_effect === "较差" ? "selected" : ""}>较差</option></select></label><label>音频分析总结<textarea data-edit-field="audio_summary">${esc(item.audio_summary || "")}</textarea></label><label>课堂亮点<textarea data-edit-field="highlights">${esc(item.highlights || "")}</textarea></label><label>存在问题<textarea data-edit-field="problems">${esc(item.problems || "")}</textarea></label><label>下次改进<textarea data-edit-field="improvement">${esc(item.improvement || "")}</textarea></label></div>${goals.length ? `<div class="feedback-edit-goals"><b>目标观察</b>${goals.map((goal, index) => `<label><span>${esc(goal.objective)}</span><select data-edit-goal="${index}"><option value="" ${!goal.status ? "selected" : ""}>暂未记录</option><option value="achieved" ${goal.status === "achieved" ? "selected" : ""}>已达到</option><option value="developing" ${goal.status === "developing" ? "selected" : ""}>正在形成</option><option value="not_observed" ${goal.status === "not_observed" ? "selected" : ""}>本次未观察到</option></select></label>`).join("")}</div>` : ""}<button class="btn primary" type="button" data-save-feedback-edit="${item.id}">保存反馈修改</button></details><div class="archive-record-actions"><button class="btn soft" data-assistant-feedback="${item.id}">和教学助手讨论</button><button class="btn danger" data-delete-feedback="${item.id}">删除这条反馈</button></div></div>${item.audio_analysis_id ? `<aside class="feedback-audio-link"><b>已关联音频记录</b><span>${esc(item.analysis?.analysis_mode_label || "课堂音频分析")}</span><button class="btn soft" data-open-feedback-audio="${item.audio_analysis_id}">查看完整分析</button><small>包含分段证据、建议与录音回听</small></aside>` : ""}</article>`;
     }).join("") : `<section class="card empty">${query ? "没有匹配的课堂反馈。" : "暂无课堂反馈记录。保存反馈后会完整归档在这里。"}</section>`;
     document.getElementById("feedbackCount").textContent = query ? `找到 ${sorted.length} 条课堂反馈` : `共 ${sorted.length} 条课堂反馈`;
     container.querySelectorAll("[data-open-feedback-audio]").forEach(button => button.onclick = () => { localStorage.setItem("audioArchiveDeepLink", JSON.stringify({ id: Number(button.dataset.openFeedbackAudio) })); window.dispatchEvent(new CustomEvent("app:navigate", { detail: "lessons" })); });
+    container.querySelectorAll("[data-assistant-feedback]").forEach(button => button.onclick = () => {
+      const item = rows.find(record => record.id === Number(button.dataset.assistantFeedback));
+      if (!item) return;
+      localStorage.setItem("teachingAssistantContext", JSON.stringify({
+        type: "feedback", feedback_id: item.id, lesson_id: item.lesson_plan_id,
+        audio_analysis_id: item.audio_analysis_id || null, class_id: item.class_id || null,
+        class_name: item.class_name || null, source_label: `${item.class_name || "课堂"} · ${item.lesson_title}`,
+      }));
+      window.dispatchEvent(new CustomEvent("app:navigate", { detail: "teachingAssistant" }));
+    });
     container.querySelectorAll("[data-delete-feedback]").forEach(button => button.onclick = async () => {
       const item = rows.find(row => row.id === Number(button.dataset.deleteFeedback));
       if (!item) return;
@@ -178,6 +200,7 @@ async function renderArchive(container, kind) {
   const goalsForItem = item => item.analysis?.goal_observations || [];
   document.getElementById("feedbackSort").onchange = paintFeedback;
   document.getElementById("feedbackSearch").oninput = paintFeedback;
+  document.getElementById("feedbackClassFilter").onchange = paintFeedback;
   paintFeedback();
 }
 

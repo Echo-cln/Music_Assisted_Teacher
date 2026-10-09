@@ -310,3 +310,16 @@ class LessonPlanRevision(Base):
     content_json: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+
+
+class AssistantConversation(Base):
+    """教师独立保存的教学助手对话；记录与上下文均按教师隔离。"""
+
+    __tablename__ = "assistant_conversations"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teachers.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(100), default="新对话")
+    context_json: Mapped[str] = mapped_column(Text, default="{}")
+    messages_json: Mapped[str] = mapped_column(Text, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)

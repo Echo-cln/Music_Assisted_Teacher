@@ -32,13 +32,22 @@ function adjustmentChanges(before, after) {
     ["preparation", "课前准备"], ["theory_explanation", "乐理讲解"], ["mistake_practice", "易错点练习"],
     ["differentiation", "分层教学"], ["assessment", "课堂评价"],
   ];
-  fields.forEach(([key, label]) => { if (normalizeText(from[key]) !== normalizeText(to[key])) changes.push({ label, detail: "已按本次要求调整" }); });
+  fields.forEach(([key, label]) => {
+    const oldValue = normalizeText(from[key]) || "未填写";
+    const newValue = normalizeText(to[key]) || "未填写";
+    if (oldValue !== newValue) changes.push({ label, detail: `${oldValue.slice(0, 90)} → ${newValue.slice(0, 90)}` });
+  });
   const beforeTimeline = from.timeline || [], afterTimeline = to.timeline || [];
   afterTimeline.forEach((stage, index) => {
     const old = beforeTimeline[index] || {};
     const changed = ["stage", "minutes", "teacher", "students", "device_action", "look_for", "low_device_option"]
       .some(key => normalizeText(old[key]) !== normalizeText(stage[key]));
-    if (changed) changes.push({ label: `课堂流程 · ${stage.stage || `第 ${index + 1} 环节`}`, detail: "环节安排、时间或观察任务已更新" });
+    if (changed) {
+      const changedFields = ["stage", "minutes", "teacher", "students", "device_action", "look_for", "low_device_option"]
+        .filter(key => normalizeText(old[key]) !== normalizeText(stage[key]))
+        .map(key => `${key === "minutes" ? "用时" : key === "teacher" ? "教师活动" : key === "students" ? "学生活动" : key === "look_for" ? "观察点" : key === "low_device_option" ? "无设备做法" : key === "device_action" ? "设备安排" : "环节"}：${normalizeText(old[key]) || "未填写"} → ${normalizeText(stage[key]) || "未填写"}`);
+      changes.push({ label: `课堂流程 · ${stage.stage || `第 ${index + 1} 环节`}`, detail: changedFields.join("；").slice(0, 240) });
+    }
   });
   return changes.slice(0, 6);
 }
@@ -119,6 +128,13 @@ export async function renderAssistant(container) {
       ? "生成后在下方查看教案；需要调整时直接在聊天框告诉我。保存按钮会保存新教案或更新已有教案。"
       : "生成期间可在右下角查看进度，也可以切换到其他页面。";
   });
+  let assistantSeed = null;
+  try { assistantSeed = JSON.parse(localStorage.getItem("assistantLessonSeed") || "null"); } catch (_) {}
+  if (assistantSeed?.prompt) {
+    localStorage.removeItem("assistantLessonSeed");
+    container.querySelector('[data-planner-mode="dialogue"]')?.click();
+    document.getElementById("lessonBrief").value = assistantSeed.prompt;
+  }
   document.getElementById("extractLessonBrief").onclick=()=>sendDialogueMessage(classes);
   document.getElementById("lessonBrief").addEventListener("keydown", event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();sendDialogueMessage(classes);}});
   container.querySelectorAll("[data-mode]").forEach(button => button.onclick = () => {
@@ -230,6 +246,16 @@ function rememberAssistantMessage(text) {
   appendDialogueMessage("assistant", text);
 }
 
+function rememberAssistantAction(text, buttonLabel, command) {
+  dialogueSession.history.push({ role: "assistant", text });
+  const node = appendDialogueMessage("assistant", `${esc(text)}<div class="dialogue-actions"><button class="btn primary" type="button" data-dialogue-command="${esc(command)}">${esc(buttonLabel)}</button></div>`, { html: true });
+  node?.querySelector("[data-dialogue-command]")?.addEventListener("click", () => {
+    const input = document.getElementById("lessonBrief");
+    input.value = command;
+    document.getElementById("extractLessonBrief")?.click();
+  });
+}
+
 function normalizedClassName(value) {
   const digits = { "一":"1", "二":"2", "三":"3", "四":"4", "五":"5", "六":"6" };
   return String(value || "").replace(/\s/g, "").replace(/[一二三四五六]/g, digit => digits[digit]).toLowerCase();
@@ -242,6 +268,9 @@ function resolveClassFromText(text, classes) {
 
 function isDialogueQuestion(message) {
   const text = String(message || "").trim();
+  if (/(?:先不生成|先不改|不改了|取消生成|先不要生成)/.test(text)) return false;
+  if (/(?:先别改|先不改教案|不要修改|只是问|只问|先解释|仅解释)/.test(text)
+      && /(?:教案|生成|调整|修改|为什么|原因|安排)/.test(text)) return true;
   const changeVerb = "(?:调整|修改|改成|改为|改|换成|换为|换|增加|减少|删掉|删除|补充|安排|重写|缩短|延长|加入|替换)";
   const explicitObjectChange = new RegExp(`(?:把|将).{0,45}${changeVerb}`).test(text)
     || new RegExp(`^${changeVerb}`).test(text);
@@ -325,15 +354,65 @@ async function sendDialogueMessage(classes) {
       return;
     }
 
-    if (dialogueSession.phase === "ready" && currentPlan) {
-      dialogueSession.phase = "adjusting";
-      pending && (pending.querySelector(".dialogue-bubble p").textContent = "我按你的要求调整教案，并保留其他未提及的内容。");
-      const ok = await streamPreviewAdjustment(document.getElementById("lessonArea"), prompt);
+    if (dialogueSession.waitingFor === "generation_confirmation") {
+      if (/(?:确认|按这些条件|就这样|开始生成|生成教案|请生成|直接生成)/.test(prompt)) {
+        const payload = dialogueSession.pendingGenerationPayload;
+        if (!payload) throw new Error("待确认的备课条件已失效，请重新确认班级和歌曲");
+        dialogueSession.waitingFor = null;
+        dialogueSession.phase = "collecting";
+        pending && (pending.querySelector(".dialogue-bubble p").textContent = "好，我按刚才确认的条件开始生成。");
+        pending?.remove();
+        const started = await generate(false, payload);
+        if (!started) dialogueSession.phase = "collecting";
+        return;
+      }
+      if (/(?:取消|先不生成|先不要生成|暂不生成|再想想|先等等)/.test(prompt)) {
+        dialogueSession.waitingFor = null;
+        dialogueSession.pendingGenerationPayload = null;
+        dialogueSession.phase = "collecting";
+        pending?.remove();
+        rememberAssistantMessage("好，我们先不生成。你可以继续补充或改动条件，准备好时再告诉我。");
+        return;
+      }
+      // A new detail replaces the pending proposal; it never silently confirms it.
+      dialogueSession.waitingFor = null;
+      dialogueSession.phase = "collecting";
+    }
+
+    if (dialogueSession.waitingFor === "adjustment_confirmation" && currentPlan) {
+      if (/(?:确认|按这个改|按此修改|就这样|开始调整|可以修改)/.test(prompt)) {
+        const instruction = dialogueSession.pendingAdjustmentPrompt;
+        dialogueSession.waitingFor = null;
+        dialogueSession.phase = "adjusting";
+        pending && (pending.querySelector(".dialogue-bubble p").textContent = "好，我按刚才说的方向更新预览。");
+        const before = currentPlan;
+        const ok = await streamPreviewAdjustment(document.getElementById("lessonArea"), instruction);
+        pending?.remove();
+        dialogueSession.phase = "ready";
+        const changed = currentPlan?.adjustment_changes || [];
+        rememberAssistantMessage(ok
+          ? (changed.length ? `这次主要改了：${changed.slice(0, 5).map(item => `${item.label}：${item.detail}`).join("；")}。其他未提及部分先保留，完整预览已更新，确认后再保存。` : "预览已更新。系统没有检测到明确的字段差异，请核对正文后再保存。")
+          : "这次没有完成调整，原教案仍保留。你可以换个说法，或先在预览里手动编辑。");
+        return;
+      }
+      if (/(?:取消|先不改|不改了|算了)/.test(prompt)) {
+        dialogueSession.waitingFor = null;
+        dialogueSession.pendingAdjustmentPrompt = null;
+        pending?.remove();
+        rememberAssistantMessage("好，先保留当前教案，不做修改。你还可以继续问我问题。");
+        return;
+      }
+      dialogueSession.pendingAdjustmentPrompt = prompt;
       pending?.remove();
-      dialogueSession.phase = "ready";
-      rememberAssistantMessage(ok
-        ? "已经调整好，更新后的内容在下方预览。你可以继续提出修改，或保存教案。"
-        : "这次没有完成调整，原预览仍保留。你可以换一种说法再试一次。");
+      rememberAssistantAction(`收到，你的新要求是“${prompt}”。我会按这条最新要求重新整理修改方案，之前那条待确认方案不再执行。`, "确认并更新预览", "确认按最新修改方案调整");
+      return;
+    }
+
+    if (dialogueSession.phase === "ready" && currentPlan) {
+      dialogueSession.pendingAdjustmentPrompt = prompt;
+      dialogueSession.waitingFor = "adjustment_confirmation";
+      pending?.remove();
+      rememberAssistantAction(`我理解你想这样调整：${prompt}。我会保留没有提到的内容。先确认一下，按这个方向更新预览吗？`, "按这个方向修改", "确认按这个方案修改");
       return;
     }
 
@@ -388,7 +467,8 @@ async function sendDialogueMessage(classes) {
       rememberAssistantMessage("好，那我们换一首。你想用哪首歌？可以直接说歌名，我会核对资源库。");
       return;
     }
-    if (directSong && (waitingFor === "song" || waitingFor === "song_resource" || !settings.song_name)) settings.song_name = directSong;
+    const explicitSongChange = /(?:换成|改成|改为|换为|歌曲换|歌名改|换一首)/.test(prompt);
+    if (directSong && (waitingFor === "song" || waitingFor === "song_resource" || !settings.song_name || explicitSongChange)) settings.song_name = directSong;
     else if (!confirmsResourceAdded && parsedSong && (waitingFor === "song" || !settings.song_name)) settings.song_name = parsedSong;
 
     const parsedDuration = Number(parsed.duration_minutes);
@@ -456,11 +536,14 @@ async function sendDialogueMessage(classes) {
       teacher_requirements: requirements,
       generation_strategy: generationStrategy,
     };
-    dialogueSession.waitingFor = null;
-    dialogueSession.phase = "collecting";
-    rememberAssistantMessage(`条件已经清楚：${settings.class_name || "通用模式"}、《${exactSong.name}》、${payload.duration_minutes}分钟。我先按${generationStrategy === "fast" ? "快速" : "深度"}模式生成一份完整教案；生成后你可以继续在这里提出修改。`);
-    const started = await generate(false, payload);
-    if (!started) dialogueSession.phase = "collecting";
+    dialogueSession.pendingGenerationPayload = payload;
+    dialogueSession.waitingFor = "generation_confirmation";
+    dialogueSession.phase = "awaiting_generation_confirmation";
+    rememberAssistantAction(
+      `我已经核对好备课条件：${settings.class_name || "通用模式"}、《${exactSong.name}》、${payload.duration_minutes}分钟；设备按“${settings.equipment_constraints.join("、") || "无电子设备"}”安排，采用${generationStrategy === "fast" ? "快速" : "深度"}模式。你还可以继续补充或调整；确认后我再生成教案。`,
+      "确认并生成教案",
+      "确认按当前条件生成教案",
+    );
   } catch (error) {
     pending?.remove();
     if (waitingFor) dialogueSession.waitingFor = waitingFor;

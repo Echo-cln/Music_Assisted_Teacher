@@ -210,6 +210,12 @@ export const api = {
   uploadCloudSoundfont: form => request("/workbench/soundfonts", { method: "POST", body: form }),
   downloadCloudSoundfont: id => binaryRequest(`/workbench/soundfonts/${id}/file`),
   deleteCloudSoundfont: id => request(`/workbench/soundfonts/${id}`, { method: "DELETE" }),
+  assistantConversations: () => request("/teaching-assistant/conversations"),
+  assistantConversation: id => request(`/teaching-assistant/conversations/${id}`),
+  createAssistantConversation: payload => request("/teaching-assistant/conversations", { method: "POST", body: JSON.stringify(payload || {}) }),
+  updateAssistantConversation: (id, payload) => request(`/teaching-assistant/conversations/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteAssistantConversation: id => request(`/teaching-assistant/conversations/${id}`, { method: "DELETE" }),
+  sendAssistantMessage: (id, message) => request(`/teaching-assistant/conversations/${id}/messages`, { method: "POST", body: JSON.stringify({ message }) }),
   adminUsers: () => request("/admin/users"),
   updateAdminUser: (id, payload) => request(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
 };

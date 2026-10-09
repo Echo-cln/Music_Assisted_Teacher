@@ -29,7 +29,7 @@ export async function renderFeedback(container) {
         <label>课堂亮点<textarea id="highlights" placeholder="例如：小组声势合作积极，学生能够主动描述歌曲情绪。"></textarea></label>
         <label>存在问题<textarea id="problems" placeholder="例如：第二乐句进入偏早，长音收尾不够稳定。"></textarea></label>
         <label>下次改进<textarea id="improvement" placeholder="例如：课前增加两分钟恒拍练习，分层安排领唱任务。"></textarea></label>
-        <button class="btn primary" id="saveFeedback">保存课堂反馈</button>
+        <div class="feedback-actions"><button class="btn soft" id="discussFeedback">和教学助手聊聊这节课</button><button class="btn primary" id="saveFeedback">保存课堂反馈</button></div>
       </section>
       <aside class="side-stack"><section class="card feedback-record-card"><div class="module-head"><div><span class="eyebrow">LINKED RECORD</span><h3>已带入的音频记录</h3></div>${imported ? '<span class="status info">待保存关联</span>' : '<span class="status info">待选择</span>'}</div>${imported ? summaryView(imported) : '<p class="muted">尚未带入分析记录。可先前往“音频分析”完成录音分析，分析结果会自动保存。</p>'}</section></aside>
     </div>`;
@@ -76,6 +76,23 @@ export async function renderFeedback(container) {
       document.getElementById("audioSummary").value = "";
       if (card) card.innerHTML = '<div class="module-head"><div><span class="eyebrow">LINKED RECORD</span><h3>已带入的音频记录</h3></div><span class="status info">待选择</span></div><p class="muted">可选择已关联本教案或尚未关联教案的分析记录。保存反馈时，会自动关联本课教案。</p>';
     }
+  };
+  document.getElementById("discussFeedback").onclick = () => {
+    const lessonId = Number(lessonSelect.value) || null;
+    const selected = lessons.find(item => item.id === lessonId);
+    const observations = [
+      ["课堂亮点", document.getElementById("highlights").value.trim()],
+      ["存在问题", document.getElementById("problems").value.trim()],
+      ["下次改进", document.getElementById("improvement").value.trim()],
+      ["音频分析总结", document.getElementById("audioSummary").value.trim()],
+    ].filter(([, value]) => value).map(([label, value]) => `${label}：${value}`).join("\n");
+    localStorage.setItem("teachingAssistantContext", JSON.stringify({
+      type: "feedback_draft", lesson_id: lessonId, class_id: selected?.class_id || null,
+      class_name: selected?.class_name || null, audio_analysis_id: Number(audioSelect.value) || null,
+      source_label: selected ? `《${selected.title}》课堂反馈草稿` : "课堂反馈草稿",
+      teacher_observations: observations,
+    }));
+    window.dispatchEvent(new CustomEvent("app:navigate", { detail: "teachingAssistant" }));
   };
   document.getElementById("saveFeedback").onclick = async () => {
     const lessonId = Number(document.getElementById("lessonId").value);

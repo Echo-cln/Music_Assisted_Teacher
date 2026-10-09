@@ -78,6 +78,8 @@ def list_feedback(db: Session = Depends(get_db), teacher: Teacher = Depends(get_
         output.append({
             "id": item.id, "lesson_plan_id": plan.id if plan else None,
             "lesson_title": plan.title if plan else "已删除教案",
+            "class_id": record.class_id if record else None,
+            "class_name": db.get(ClassProfile, record.class_id).name if record and db.get(ClassProfile, record.class_id) else "—",
             "song_name": song.name if song else "—",
             "overall_effect": item.overall_effect, "highlights": item.highlights,
             "problems": item.problems, "improvement": item.improvement,
