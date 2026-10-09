@@ -1,4 +1,4 @@
-import { api } from "../api/client.js";
+import { api } from "../api/client.js?v=20261009-dialogue-trends";
 import { showModal } from "../components/modal.js";
 import { esc, notify, pageHeader } from "../utils/dom.js";
 

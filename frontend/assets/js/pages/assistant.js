@@ -1,4 +1,4 @@
-import { api } from "../api/client.js";
+import { api } from "../api/client.js?v=20261009-dialogue-trends";
 import { lessonView } from "../components/lesson.js?v=20261007-2";
 import { cancelActiveGeneration, getGenerationJob, refreshGeneration, startGeneration } from "../state/generation.js";
 import { esc, notify, pageHeader } from "../utils/dom.js";
