@@ -44,9 +44,17 @@ export async function renderAssistant(container) {
   container.innerHTML = pageHeader("教案助手", "按班级推荐歌曲，或手动选择歌曲生成教案。") + `
     <div class="grid two">
       <div class="grid">
-        <section class="card">
-          <div class="tabs planner-mode-tabs"><button class="tab active" data-planner-mode="form">表单备课</button><button class="tab" data-planner-mode="dialogue">对话备课</button></div>
-          <div id="sourceModeTabs" class="tabs"><button class="tab active" data-mode="smart">智能推荐</button><button class="tab" data-mode="manual">手动指定</button></div>
+        <section class="card planner-card">
+          <div class="planner-mode-heading"><span class="eyebrow">备课方式</span><p>选择适合本次课堂的准备流程</p></div>
+          <div class="planner-mode-tabs" role="tablist" aria-label="备课方式">
+            <button class="planner-mode-option active" role="tab" aria-selected="true" data-planner-mode="form"><span class="planner-mode-index">01</span><span><strong>表单备课</strong><small>逐项指定课程条件</small></span></button>
+            <button class="planner-mode-option" role="tab" aria-selected="false" data-planner-mode="dialogue"><span class="planner-mode-index">02</span><span><strong>对话备课</strong><small>用自然语言描述需求</small></span></button>
+          </div>
+          <div id="formModePanel">
+            <div class="source-mode-section">
+              <div class="source-mode-heading"><span>表单备课 · 歌曲选择</span><strong>选择歌曲来源</strong></div>
+              <div id="sourceModeTabs" class="source-mode-tabs" role="tablist" aria-label="歌曲选择方式"><button class="source-mode-option active" role="tab" aria-selected="true" data-mode="smart">智能推荐</button><button class="source-mode-option" role="tab" aria-selected="false" data-mode="manual">手动指定</button></div>
+            </div>
           <div id="smartForm" class="form-grid">
             <label>地区歌库<select id="region">${regions.map(region => `<option>${region}</option>`).join("")}</select></label>
             <label>授课班级<select id="classId">${classOptions(classes, true)}</select></label>
@@ -67,10 +75,14 @@ export async function renderAssistant(container) {
             <label class="full">本课要求（选填）<textarea id="manualRequirements" placeholder="填写设备条件、学生基础或课堂重点"></textarea></label><small class="muted full">歌曲信息、班级整体特征和本课要求会发送给你配置的模型服务以生成教案；请勿填写学生姓名、联系方式或可识别个人的信息。</small>
             <button class="btn primary" id="manualGenerate">检索并生成教案</button>
           </div>
+          </div>
           <div id="dialogueModePanel" class="dialogue-planning hidden">
-            <label>用自己的话描述本课需求<textarea id="lessonBrief" rows="5" placeholder="例如：明天给三年级1班上《茉莉花》，40分钟，希望多一些互动，加入当地民歌元素，教室没有投影。"></textarea></label>
-            <button class="btn" id="extractLessonBrief">整理备课条件</button>
-            <div id="briefConfirmation" class="brief-confirmation hidden"></div>
+            <div class="dialogue-intro"><span class="eyebrow">对话备课</span><h3>说说这节课怎么上</h3><p>告诉我班级、歌曲、课时和你想要的课堂体验。我会整理成可检查的备课条件，再由你确认生成。</p></div>
+            <div id="dialogueMessages" class="dialogue-messages" aria-live="polite">
+              <div class="dialogue-message assistant"><span class="dialogue-avatar">师</span><div class="dialogue-bubble"><b>备课助手</b><p>你好！可以像和同事讨论备课一样告诉我：给哪个班上什么歌、课时多长、设备情况如何，以及你希望学生在课堂上做什么。</p><small>例如：明天给三年级1班上《茉莉花》，40分钟，希望多一些互动，加入当地民歌元素，教室没有投影。</small></div></div>
+            </div>
+            <div class="dialogue-composer"><label class="sr-only" for="lessonBrief">描述本课需求</label><textarea id="lessonBrief" rows="2" placeholder="输入本课需求，按 Enter 发送；Shift + Enter 换行"></textarea><button class="btn primary" id="extractLessonBrief" aria-label="发送备课需求">发送</button></div>
+            <p class="dialogue-privacy-note">生成前会先展示识别出的条件，确认后才开始生成。</p>
           </div>
           <div id="recommendations"></div>
         </section>
@@ -84,17 +96,18 @@ export async function renderAssistant(container) {
   bindEquipmentControls(container);
   container.querySelectorAll("[data-planner-mode]").forEach(button => button.onclick=()=>{
     const dialog=button.dataset.plannerMode==="dialogue";
-    container.querySelectorAll("[data-planner-mode]").forEach(item=>item.classList.toggle("active",item===button));
-    document.getElementById("sourceModeTabs").classList.toggle("hidden",dialog);
+    container.querySelectorAll("[data-planner-mode]").forEach(item=>{const active=item===button;item.classList.toggle("active",active);item.setAttribute("aria-selected",String(active));});
+    document.getElementById("formModePanel").classList.toggle("hidden",dialog);
     const smart=document.querySelector('[data-mode="smart"]').classList.contains("active");
-    document.getElementById("smartForm").classList.toggle("hidden",dialog||!smart);
-    document.getElementById("manualForm").classList.toggle("hidden",dialog||smart);
+    document.getElementById("smartForm").classList.toggle("hidden",!dialog&&!smart);
+    document.getElementById("manualForm").classList.toggle("hidden",!dialog&&smart);
     document.getElementById("recommendations").classList.toggle("hidden",dialog);
     document.getElementById("dialogueModePanel").classList.toggle("hidden",!dialog);
   });
   document.getElementById("extractLessonBrief").onclick=()=>extractBrief(classes);
+  document.getElementById("lessonBrief").addEventListener("keydown", event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();extractBrief(classes);}});
   container.querySelectorAll("[data-mode]").forEach(button => button.onclick = () => {
-    container.querySelectorAll("[data-mode]").forEach(item => item.classList.toggle("active", item === button));
+    container.querySelectorAll("[data-mode]").forEach(item => {const active=item===button;item.classList.toggle("active",active);item.setAttribute("aria-selected",String(active));});
     document.getElementById("smartForm").classList.toggle("hidden", button.dataset.mode !== "smart");
     document.getElementById("manualForm").classList.toggle("hidden", button.dataset.mode !== "manual");
   });
@@ -158,74 +171,124 @@ export async function renderAssistant(container) {
 }
 
 
+function appendDialogueMessage(role, content, options = {}) {
+  const transcript = document.getElementById("dialogueMessages");
+  if (!transcript) return null;
+  const message = document.createElement("div");
+  message.className = `dialogue-message ${role}${options.pending ? " is-pending" : ""}`;
+  const avatar = document.createElement("span");
+  avatar.className = "dialogue-avatar";
+  avatar.textContent = role === "user" ? "我" : "师";
+  const bubble = document.createElement("div");
+  bubble.className = "dialogue-bubble";
+  if (options.html) {
+    bubble.innerHTML = `<b>${role === "user" ? "你" : "备课助手"}</b>${content}`;
+  } else {
+    const heading = document.createElement("b");
+    heading.textContent = role === "user" ? "你" : "备课助手";
+    const body = document.createElement("p");
+    body.textContent = content;
+    bubble.append(heading, body);
+  }
+  message.append(avatar, bubble);
+  transcript.append(message);
+  transcript.scrollTop = transcript.scrollHeight;
+  return message;
+}
+
 async function extractBrief(classes) {
-  const prompt = document.getElementById("lessonBrief").value.trim();
+  const input = document.getElementById("lessonBrief");
+  const prompt = input.value.trim();
   if (prompt.length < 8) return notify("请先描述歌曲、班级或课堂需求");
   const selectedClassId = Number(document.getElementById("classId").value || document.getElementById("manualClassId").value) || null;
   const button = document.getElementById("extractLessonBrief");
-  button.disabled = true; button.textContent = "正在整理条件…";
+  button.disabled = true;
+  button.textContent = "整理中…";
+  document.querySelectorAll(".brief-confirmation").forEach(item => item.remove());
+  appendDialogueMessage("user", prompt);
+  input.value = "";
+  const pending = appendDialogueMessage("assistant", "我先把班级、歌曲、课时和设备要求整理出来…", { pending: true });
   try {
     const response = await api.extractLessonBrief({ prompt, class_id: selectedClassId });
+    pending?.remove();
     const parsed = response.parsed || {};
     const normalized = value => String(value || "").replace(/\s/g, "").toLowerCase();
     let chosenClass = parsed.class_name ? classes.find(item => normalized(item.name) === normalized(parsed.class_name)) : null;
     if (!chosenClass) chosenClass = classes.find(item => item.id === selectedClassId) || classes[0] || null;
     const profile = classes.find(item => item.id === chosenClass?.id) || response.class_profile || {};
     const classMismatch = parsed.class_name && !classes.some(item => normalized(item.name) === normalized(parsed.class_name));
-    const currentClass=classes.find(item=>item.id===selectedClassId);
-    const classConflict=chosenClass&&currentClass&&chosenClass.id!==currentClass.id;
+    const currentClass = classes.find(item => item.id === selectedClassId);
+    const classConflict = chosenClass && currentClass && chosenClass.id !== currentClass.id;
     const profileText = profile ? [profile.grade ? profile.grade + "年级" : "", profile.province, profile.learning_level, "音准：" + profile.pitch_level, "节奏：" + profile.rhythm_level, "合作：" + profile.cooperation, profile.common_problems].filter(Boolean).join(" · ") : "尚未选择班级画像";
     const currentDuration = Number(document.getElementById("duration").value || document.getElementById("manualDuration").value) || 40;
     const currentActivity = document.getElementById("activity").value || document.getElementById("manualActivity").value;
     const songFallback = selectedSong?.name || document.getElementById("songName").value.trim() || "";
     const regionFallback = profile.province || document.getElementById("region").value;
-    const classOptions = classes.map(item => `<option value="${item.id}" ${item.id===chosenClass?.id?"selected":""}>${esc(item.name)} · ${item.grade}年级 · ${esc(item.province)}</option>`).join("");
+    const options = classes.map(item => `<option value="${item.id}" ${item.id === chosenClass?.id ? "selected" : ""}>${esc(item.name)} · ${esc(item.grade)}年级 · ${esc(item.province)}</option>`).join("");
     const parsedDevices = Array.isArray(parsed.equipment_constraints) ? parsed.equipment_constraints.join("、") : String(parsed.equipment_constraints || "");
-    const currentDevicePanel=document.querySelector(`[data-equipment-controls="${document.getElementById("sourceModeTabs").querySelector("[data-mode].active")?.dataset.mode==="manual"?"manual":"smart"}"] [data-equipment-summary]`);
-    const devices=parsedDevices||currentDevicePanel?.value||"";
-    const currentRequirements=document.getElementById("requirements").value.trim()||document.getElementById("manualRequirements").value.trim();
+    const activeMode = document.querySelector("#sourceModeTabs [data-mode].active")?.dataset.mode;
+    const currentDevicePanel = document.querySelector(`[data-equipment-controls="${activeMode === "manual" ? "manual" : "smart"}"] [data-equipment-summary]`);
+    const devices = parsedDevices || currentDevicePanel?.value || "";
+    const currentRequirements = document.getElementById("requirements").value.trim() || document.getElementById("manualRequirements").value.trim();
     const requirements = String(parsed.teacher_requirements || currentRequirements || "");
-    const strategyFallback=document.getElementById("strategy").value||document.getElementById("manualStrategy").value||"deep";
-    const confirmation = document.getElementById("briefConfirmation");
-    confirmation.classList.remove("hidden");
-    confirmation.innerHTML = `<div class="brief-confirmation-head"><div><span class="eyebrow">备课条件确认</span><h3>检查后生成教案</h3></div><span class="status info">请核对</span></div>
-      ${classMismatch?`<div class="notice">识别到“${esc(parsed.class_name)}”，但当前教师档案中没有同名班级。请在下方选择正确班级，系统不会创建或猜测班级。</div>`:""}${classConflict?`<div class="notice">对话中识别为“${esc(chosenClass.name)}”，与当前表单班级“${esc(currentClass.name)}”不同。下方已预选对话班级；请确认，或改为沿用当前画像。</div>`:""}
-      <div class="brief-profile-context"><b>读取到的班级特点</b><span>${esc(profileText||"尚未选择班级画像")}</span></div>
-      <div class="form-grid brief-fields">
-        <label>授课班级<select id="briefClassId"><option value="">通用模式（不指定班级）</option>${classOptions}</select></label>
-        <label>歌曲<input id="briefSong" value="${esc(parsed.song_name || songFallback)}" placeholder="请输入歌名"></label>
-        <label>课时（分钟）<input id="briefDuration" type="number" min="20" max="90" value="${Number(parsed.duration_minutes)||currentDuration}"></label>
-        <label>课堂偏好<input id="briefActivity" value="${esc(parsed.activity_preference || profile.preferred_method || currentActivity || "")}"></label>
-        <label>地区 / 文化元素<input id="briefRegion" value="${esc(parsed.region_element || regionFallback || "")}" placeholder="没有明确要求可留空"></label>
-        <label>设备条件与限制<input id="briefDevices" value="${esc(devices)}" placeholder="例如：无投影、无音箱"></label>
-        <label class="full">其他课堂要求<textarea id="briefRequirements" rows="3">${esc(requirements)}</textarea></label>
-        <label>生成模式<select id="briefStrategy"><option value="fast" ${strategyFallback==="fast"?"selected":""}>快速模式</option><option value="deep" ${strategyFallback!=="fast"?"selected":""}>深度模式</option></select></label>
-      </div>
-      <p class="muted brief-sync-note">确认时会同步到表单备课设置；后续在表单中修改，也会更新这里的条件。</p>
-      <button class="btn primary" id="confirmBriefGenerate">确认条件并生成</button>`;
+    const strategyFallback = document.getElementById("strategy").value || document.getElementById("manualStrategy").value || "deep";
+    const song = parsed.song_name || songFallback || "尚未指定";
+    const className = chosenClass?.name || "通用模式";
+    const duration = Number(parsed.duration_minutes) || currentDuration;
+    const activity = parsed.activity_preference || profile.preferred_method || currentActivity || "互动与分组合作";
+    const chips = [className, song === "尚未指定" ? song : `《${song}》`, `${duration} 分钟`, activity].map(item => `<span class="dialogue-condition-chip">${esc(item)}</span>`).join("");
+    const warning = classMismatch ? `<div class="notice">识别到“${esc(parsed.class_name)}”，但教师档案中没有同名班级。请选择已有班级，或选通用模式。</div>` : "";
+    const conflict = classConflict ? `<div class="notice">对话中识别为“${esc(chosenClass.name)}”，与表单当前选择的“${esc(currentClass.name)}”不同。请核对下面已预选的班级。</div>` : "";
+    const confirmationHtml = `<div class="brief-confirmation">
+      <div class="brief-confirmation-head"><div><span class="eyebrow">备课条件已整理</span><h3>这节课我理解的是</h3></div><span class="status info">请确认</span></div>
+      <div class="dialogue-condition-chips">${chips}</div>
+      <p class="dialogue-response-copy">我会结合班级画像安排活动，并把设备限制写进具体教学环节。请确认条件；需要调整时可以展开编辑。</p>
+      ${warning}${conflict}
+      <div class="brief-profile-context"><b>班级画像参考</b><span>${esc(profileText || "尚未选择班级画像")}</span></div>
+      <details class="brief-edit-details"><summary>检查或修改备课条件</summary>
+        <div class="form-grid brief-fields">
+          <label>授课班级<select id="briefClassId"><option value="">通用模式（不指定班级）</option>${options}</select></label>
+          <label>歌曲<input id="briefSong" value="${esc(parsed.song_name || songFallback)}" placeholder="请输入歌名"></label>
+          <label>课时（分钟）<input id="briefDuration" type="number" min="20" max="90" value="${Number(parsed.duration_minutes) || currentDuration}"></label>
+          <label>课堂偏好<input id="briefActivity" value="${esc(activity)}"></label>
+          <label>地区 / 文化元素<input id="briefRegion" value="${esc(parsed.region_element || regionFallback || "")}" placeholder="没有明确要求可留空"></label>
+          <label>设备条件与限制<input id="briefDevices" value="${esc(devices)}" placeholder="例如：无投影、无音箱"></label>
+          <label class="full">其他课堂要求<textarea id="briefRequirements" rows="2">${esc(requirements)}</textarea></label>
+          <label>生成模式<select id="briefStrategy"><option value="fast" ${strategyFallback === "fast" ? "selected" : ""}>快速模式</option><option value="deep" ${strategyFallback !== "fast" ? "selected" : ""}>深度模式</option></select></label>
+        </div>
+      </details>
+      <p class="muted brief-sync-note">确认后会同步到表单备课条件。</p>
+      <button class="btn primary" id="confirmBriefGenerate">确认条件并生成教案</button>
+    </div>`;
+    appendDialogueMessage("assistant", confirmationHtml, { html: true });
     bindBriefSettings(classes);
     bindDialogToForms();
-    document.getElementById("confirmBriefGenerate").onclick=async()=>{
-      const classId=Number(document.getElementById("briefClassId").value)||null;
-      const songName=document.getElementById("briefSong").value.trim();
-      if(!songName)return notify("请补充歌曲名称");
-      const songs=await api.songs({q:songName});
-      if(!songs.length)return notify(`资源库中未找到《${songName}》，请先到教学资源库添加歌曲`);
-      selectedSong=songs.find(song=>normalized(song.name)===normalized(songName));
-      if(!selectedSong)return notify(`检索到了相近歌曲（${songs.slice(0,4).map(song=>song.name).join("、")}），请把输入名称改成资源库中的准确歌名后再生成`);
-      const duration=Math.max(20,Math.min(90,Number(document.getElementById("briefDuration").value)||40));
-      const activity=document.getElementById("briefActivity").value.trim()||profile.preferred_method||"互动与分组合作";
-      const region=document.getElementById("briefRegion").value.trim();
-      const device=document.getElementById("briefDevices").value.trim()||"未额外指定设备";
-      const extra=document.getElementById("briefRequirements").value.trim();
-      const strategy=document.getElementById("briefStrategy").value;
-      const teacherRequirements=[extra,region?`地区/文化元素：${region}`:"",`课堂设备条件：${device}`].filter(Boolean).join("\n");
-      applyBriefToForms({classId,songName,duration,activity,teacherRequirements,strategy,region});
-      await generate(false,{song_id:selectedSong.id,class_id:classId,duration_minutes:duration,activity_preference:activity,teacher_requirements:teacherRequirements,generation_strategy:strategy});
+    document.getElementById("confirmBriefGenerate").onclick = async () => {
+      const classId = Number(document.getElementById("briefClassId").value) || null;
+      const songName = document.getElementById("briefSong").value.trim();
+      if (!songName) return notify("请补充歌曲名称");
+      const songs = await api.songs({ q: songName });
+      if (!songs.length) return notify(`资源库中未找到《${songName}》，请先到教学资源库添加歌曲`);
+      selectedSong = songs.find(songItem => normalized(songItem.name) === normalized(songName));
+      if (!selectedSong) return notify(`检索到了相近歌曲（${songs.slice(0, 4).map(songItem => songItem.name).join("、")}），请把输入名称改成资源库中的准确歌名后再生成`);
+      const duration = Math.max(20, Math.min(90, Number(document.getElementById("briefDuration").value) || 40));
+      const confirmedActivity = document.getElementById("briefActivity").value.trim() || profile.preferred_method || "互动与分组合作";
+      const region = document.getElementById("briefRegion").value.trim();
+      const device = document.getElementById("briefDevices").value.trim() || "未额外指定设备";
+      const extra = document.getElementById("briefRequirements").value.trim();
+      const strategy = document.getElementById("briefStrategy").value;
+      const teacherRequirements = [extra, region ? `地区/文化元素：${region}` : "", `课堂设备条件：${device}`].filter(Boolean).join("\n");
+      applyBriefToForms({ classId, songName, duration, activity: confirmedActivity, teacherRequirements, strategy, region });
+      await generate(false, { song_id: selectedSong.id, class_id: classId, duration_minutes: duration, activity_preference: confirmedActivity, teacher_requirements: teacherRequirements, generation_strategy: strategy });
     };
-  } catch(error) {
-    notify(`备课条件整理失败：${error.message||"请检查模型服务配置"}`,"error");
-  } finally { button.disabled=false;button.textContent="重新整理条件"; }
+  } catch (error) {
+    pending?.remove();
+    appendDialogueMessage("assistant", `这次没有整理成功：${error.message || "请检查连接后重试"}`);
+    console.error("备课条件整理失败", error);
+  } finally {
+    button.disabled = false;
+    button.textContent = "发送";
+  }
 }
 
 function applyBriefToForms(settings) {

@@ -993,3 +993,72 @@ td small { color: var(--muted); }
   .trend-record-list { grid-template-columns:1fr; }
   .class-trend-chart { padding:7px; }
 }
+
+
+/* Dialogue-first lesson planning: clear primary modes and nested form choices */
+.planner-card { overflow: hidden; }
+.planner-mode-heading { margin-bottom: 13px; }
+.planner-mode-heading p { margin: 3px 0 0; color: var(--muted); }
+.planner-mode-tabs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin: 0 0 22px; padding: 0; border: 0; }
+.planner-mode-option { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 16px 18px; border: 1px solid #e8d8ca; border-radius: 16px; background: #fffdfa; color: #514139; text-align: left; cursor: pointer; transition: border-color .18s, background .18s, box-shadow .18s; }
+.planner-mode-option:hover { border-color: #c7795c; }
+.planner-mode-option.active { border-color: #b45a3e; background: #fff3e9; box-shadow: 0 0 0 2px rgba(180,90,62,.10); }
+.planner-mode-index { display: grid; place-items: center; flex: 0 0 38px; width: 38px; height: 38px; border-radius: 12px; background: #f5e6dc; color: #9f4b35; font-weight: 750; font-size: .82rem; }
+.planner-mode-option.active .planner-mode-index { background: #a94f35; color: #fff; }
+.planner-mode-option strong, .planner-mode-option small { display: block; }
+.planner-mode-option strong { font-size: 1.08rem; }
+.planner-mode-option small { margin-top: 3px; color: var(--muted); font-size: .82rem; }
+.source-mode-section { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 0 0 18px; padding: 12px 14px; border: 1px solid #efe4da; border-radius: 14px; background: #fdf8f3; }
+.source-mode-heading { display: grid; gap: 3px; }
+.source-mode-heading span { color: var(--muted); font-size: .76rem; }
+.source-mode-heading strong { color: #574238; font-size: .95rem; }
+.source-mode-tabs { display: inline-flex; gap: 5px; padding: 4px; border: 1px solid #ead9cb; border-radius: 12px; background: #fff; }
+.source-mode-option { min-height: 36px; padding: 7px 13px; border: 0; border-radius: 9px; background: transparent; color: #66574f; font: inherit; cursor: pointer; }
+.source-mode-option.active { background: #f4e5da; color: #913f2d; font-weight: 700; }
+.dialogue-planning { display: grid; gap: 0; }
+.dialogue-intro { padding: 2px 2px 14px; }
+.dialogue-intro h3 { margin: 5px 0; font-size: 1.28rem; }
+.dialogue-intro p { max-width: 740px; margin: 0; color: var(--muted); line-height: 1.65; }
+.dialogue-messages { display: flex; flex-direction: column; gap: 14px; max-height: 530px; overflow: auto; padding: 16px; border: 1px solid #eee1d6; border-radius: 18px 18px 0 0; background: linear-gradient(180deg,#fffaf5,#fffdfb); scroll-behavior: smooth; }
+.dialogue-message { display: flex; align-items: flex-start; gap: 9px; max-width: 92%; }
+.dialogue-message.user { align-self: flex-end; flex-direction: row-reverse; }
+.dialogue-avatar { display: grid; place-items: center; flex: 0 0 30px; width: 30px; height: 30px; border-radius: 50%; background: #f1e4da; color: #91452f; font-size: .8rem; font-weight: 750; }
+.dialogue-message.user .dialogue-avatar { background: #a45137; color: white; }
+.dialogue-bubble { min-width: 0; padding: 12px 14px; border: 1px solid #ebdfd5; border-radius: 4px 15px 15px 15px; background: #fff; box-shadow: 0 4px 14px rgba(71,46,31,.035); }
+.dialogue-message.user .dialogue-bubble { border-color: #ead4c7; border-radius: 15px 4px 15px 15px; background: #fbefe6; }
+.dialogue-bubble > b { display: block; margin-bottom: 5px; color: #6b4738; font-size: .82rem; }
+.dialogue-bubble p { margin: 0; color: #443832; line-height: 1.65; white-space: pre-wrap; }
+.dialogue-bubble > small { display: block; margin-top: 8px; color: var(--muted); line-height: 1.55; }
+.dialogue-message.is-pending .dialogue-bubble p::after { display: inline-block; width: 18px; content: "···"; color: #a65338; animation: dialogue-pulse 1s infinite; }
+@keyframes dialogue-pulse { 50% { opacity: .35; } }
+.dialogue-composer { display: flex; align-items: flex-end; gap: 9px; padding: 11px; border: 1px solid #eee1d6; border-top: 0; border-radius: 0 0 16px 16px; background: #fff; }
+.dialogue-composer textarea { flex: 1; min-height: 48px; max-height: 140px; margin: 0; resize: vertical; border-radius: 12px; }
+.dialogue-composer button { flex: 0 0 auto; min-width: 82px; min-height: 46px; }
+.dialogue-privacy-note { margin: 9px 2px 0; color: var(--muted); font-size: .78rem; }
+.dialogue-message:has(.brief-confirmation) { max-width: 100%; width: 100%; }
+.dialogue-message:has(.brief-confirmation) .dialogue-bubble { flex: 1; }
+.brief-confirmation { margin: 8px 0 0; padding: 13px; border-color: #ead8ca; background: #fffaf5; }
+.brief-confirmation-head { margin-bottom: 9px; }
+.brief-confirmation-head h3 { font-size: 1.05rem; }
+.dialogue-condition-chips { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0; }
+.dialogue-condition-chip { display: inline-flex; align-items: center; max-width: 100%; padding: 6px 10px; border: 1px solid #ead8ca; border-radius: 999px; background: white; color: #694b3e; font-size: .82rem; }
+.dialogue-response-copy { margin: 8px 0 11px; color: #67564d; font-size: .88rem; line-height: 1.55; }
+.brief-edit-details { margin: 11px 0; padding: 0 11px; border: 1px solid #e9ddd2; border-radius: 12px; background: #fff; }
+.brief-edit-details summary { padding: 11px 0; color: #774b39; font-weight: 700; cursor: pointer; }
+.brief-edit-details[open] { padding-bottom: 12px; }
+.brief-edit-details .brief-fields { padding-bottom: 2px; }
+.brief-edit-details .brief-fields label { font-size: .83rem; }
+.brief-edit-details .brief-fields input, .brief-edit-details .brief-fields select, .brief-edit-details .brief-fields textarea { padding: 9px 10px; }
+.brief-profile-context { gap: 4px; margin: 10px 0; font-size: .81rem; }
+.brief-sync-note { margin: 8px 0; }
+@media(max-width:700px) {
+  .planner-mode-tabs { grid-template-columns: 1fr; gap: 8px; margin-bottom: 17px; }
+  .planner-mode-option { padding: 12px 14px; }
+  .source-mode-section { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .source-mode-tabs { width: 100%; }
+  .source-mode-option { flex: 1; }
+  .dialogue-messages { max-height: 60vh; padding: 11px; }
+  .dialogue-message { max-width: 100%; }
+  .dialogue-composer { align-items: stretch; }
+  .dialogue-composer button { min-width: 68px; }
+}
