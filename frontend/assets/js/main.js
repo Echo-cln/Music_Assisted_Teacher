@@ -10,7 +10,7 @@ const app = document.getElementById("app");
 const routeLoaders = {
   home: () => import("./pages/home.js").then(m => m.renderHome),
   teachingAssistant: () => import("./pages/teaching_assistant.js?v=20261009-teaching-assistant-2").then(m => m.renderTeachingAssistant),
-  assistant: () => import("./pages/assistant.js?v=20261009-dialogue-readable-2").then(m => m.renderAssistant),
+  assistant: () => import("./pages/assistant.js?v=20261009-dialogue-reply-limit-3").then(m => m.renderAssistant),
   classes: () => import("./pages/classes.js?v=20261009-dbtrend-persist").then(m => m.renderClasses),
   resources: () => import("./pages/resources.js").then(m => m.renderResources),
   workbench: () => import("./pages/workbench.js").then(m => m.renderWorkbench),

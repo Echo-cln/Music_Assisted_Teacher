@@ -1,4 +1,4 @@
-import { api } from "../api/client.js?v=20261009-dialogue-conversation";
+import { api } from "../api/client.js?v=20261009-dialogue-reply-limit-3";
 import { lessonView } from "../components/lesson.js?v=20261007-2";
 import { cancelActiveGeneration, getGenerationJob, refreshGeneration, startGeneration } from "../state/generation.js";
 import { esc, notify, pageHeader } from "../utils/dom.js";
@@ -303,10 +303,13 @@ function extractSongTitleFromTurn(message, waitingForSong = false) {
 }
 
 async function answerDialogueQuestion(prompt) {
+  if (Array.from(String(prompt || "")).length > 1100) {
+    throw new Error("这条消息比较长，请拆成两条发送；历史对话会自动压缩后再提交。你刚才的原文仍保留在输入记录中。");
+  }
   const currentContent = currentPlan?.content || {};
   const response = await api.lessonDialogueReply({
-    message: String(prompt || "").slice(0, 3500),
-    history: dialogueSession.history.slice(0, -1).slice(-8).map(item => ({ role: item.role, content: String(item.text || "").slice(0, 1800) })),
+    message: String(prompt || ""),
+    history: dialogueSession.history.slice(0, -1).slice(-8).map(item => ({ role: item.role, content: Array.from(String(item.text || "")).slice(0, 1000).join("") })),
     context: {
       phase: dialogueSession.phase,
       waiting_for: dialogueSession.waitingFor,
