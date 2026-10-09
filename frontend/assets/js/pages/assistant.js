@@ -167,11 +167,13 @@ async function extractBrief(classes) {
   try {
     const response = await api.extractLessonBrief({ prompt, class_id: selectedClassId });
     const parsed = response.parsed || {};
-    const normalized = value => String(value || "").replace(/\\s/g, "").toLowerCase();
+    const normalized = value => String(value || "").replace(/\s/g, "").toLowerCase();
     let chosenClass = parsed.class_name ? classes.find(item => normalized(item.name) === normalized(parsed.class_name)) : null;
     if (!chosenClass) chosenClass = classes.find(item => item.id === selectedClassId) || classes[0] || null;
     const profile = classes.find(item => item.id === chosenClass?.id) || response.class_profile || {};
     const classMismatch = parsed.class_name && !classes.some(item => normalized(item.name) === normalized(parsed.class_name));
+    const currentClass=classes.find(item=>item.id===selectedClassId);
+    const classConflict=chosenClass&&currentClass&&chosenClass.id!==currentClass.id;
     const profileText = profile ? [profile.grade ? profile.grade + "年级" : "", profile.province, profile.learning_level, "音准：" + profile.pitch_level, "节奏：" + profile.rhythm_level, "合作：" + profile.cooperation, profile.common_problems].filter(Boolean).join(" · ") : "尚未选择班级画像";
     const currentDuration = Number(document.getElementById("duration").value || document.getElementById("manualDuration").value) || 40;
     const currentActivity = document.getElementById("activity").value || document.getElementById("manualActivity").value;
@@ -181,11 +183,13 @@ async function extractBrief(classes) {
     const parsedDevices = Array.isArray(parsed.equipment_constraints) ? parsed.equipment_constraints.join("、") : String(parsed.equipment_constraints || "");
     const currentDevicePanel=document.querySelector(`[data-equipment-controls="${document.getElementById("sourceModeTabs").querySelector("[data-mode].active")?.dataset.mode==="manual"?"manual":"smart"}"] [data-equipment-summary]`);
     const devices=parsedDevices||currentDevicePanel?.value||"";
-    const requirements = String(parsed.teacher_requirements || "");
+    const currentRequirements=document.getElementById("requirements").value.trim()||document.getElementById("manualRequirements").value.trim();
+    const requirements = String(parsed.teacher_requirements || currentRequirements || "");
+    const strategyFallback=document.getElementById("strategy").value||document.getElementById("manualStrategy").value||"deep";
     const confirmation = document.getElementById("briefConfirmation");
     confirmation.classList.remove("hidden");
     confirmation.innerHTML = `<div class="brief-confirmation-head"><div><span class="eyebrow">备课条件确认</span><h3>检查后生成教案</h3></div><span class="status info">请核对</span></div>
-      ${classMismatch?`<div class="notice">识别到“${esc(parsed.class_name)}”，但当前教师档案中没有同名班级。请在下方选择正确班级，系统不会创建或猜测班级。</div>`:""}
+      ${classMismatch?`<div class="notice">识别到“${esc(parsed.class_name)}”，但当前教师档案中没有同名班级。请在下方选择正确班级，系统不会创建或猜测班级。</div>`:""}${classConflict?`<div class="notice">对话中识别为“${esc(chosenClass.name)}”，与当前表单班级“${esc(currentClass.name)}”不同。下方已预选对话班级；请确认，或改为沿用当前画像。</div>`:""}
       <div class="brief-profile-context"><b>读取到的班级特点</b><span>${esc(profileText||"尚未选择班级画像")}</span></div>
       <div class="form-grid brief-fields">
         <label>授课班级<select id="briefClassId"><option value="">通用模式（不指定班级）</option>${classOptions}</select></label>
@@ -195,7 +199,7 @@ async function extractBrief(classes) {
         <label>地区 / 文化元素<input id="briefRegion" value="${esc(parsed.region_element || regionFallback || "")}" placeholder="没有明确要求可留空"></label>
         <label>设备条件与限制<input id="briefDevices" value="${esc(devices)}" placeholder="例如：无投影、无音箱"></label>
         <label class="full">其他课堂要求<textarea id="briefRequirements" rows="3">${esc(requirements)}</textarea></label>
-        <label>生成模式<select id="briefStrategy"><option value="fast">快速模式</option><option value="deep" selected>深度模式</option></select></label>
+        <label>生成模式<select id="briefStrategy"><option value="fast" ${strategyFallback==="fast"?"selected":""}>快速模式</option><option value="deep" ${strategyFallback!=="fast"?"selected":""}>深度模式</option></select></label>
       </div>
       <p class="muted brief-sync-note">确认时会同步到表单备课设置；后续在表单中修改，也会更新这里的条件。</p>
       <button class="btn primary" id="confirmBriefGenerate">确认条件并生成</button>`;
@@ -215,7 +219,7 @@ async function extractBrief(classes) {
       const device=document.getElementById("briefDevices").value.trim()||"未额外指定设备";
       const extra=document.getElementById("briefRequirements").value.trim();
       const strategy=document.getElementById("briefStrategy").value;
-      const teacherRequirements=[extra,region?`地区/文化元素：${region}`:"",`课堂设备条件：${device}`].filter(Boolean).join("\\n");
+      const teacherRequirements=[extra,region?`地区/文化元素：${region}`:"",`课堂设备条件：${device}`].filter(Boolean).join("\n");
       applyBriefToForms({classId,songName,duration,activity,teacherRequirements,strategy,region});
       await generate(false,{song_id:selectedSong.id,class_id:classId,duration_minutes:duration,activity_preference:activity,teacher_requirements:teacherRequirements,generation_strategy:strategy});
     };
@@ -297,6 +301,9 @@ function bindSongCards(root) {
   const choose = id => {
     selectedSong = recommendedSongs.find(song => song.id === Number(id));
     if (!selectedSong) return;
+    const manualSong=document.getElementById("songName"), briefSong=document.getElementById("briefSong");
+    if(manualSong)manualSong.value=selectedSong.name;
+    if(briefSong)briefSong.value=selectedSong.name;
     root.querySelectorAll(".song-card").forEach(card => {
       const active = Number(card.dataset.songId) === selectedSong.id;
       card.classList.toggle("selected", active);
@@ -448,7 +455,8 @@ function restoreJob(job, restoredFromCenter = false) {
     if (currentPlan) renderPreview(area, false, job);
     if(previousResult) area.insertAdjacentHTML("afterbegin",`<div class="notice previous-plan-notice">上次生成任务对应：${esc(currentPlan?.class_name||"未指定班级")}，不是当前设置的结果。</div>`);
     area.insertAdjacentHTML("afterbegin", `<div class="notice">教案完善未完成：${esc(job.error_message || "请稍后重试")}。下方仍保留规则生成的可用教案骨架。</div>`);
-    disableActions(false);
+    disableActions(previousResult);
+    if(previousResult){document.getElementById("savePlan").textContent="请按当前条件重新生成";document.getElementById("printPlan").disabled=false;}
     return;
   }
   if (job.preview) {
