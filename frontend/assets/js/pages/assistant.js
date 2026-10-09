@@ -283,6 +283,7 @@ async function extractBrief(classes) {
     };
   } catch (error) {
     pending?.remove();
+    input.value = prompt;
     appendDialogueMessage("assistant", `这次没有整理成功：${error.message || "请检查连接后重试"}`);
     console.error("备课条件整理失败", error);
   } finally {
