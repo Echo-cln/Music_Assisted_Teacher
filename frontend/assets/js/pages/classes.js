@@ -71,34 +71,85 @@ function openClassDetails(item) {
   const root = showModal(`<div class="modal-head"><div><span class="eyebrow">CLASS PROFILE</span><h2>${esc(item.name)} · 班级详情</h2><p>${item.grade} 年级 · ${esc(item.province)} · ${item.student_count} 人</p></div><button class="close" data-close>×</button></div>
     <div class="tabs class-detail-tabs"><button class="tab active" data-class-detail-tab="profile">班级画像</button><button class="tab" data-class-detail-tab="trends">学情趋势</button></div>
     <section data-class-detail-panel="profile"><div class="profile-grid"><div><small>整体基础</small><b>${esc(item.learning_level)}</b></div><div><small>课堂活跃度</small><b>${esc(item.activity_level)}</b></div><div><small>合作情况</small><b>${esc(item.cooperation)}</b></div><div><small>音准</small><b>${esc(item.pitch_level)}</b></div><div><small>节奏</small><b>${esc(item.rhythm_level)}</b></div><div><small>乐理</small><b>${esc(item.theory_level)}</b></div></div><h3>需要关注的群体差异</h3><div class="profile-difference-tags">${(item.common_problems || "").split(/[、,，;；\\n]+/).map(value => value.trim()).filter(Boolean).map(value => `<span class="pill soft">${esc(value)}</span>`).join("") || '<span class="muted">尚无记录</span>'}</div><p class="insight">${esc(item.teacher_notes || "尚未填写教学感受")}</p><div class="actions"><button class="btn primary" data-edit-detail>编辑班级画像</button><button class="btn" data-close>关闭</button></div></section>
-    <section data-class-detail-panel="trends" hidden><div class="class-trend-view"><div class="class-trend-head"><div><span class="eyebrow">CLASSROOM EVIDENCE</span><h3>学情趋势</h3><p class="muted">只汇总该班已保存的课堂反馈和关联音频分析，不含学生个人排名。音频分数是主音高轨迹稳定度、起音间隔规律度（0–100），不等同于逐音准确率。</p></div><select data-trend-metric aria-label="选择趋势指标"><option value="pitch_stability">音准轨迹稳定度</option><option value="rhythm_regularness">节奏规律度</option><option value="participation">课堂参与</option><option value="cooperation">合作情况</option></select></div><div data-trend-summary class="trend-summary"></div><div data-trend-chart class="class-trend-chart"><p class="muted">正在读取已保存的课堂记录…</p></div><small data-trend-source class="muted"></small></div></section>`);
-  const buttons=[...root.querySelectorAll("[data-class-detail-tab]")], panels=[...root.querySelectorAll("[data-class-detail-panel]")];
-  let data=null;
-  const render=metric=>{
-    const chart=root.querySelector("[data-trend-chart]"), summary=root.querySelector("[data-trend-summary]"), source=root.querySelector("[data-trend-source]");
-    if(!data)return;
-    const names={pitch_stability:"主音高轨迹稳定度",rhythm_regularness:"起音间隔规律度",participation:"课堂参与",cooperation:"合作情况"};
-    const cat=metric==="participation"||metric==="cooperation";
-    const order=metric==="participation"?{"需要带动":1,"参与一般":2,"参与积极":3}:{"需要教师带动":1,"合作一般":2,"主动合作":3};
-    const bands=metric==="participation"?["需要带动","参与一般","参与积极"]:["需要教师带动","合作一般","主动合作"];
-    const pts=data.points.filter(p=>p[metric]!==null&&p[metric]!==undefined&&p[metric]!=="");
-    if(!pts.length){chart.innerHTML=`<div class="empty">尚无“${names[metric]}”记录。记录课后观察或关联音频分析后，这里会显示真实变化。</div>`;summary.textContent="课堂记录积累中";source.textContent=`数据来源：${data.record_count} 条已归档课堂反馈 · 最近更新：${data.updated_at?.slice(0,10)||"暂无"}`;return;}
-    const W=620,H=250,L=74,R=20,T=22,B=52,pw=W-L-R,ph=H-T-B;
-    const coords=pts.map((p,i)=>{const value=cat?order[p[metric]]:Number(p[metric]);return{x:L+(pts.length===1?pw/2:i*pw/(pts.length-1)),y:T+ph-(value-(cat?1:0))/((cat?3:100)-(cat?1:0))*ph};});
-    const ys=cat?bands.map((v,i)=>({v,y:T+ph-i*ph/2})):[0,50,100].map(v=>({v:`${v}分`,y:T+ph-v/100*ph}));
-    chart.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${names[metric]}趋势">${ys.map(t=>`<line x1="${L}" y1="${t.y}" x2="${W-R}" y2="${t.y}" class="trend-grid"/><text x="${L-8}" y="${t.y+4}" text-anchor="end" class="trend-axis-label">${esc(t.v)}</text>`).join("")}<polyline points="${coords.map(c=>`${c.x},${c.y}`).join(" ")}" class="trend-line"/>${coords.map((c,i)=>`<circle cx="${c.x}" cy="${c.y}" r="5" class="trend-dot"/><text x="${c.x}" y="${c.y-11}" text-anchor="middle" class="trend-point-label">${esc(String(pts[i][metric]))}${cat?"":"分"}</text><text x="${c.x}" y="${H-B+20}" text-anchor="middle" class="trend-axis-label">${esc(pts[i].date.slice(5,10))}</text>`).join("")}</svg><ol class="trend-record-list">${pts.map(p=>`<li><b>${esc(p.date.slice(0,10))}</b><span>${esc(String(p[metric]))}${cat?"":" 分"}</span><small>${esc(p.lesson_title)} · ${esc(p.source)}</small></li>`).join("")}</ol>`;
-    if(pts.length<2)summary.textContent=`课堂记录积累中：当前有 ${pts.length} 次有效记录；累计两次后再显示变化方向。`;
-    else{const first=pts[0][metric],last=pts[pts.length-1][metric],a=cat?order[first]:Number(first),b=cat?order[last]:Number(last),desc=b>a?"有所改善":b<a?"有所下降":"暂时稳定";summary.textContent=`近 ${pts.length} 次有记录的课堂中，${names[metric]}${desc}（${first} → ${last}${cat?"":"分"}）。`;}
-    source.textContent=`数据来源：${[...new Set(pts.map(p=>p.source))].join("、")} · 最近更新：${data.updated_at?.slice(0,10)||"暂无"}`;
+    <section data-class-detail-panel="trends" hidden><div class="class-trend-view">
+      <header class="class-trend-head"><div><span class="eyebrow">CLASSROOM EVIDENCE</span><h3>近几次课堂表现</h3><p class="muted">音准与节奏来自已关联的音频分析；参与和合作来自课后观察。只呈现班级整体，不展示学生个人排名。</p></div>
+        <div class="trend-mode-toggle hidden" data-trend-mode-toggle role="group" aria-label="趋势数据类型"><button type="button" class="active" data-trend-mode="demo">演示预览</button><button type="button" data-trend-mode="real">课堂记录</button></div>
+      </header>
+      <div data-trend-summary class="trend-summary"></div><div data-trend-source class="trend-data-source"></div>
+      <div data-trend-grid class="trend-chart-grid"><div class="trend-loading">正在读取课堂记录…</div></div>
+    </div></section>`);
+  const buttons = [...root.querySelectorAll("[data-class-detail-tab]")], panels = [...root.querySelectorAll("[data-class-detail-panel]")];
+  let data = null, selectedMode = "real";
+  const metrics = [
+    { key: "pitch_stability", title: "音准轨迹稳定度", subtitle: "主音高轨迹的稳定程度", type: "score" },
+    { key: "rhythm_regularness", title: "节奏规律度", subtitle: "起音间隔的规律程度", type: "score" },
+    { key: "participation", title: "课堂参与", subtitle: "教师课后观察", type: "participation" },
+    { key: "cooperation", title: "合作情况", subtitle: "教师课后观察", type: "cooperation" },
+  ];
+  const dateLabel = value => String(value || "").startsWith("演示") ? value : String(value || "").slice(5, 10);
+  const valueLabel = (metric, value) => metric.type === "score" ? (value == null ? "—" : `${value} 分`) : (value || "—");
+  const drawCard = (metric, sourcePoints) => {
+    const points = sourcePoints.filter(point => point[metric.key] !== null && point[metric.key] !== undefined && point[metric.key] !== "").slice(-6);
+    const latest = points.at(-1);
+    let chart = '<div class="trend-chart-empty">暂无记录</div>';
+    if (points.length) {
+      const width = 520, height = 184, left = metric.type === "score" ? 43 : 92, right = 14, top = 15, bottom = 37;
+      const plotWidth = width - left - right, plotHeight = height - top - bottom, isScore = metric.type === "score";
+      const categoryOrder = metric.type === "participation" ? { "需要带动": 1, "参与一般": 2, "参与积极": 3 } : { "需要教师带动": 1, "合作一般": 2, "主动合作": 3 };
+      const categoryLabels = metric.type === "participation" ? ["需要带动", "参与一般", "参与积极"] : ["需要教师带动", "合作一般", "主动合作"];
+      const coords = points.map((point, index) => {
+        const raw = isScore ? Number(point[metric.key]) : categoryOrder[point[metric.key]];
+        const value = Number.isFinite(raw) ? raw : (isScore ? 0 : 1);
+        return { x: left + (points.length === 1 ? plotWidth / 2 : index * plotWidth / (points.length - 1)), y: top + plotHeight - (isScore ? Math.max(0, Math.min(100, value)) / 100 : (value - 1) / 2) * plotHeight, value: point[metric.key], point };
+      });
+      const ticks = isScore ? [0, 50, 100].map(value => ({ value: `${value}`, y: top + plotHeight - value / 100 * plotHeight })) : categoryLabels.map((value, index) => ({ value, y: top + plotHeight - index * plotHeight / 2 }));
+      const grid = ticks.map(tick => `<line x1="${left}" y1="${tick.y}" x2="${width - right}" y2="${tick.y}" class="trend-grid"/><text x="${left - 8}" y="${tick.y + 4}" text-anchor="end" class="trend-axis-label">${esc(tick.value)}</text>`).join("");
+      const line = coords.length > 1 ? `<polyline points="${coords.map(point => `${point.x},${point.y}`).join(" ")}" class="trend-line"/>` : "";
+      const marks = coords.map(point => `<circle cx="${point.x}" cy="${point.y}" r="5" class="trend-dot"><title>${esc(dateLabel(point.point.date))}：${esc(valueLabel(metric, point.value))}</title></circle><text x="${point.x}" y="${height - 10}" text-anchor="middle" class="trend-axis-label">${esc(dateLabel(point.point.date))}</text>`).join("");
+      chart = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(metric.title)}趋势">${grid}${line}${marks}</svg>`;
+      if (points.length === 1) chart += '<small class="trend-chart-hint">已有 1 次记录；累计两次后显示变化线</small>';
+    }
+    return `<article class="trend-chart-card"><header><div><h4>${esc(metric.title)}</h4><p>${esc(metric.subtitle)}</p></div><strong class="trend-latest">${esc(valueLabel(metric, latest?.[metric.key]))}</strong></header><div class="trend-chart-canvas">${chart}</div><footer><span>${points.length ? `最近 ${points.length} 次记录` : "暂无有效记录"}</span><small>${esc(latest?.source || "等待课堂记录")}</small></footer></article>`;
   };
-  buttons.forEach(button=>button.onclick=async()=>{
-    buttons.forEach(b=>b.classList.toggle("active",b===button));panels.forEach(p=>p.hidden=p.dataset.classDetailPanel!==button.dataset.classDetailTab);
-    if(button.dataset.classDetailTab==="trends"&&!data){try{data=await api.classTrends(item.id);render(root.querySelector("[data-trend-metric]").value);}catch(error){root.querySelector("[data-trend-chart]").innerHTML=`<div class="notice">${esc(error.message||"读取学情趋势失败")}</div>`;}}
+  const render = () => {
+    if (!data) return;
+    const demoMode = selectedMode === "demo" && data.demo_available && data.demo_points?.length;
+    const points = demoMode ? data.demo_points : data.points;
+    root.querySelector("[data-trend-summary]").textContent = demoMode
+      ? "演示预览使用示例数值，只用于查看四项趋势图的排版和交互，不代表该班真实表现。"
+      : points.length >= 2 ? `已读取 ${points.length} 条课堂记录；趋势以真实归档记录为准。`
+      : `课堂记录积累中：当前有 ${points.length} 条有效记录，建议结合音频分析和课后观察继续记录。`;
+    const realSources = [...new Set(points.filter(point => point.source && !point.source.includes("演示样例")).map(point => point.source))];
+    root.querySelector("[data-trend-source]").textContent = demoMode
+      ? `演示班级：${esc(data.class_name)} · 样例数据 4 次 · 与真实课堂反馈分开保存`
+      : `真实数据来源：${realSources.join("、") || "暂未归档"} · 已归档 ${data.record_count} 条反馈 · 最近更新：${data.updated_at?.slice(0, 10) || "暂无"}`;
+    root.querySelector("[data-trend-grid]").innerHTML = metrics.map(metric => drawCard(metric, points || [])).join("");
+  };
+  root.querySelectorAll("[data-trend-mode]").forEach(button => button.onclick = () => {
+    selectedMode = button.dataset.trendMode;
+    root.querySelectorAll("[data-trend-mode]").forEach(mode => mode.classList.toggle("active", mode === button));
+    render();
   });
-  root.querySelector("[data-trend-metric]").onchange=e=>render(e.target.value);
-  root.querySelector("[data-edit-detail]").onclick=()=>{document.getElementById("modalRoot").innerHTML="";openClassForm(item,document.getElementById("app"));};
+  buttons.forEach(button => button.onclick = async () => {
+    buttons.forEach(mode => mode.classList.toggle("active", mode === button));
+    panels.forEach(panel => panel.hidden = panel.dataset.classDetailPanel !== button.dataset.classDetailTab);
+    if (button.dataset.classDetailTab === "trends" && !data) {
+      try {
+        data = await api.classTrends(item.id);
+        selectedMode = data.demo_available ? "demo" : "real";
+        root.querySelector("[data-trend-mode-toggle]").classList.toggle("hidden", !data.demo_available);
+        root.querySelectorAll("[data-trend-mode]").forEach(mode => mode.classList.toggle("active", mode.dataset.trendMode === selectedMode));
+        render();
+      } catch (error) {
+        root.querySelector("[data-trend-summary]").textContent = "暂时无法读取趋势数据";
+        root.querySelector("[data-trend-source]").textContent = error.message || "请确认后端已启动后重试。";
+        root.querySelector("[data-trend-grid]").innerHTML = "";
+      }
+    }
+  });
+  root.querySelector("[data-edit-detail]").onclick = () => { document.getElementById("modalRoot").innerHTML = ""; openClassForm(item, document.getElementById("app")); };
 }
-
+`
 function bindClassDifferenceTags(root) {
   const editor = root.querySelector("[data-student-difference-editor]");
   if (!editor) return;

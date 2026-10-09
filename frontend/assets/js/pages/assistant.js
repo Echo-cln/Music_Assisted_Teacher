@@ -77,11 +77,11 @@ export async function renderAssistant(container) {
           </div>
           </div>
           <div id="dialogueModePanel" class="dialogue-planning hidden">
-            <div class="dialogue-intro"><span class="eyebrow">对话备课</span><h3>说说这节课怎么上</h3><p>告诉我班级、歌曲、课时和你想要的课堂体验。我会整理成可检查的备课条件，再由你确认生成。</p></div>
+            <div class="dialogue-intro"><span class="eyebrow">对话备课</span><h3>说说这节课怎么上</h3><p>可以从这节课最想解决的问题说起。班级、歌曲、课时或设备，想到哪项就先告诉我；我会结合班级画像梳理，再和你一起确认。</p></div>
             <div id="dialogueMessages" class="dialogue-messages" aria-live="polite">
-              <div class="dialogue-message assistant"><span class="dialogue-avatar">师</span><div class="dialogue-bubble"><b>备课助手</b><p>你好！可以像和同事讨论备课一样告诉我：给哪个班上什么歌、课时多长、设备情况如何，以及你希望学生在课堂上做什么。</p><small>例如：明天给三年级1班上《茉莉花》，40分钟，希望多一些互动，加入当地民歌元素，教室没有投影。</small></div></div>
+              <div class="dialogue-message assistant"><span class="dialogue-avatar">助</span><div class="dialogue-bubble"><b>备课助手</b><p>你好，我是你的备课小助手。你可以先说说这节课最想解决什么，也可以告诉我班级、歌曲、时间和设备情况。我会参考已有班级画像整理条件，生成前先请你核对。</p><small>比如：三年级的孩子最近拍子总容易快。我想用《茉莉花》上一节40分钟的课，尽量多让他们动起来；教室没有投影，只有一台钢琴。</small></div></div>
             </div>
-            <div class="dialogue-composer"><label class="sr-only" for="lessonBrief">描述本课需求</label><textarea id="lessonBrief" rows="2" placeholder="输入本课需求，按 Enter 发送；Shift + Enter 换行"></textarea><button class="btn primary" id="extractLessonBrief" aria-label="发送备课需求">发送</button></div>
+            <div class="dialogue-composer"><label class="sr-only" for="lessonBrief">描述本课需求</label><textarea id="lessonBrief" rows="2" placeholder="写下这节课的想法或限制…（Enter 发送，Shift + Enter 换行）"></textarea><button class="btn primary" id="extractLessonBrief" aria-label="发送备课需求">发送</button></div>
             <p class="dialogue-privacy-note">生成前会先展示识别出的条件，确认后才开始生成。</p>
           </div>
           <div id="recommendations"></div>
@@ -178,7 +178,7 @@ function appendDialogueMessage(role, content, options = {}) {
   message.className = `dialogue-message ${role}${options.pending ? " is-pending" : ""}`;
   const avatar = document.createElement("span");
   avatar.className = "dialogue-avatar";
-  avatar.textContent = role === "user" ? "我" : "师";
+  avatar.textContent = role === "user" ? "我" : "助";
   const bubble = document.createElement("div");
   bubble.className = "dialogue-bubble";
   if (options.html) {
