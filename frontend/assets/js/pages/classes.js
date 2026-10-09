@@ -73,13 +73,12 @@ function openClassDetails(item) {
     <section data-class-detail-panel="profile"><div class="profile-grid"><div><small>整体基础</small><b>${esc(item.learning_level)}</b></div><div><small>课堂活跃度</small><b>${esc(item.activity_level)}</b></div><div><small>合作情况</small><b>${esc(item.cooperation)}</b></div><div><small>音准</small><b>${esc(item.pitch_level)}</b></div><div><small>节奏</small><b>${esc(item.rhythm_level)}</b></div><div><small>乐理</small><b>${esc(item.theory_level)}</b></div></div><h3>需要关注的群体差异</h3><div class="profile-difference-tags">${(item.common_problems || "").split(/[、,，;；\\n]+/).map(value => value.trim()).filter(Boolean).map(value => `<span class="pill soft">${esc(value)}</span>`).join("") || '<span class="muted">尚无记录</span>'}</div><p class="insight">${esc(item.teacher_notes || "尚未填写教学感受")}</p><div class="actions"><button class="btn primary" data-edit-detail>编辑班级画像</button><button class="btn" data-close>关闭</button></div></section>
     <section data-class-detail-panel="trends" hidden><div class="class-trend-view">
       <header class="class-trend-head"><div><span class="eyebrow">CLASSROOM EVIDENCE</span><h3>近几次课堂表现</h3><p class="muted">音准与节奏来自已关联的音频分析；参与和合作来自课后观察。只呈现班级整体，不展示学生个人排名。</p></div>
-        <div class="trend-mode-toggle hidden" data-trend-mode-toggle role="group" aria-label="趋势数据类型"><button type="button" class="active" data-trend-mode="demo">演示预览</button><button type="button" data-trend-mode="real">课堂记录</button></div>
       </header>
       <div data-trend-summary class="trend-summary"></div><div data-trend-source class="trend-data-source"></div>
       <div data-trend-grid class="trend-chart-grid"><div class="trend-loading">正在读取课堂记录…</div></div>
     </div></section>`);
   const buttons = [...root.querySelectorAll("[data-class-detail-tab]")], panels = [...root.querySelectorAll("[data-class-detail-panel]")];
-  let data = null, selectedMode = "real";
+  let data = null;
   const metrics = [
     { key: "pitch_stability", title: "音准轨迹稳定度", subtitle: "主音高轨迹的稳定程度", type: "score" },
     { key: "rhythm_regularness", title: "节奏规律度", subtitle: "起音间隔的规律程度", type: "score" },
@@ -105,7 +104,7 @@ function openClassDetails(item) {
       const ticks = isScore ? [0, 50, 100].map(value => ({ value: `${value}`, y: top + plotHeight - value / 100 * plotHeight })) : categoryLabels.map((value, index) => ({ value, y: top + plotHeight - index * plotHeight / 2 }));
       const grid = ticks.map(tick => `<line x1="${left}" y1="${tick.y}" x2="${width - right}" y2="${tick.y}" class="trend-grid"/><text x="${left - 8}" y="${tick.y + 4}" text-anchor="end" class="trend-axis-label">${esc(tick.value)}</text>`).join("");
       const line = coords.length > 1 ? `<polyline points="${coords.map(point => `${point.x},${point.y}`).join(" ")}" class="trend-line"/>` : "";
-      const marks = coords.map(point => `<circle cx="${point.x}" cy="${point.y}" r="5" class="trend-dot"><title>${esc(dateLabel(point.point.date))}：${esc(valueLabel(metric, point.value))}</title></circle><text x="${point.x}" y="${height - 10}" text-anchor="middle" class="trend-axis-label">${esc(dateLabel(point.point.date))}</text>`).join("");
+      const marks = coords.map(point => `<circle cx="${point.x}" cy="${point.y}" r="5" class="trend-dot ${point.point.is_demo ? "trend-dot-demo" : ""}"><title>${esc(dateLabel(point.point.date))}：${esc(valueLabel(metric, point.value))}</title></circle><text x="${point.x}" y="${height - 10}" text-anchor="middle" class="trend-axis-label">${esc(dateLabel(point.point.date))}</text>`).join("");
       chart = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(metric.title)}趋势">${grid}${line}${marks}</svg>`;
       if (points.length === 1) chart += '<small class="trend-chart-hint">已有 1 次记录；累计两次后显示变化线</small>';
     }
@@ -113,32 +112,24 @@ function openClassDetails(item) {
   };
   const render = () => {
     if (!data) return;
-    const demoMode = selectedMode === "demo" && data.demo_available && data.demo_points?.length;
-    const points = demoMode ? data.demo_points : data.points;
-    root.querySelector("[data-trend-summary]").textContent = demoMode
-      ? "演示预览使用示例数值，只用于查看四项趋势图的排版和交互，不代表该班真实表现。"
-      : points.length >= 2 ? `已读取 ${points.length} 条课堂记录；趋势以真实归档记录为准。`
-      : `课堂记录积累中：当前有 ${points.length} 条有效记录，建议结合音频分析和课后观察继续记录。`;
-    const realSources = [...new Set(points.filter(point => point.source && !point.source.includes("演示样例")).map(point => point.source))];
-    root.querySelector("[data-trend-source]").textContent = demoMode
-      ? `演示班级：${esc(data.class_name)} · 样例数据 4 次 · 与真实课堂反馈分开保存`
-      : `真实数据来源：${realSources.join("、") || "暂未归档"} · 已归档 ${data.record_count} 条反馈 · 最近更新：${data.updated_at?.slice(0, 10) || "暂无"}`;
-    root.querySelector("[data-trend-grid]").innerHTML = metrics.map(metric => drawCard(metric, points || [])).join("");
+    const points = data.points || [];
+    const demoCount = points.filter(point => point.is_demo).length;
+    root.querySelector("[data-trend-summary]").textContent = demoCount
+      ? `当前图表读取数据库中的 ${points.length} 条课堂反馈，其中 ${demoCount} 条为已入库并标注的演示样例；演示数据不代表真实教学结果。`
+      : points.length >= 2
+        ? `已读取 ${points.length} 条已归档课堂记录；趋势仅依据实际保存的反馈和关联音频分析。`
+        : `课堂记录积累中：当前有 ${points.length} 条有效记录，建议结合音频分析和课后观察继续记录。`;
+    const sources = [...new Set(points.map(point => point.source).filter(Boolean))];
+    root.querySelector("[data-trend-source]").textContent =
+      `班级：${esc(data.class_name)} · 数据来源：${sources.join("、") || "暂未归档"} · 已归档 ${data.record_count} 条反馈 · 最近更新：${data.updated_at?.slice(0, 10) || "暂无"}`;
+    root.querySelector("[data-trend-grid]").innerHTML = metrics.map(metric => drawCard(metric, points)).join("");
   };
-  root.querySelectorAll("[data-trend-mode]").forEach(button => button.onclick = () => {
-    selectedMode = button.dataset.trendMode;
-    root.querySelectorAll("[data-trend-mode]").forEach(mode => mode.classList.toggle("active", mode === button));
-    render();
-  });
   buttons.forEach(button => button.onclick = async () => {
     buttons.forEach(mode => mode.classList.toggle("active", mode === button));
     panels.forEach(panel => panel.hidden = panel.dataset.classDetailPanel !== button.dataset.classDetailTab);
     if (button.dataset.classDetailTab === "trends" && !data) {
       try {
         data = await api.classTrends(item.id);
-        selectedMode = data.demo_available ? "demo" : "real";
-        root.querySelector("[data-trend-mode-toggle]").classList.toggle("hidden", !data.demo_available);
-        root.querySelectorAll("[data-trend-mode]").forEach(mode => mode.classList.toggle("active", mode.dataset.trendMode === selectedMode));
         render();
       } catch (error) {
         root.querySelector("[data-trend-summary]").textContent = "暂时无法读取趋势数据";
@@ -149,7 +140,7 @@ function openClassDetails(item) {
   });
   root.querySelector("[data-edit-detail]").onclick = () => { document.getElementById("modalRoot").innerHTML = ""; openClassForm(item, document.getElementById("app")); };
 }
-`
+
 function bindClassDifferenceTags(root) {
   const editor = root.querySelector("[data-student-difference-editor]");
   if (!editor) return;

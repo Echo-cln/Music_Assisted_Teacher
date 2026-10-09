@@ -1102,3 +1102,6 @@ td small { color: var(--muted); }
   .trend-chart-card footer { align-items:flex-start; flex-direction:column; gap:2px; }
   .trend-chart-card footer small { max-width:100%; text-align:left; white-space:normal; }
 }
+
+.trend-chart-card .trend-dot-demo { fill:#efc7a6; stroke:#a24d35; stroke-width:2.5; }
+.trend-chart-card footer small { color:#8a604e; }

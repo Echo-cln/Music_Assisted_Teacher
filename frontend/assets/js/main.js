@@ -1,4 +1,4 @@
-import { api } from "./api/client.js?v=20261009-trends-grid-helper";
+import { api } from "./api/client.js?v=20261009-dbtrend-persist";
 import { renderAuth } from "./pages/auth.js?v=20261007-login1";
 import { initGenerationCenter, setGenerationCenterVisible } from "./state/generation.js";
 import { initAudioJobCenter, setAudioJobCenterVisible } from "./state/audio_jobs.js";
@@ -9,8 +9,8 @@ const app = document.getElementById("app");
 // 首页和其余功能在模块图阶段一起白屏。
 const routeLoaders = {
   home: () => import("./pages/home.js").then(m => m.renderHome),
-  assistant: () => import("./pages/assistant.js?v=20261009-trends-grid-helper").then(m => m.renderAssistant),
-  classes: () => import("./pages/classes.js?v=20261009-trends-grid-helper").then(m => m.renderClasses),
+  assistant: () => import("./pages/assistant.js?v=20261009-dbtrend-persist").then(m => m.renderAssistant),
+  classes: () => import("./pages/classes.js?v=20261009-dbtrend-persist").then(m => m.renderClasses),
   resources: () => import("./pages/resources.js").then(m => m.renderResources),
   workbench: () => import("./pages/workbench.js").then(m => m.renderWorkbench),
   lessons: () => import("./pages/lessons.js?v=20261007-6").then(m => m.renderLessons),
@@ -95,6 +95,7 @@ async function navigate(route = "home") {
   } catch (error) {
     // 旧页面的迟到异常不能覆盖当前页面。
     if (sequence !== navigationSequence) return;
+    console.error(`页面加载失败：${route}`, error);
     if (error.status === 401) return showLogin();
     app.innerHTML = `<div class="card notice"><h2>页面暂时无法加载</h2><p>${esc(error.message)}</p><p>请打开浏览器控制台查看具体错误；此处会区分前端脚本、接口和数据错误。</p></div>`;
   }

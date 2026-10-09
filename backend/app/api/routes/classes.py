@@ -146,48 +146,12 @@ def class_learning_trends(
             "overall_effect": feedback.overall_effect,
             "participation": class_observations.get("participation"),
             "cooperation": class_observations.get("cooperation"),
-            "pitch_stability": linked_audio["pitch_stability"] if linked_audio else None,
-            "rhythm_regularness": linked_audio["rhythm_regularness"] if linked_audio else None,
+            "pitch_stability": linked_audio["pitch_stability"] if linked_audio else class_observations.get("pitch_stability"),
+            "rhythm_regularness": linked_audio["rhythm_regularness"] if linked_audio else class_observations.get("rhythm_regularness"),
             "goal_observations": observation.get("goal_observations") or [],
-            "source": "教师课后反馈" + (" + 音频分析" if linked_audio else ""),
+            "source": "数据库演示课堂反馈" if observation.get("demo_trend_sample") else "教师课后反馈" + (" + 音频分析" if linked_audio else ""),
+            "is_demo": bool(observation.get("demo_trend_sample")),
         })
-
-    # 可选的演示曲线仅向内置 demo 账号提供，并与真实课堂反馈分开返回；
-    # 不写入数据库、不参与真实趋势统计，便于新用户先查看四种图表的样式。
-    demo_series = {
-        "三年级1班": {
-            "pitch_stability": [58, 63, 69, 74],
-            "rhythm_regularness": [46, 52, 61, 68],
-            "participation": ["参与一般", "参与一般", "参与积极", "参与积极"],
-            "cooperation": ["合作一般", "合作一般", "主动合作", "主动合作"],
-        },
-        "三年级2班": {
-            "pitch_stability": [45, 50, 56, 62],
-            "rhythm_regularness": [39, 47, 53, 60],
-            "participation": ["需要带动", "参与一般", "参与一般", "参与积极"],
-            "cooperation": ["需要教师带动", "合作一般", "合作一般", "主动合作"],
-        },
-        "四年级1班": {
-            "pitch_stability": [72, 76, 80, 83],
-            "rhythm_regularness": [68, 73, 78, 82],
-            "participation": ["参与积极", "参与积极", "参与积极", "参与积极"],
-            "cooperation": ["主动合作", "主动合作", "主动合作", "主动合作"],
-        },
-    }
-    normalized_name = profile.name.replace(" ", "")
-    demo_values = demo_series.get(normalized_name) if teacher.username == "demo" else None
-    demo_points = [
-        {
-            "date": f"演示 {index + 1}",
-            "lesson_title": "歌唱与节奏练习",
-            "pitch_stability": demo_values["pitch_stability"][index],
-            "rhythm_regularness": demo_values["rhythm_regularness"][index],
-            "participation": demo_values["participation"][index],
-            "cooperation": demo_values["cooperation"][index],
-            "source": "演示样例（非真实课堂数据）",
-        }
-        for index in range(4)
-    ] if demo_values else []
 
     return {
         "class_id": profile.id,
@@ -195,6 +159,4 @@ def class_learning_trends(
         "updated_at": points[-1]["date"] if points else (profile.updated_at.isoformat(timespec="seconds") if profile.updated_at else None),
         "record_count": len(points),
         "points": points,
-        "demo_available": bool(demo_points),
-        "demo_points": demo_points,
     }
