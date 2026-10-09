@@ -114,3 +114,56 @@ def stream_adjusted_lesson_json(
     content: dict, instruction: str, model: str | None = None
 ) -> Iterator[str]:
     yield from _retry_stream(_build_messages(content, instruction, adjustment=True), model)
+
+
+def extract_lesson_brief(prompt: str, class_profile: dict | None = None) -> dict:
+    """Extract explicit teacher constraints into a small reviewable draft."""
+    system_prompt = """
+你是小学音乐备课条件整理助手。把教师的自然语言整理成可核对的 JSON，不生成教案。
+只输出 JSON 对象，字段固定为：
+class_name（班级名称或 null）、song_name（歌曲名或 null）、duration_minutes（20到90之间的整数或 null）、
+activity_preference（课堂偏好或 null）、region_element（教师明确提出的地区/文化元素或 null）、
+equipment_constraints（教师明确说到的设备与限制数组；没有提及则空数组）、
+teacher_requirements（其余明确的课堂要求，字符串）。
+不得猜测教师没有说的歌曲、年级、课时、设备或地域元素。把“没投影”“没有音箱”等限制原样保留在设备约束里。
+"""
+    payload = {
+        "teacher_message": prompt,
+        "selected_class_profile": class_profile or {},
+    }
+    model = get_settings().ai_fast_model
+    raw = "".join(_retry_stream(
+        [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+        ],
+        model,
+        "fast",
+    )).strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    start = raw.find("{")
+    if start < 0:
+        raise ValueError("模型未返回备课条件 JSON")
+    try:
+        result, _ = json.JSONDecoder().raw_decode(raw[start:])
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"备课条件格式无法解析：{exc.msg}") from exc
+    if not isinstance(result, dict):
+        raise ValueError("备课条件返回格式不是对象")
+    result.setdefault("class_name", None)
+    result.setdefault("song_name", None)
+    result.setdefault("duration_minutes", None)
+    result.setdefault("activity_preference", None)
+    result.setdefault("region_element", None)
+    result.setdefault("equipment_constraints", [])
+    result.setdefault("teacher_requirements", "")
+    if not isinstance(result["equipment_constraints"], list):
+        result["equipment_constraints"] = [str(result["equipment_constraints"])]
+    result["equipment_constraints"] = [str(value).strip() for value in result["equipment_constraints"] if str(value).strip()]
+    if result["duration_minutes"] is not None:
+        try:
+            result["duration_minutes"] = max(20, min(90, int(result["duration_minutes"])))
+        except (TypeError, ValueError):
+            result["duration_minutes"] = None
+    return result

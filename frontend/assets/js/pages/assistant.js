@@ -7,6 +7,7 @@ const regions = ["华南地区", "西南地区", "西北地区", "华中地区",
 let selectedSong = null;
 let currentPlan = null;
 let recommendedSongs = [];
+let activeGenerationJobId = null;
 
 function normalizeText(value) {
   if (Array.isArray(value)) return value.join("\n").replace(/\s+/g, " ").trim();
@@ -44,10 +45,11 @@ export async function renderAssistant(container) {
     <div class="grid two">
       <div class="grid">
         <section class="card">
-          <div class="tabs"><button class="tab active" data-mode="smart">智能推荐</button><button class="tab" data-mode="manual">手动指定</button></div>
+          <div class="tabs planner-mode-tabs"><button class="tab active" data-planner-mode="form">表单备课</button><button class="tab" data-planner-mode="dialogue">对话备课</button></div>
+          <div id="sourceModeTabs" class="tabs"><button class="tab active" data-mode="smart">智能推荐</button><button class="tab" data-mode="manual">手动指定</button></div>
           <div id="smartForm" class="form-grid">
             <label>地区歌库<select id="region">${regions.map(region => `<option>${region}</option>`).join("")}</select></label>
-            <label>授课班级<select id="classId">${classOptions(classes)}</select></label>
+            <label>授课班级<select id="classId">${classOptions(classes, true)}</select></label>
             <label>课时长度<select id="duration"><option value="40">40 分钟</option><option value="45">45 分钟</option><option value="30">30 分钟</option></select></label>
             <label>课堂偏好<select id="activity"><option>互动与分组合作</option><option>唱游与律动</option><option>地方文化体验</option><option>基础演唱训练</option></select></label>
             ${equipmentControls("smart")}
@@ -65,6 +67,11 @@ export async function renderAssistant(container) {
             <label class="full">本课要求（选填）<textarea id="manualRequirements" placeholder="填写设备条件、学生基础或课堂重点"></textarea></label><small class="muted full">歌曲信息、班级整体特征和本课要求会发送给你配置的模型服务以生成教案；请勿填写学生姓名、联系方式或可识别个人的信息。</small>
             <button class="btn primary" id="manualGenerate">检索并生成教案</button>
           </div>
+          <div id="dialogueModePanel" class="dialogue-planning hidden">
+            <label>用自己的话描述本课需求<textarea id="lessonBrief" rows="5" placeholder="例如：明天给三年级1班上《茉莉花》，40分钟，希望多一些互动，加入当地民歌元素，教室没有投影。"></textarea></label>
+            <button class="btn" id="extractLessonBrief">整理备课条件</button>
+            <div id="briefConfirmation" class="brief-confirmation hidden"></div>
+          </div>
           <div id="recommendations"></div>
         </section>
         <div id="lessonArea"></div>
@@ -75,6 +82,17 @@ export async function renderAssistant(container) {
     </div>`;
 
   bindEquipmentControls(container);
+  container.querySelectorAll("[data-planner-mode]").forEach(button => button.onclick=()=>{
+    const dialog=button.dataset.plannerMode==="dialogue";
+    container.querySelectorAll("[data-planner-mode]").forEach(item=>item.classList.toggle("active",item===button));
+    document.getElementById("sourceModeTabs").classList.toggle("hidden",dialog);
+    const smart=document.querySelector('[data-mode="smart"]').classList.contains("active");
+    document.getElementById("smartForm").classList.toggle("hidden",dialog||!smart);
+    document.getElementById("manualForm").classList.toggle("hidden",dialog||smart);
+    document.getElementById("recommendations").classList.toggle("hidden",dialog);
+    document.getElementById("dialogueModePanel").classList.toggle("hidden",!dialog);
+  });
+  document.getElementById("extractLessonBrief").onclick=()=>extractBrief(classes);
   container.querySelectorAll("[data-mode]").forEach(button => button.onclick = () => {
     container.querySelectorAll("[data-mode]").forEach(item => item.classList.toggle("active", item === button));
     document.getElementById("smartForm").classList.toggle("hidden", button.dataset.mode !== "smart");
@@ -136,7 +154,139 @@ export async function renderAssistant(container) {
 
   window.addEventListener("generation:update", updateFromGenerationEvent);
   const job = await refreshGeneration();
-  restoreJob(job);
+  restoreJob(job, true);
+}
+
+
+async function extractBrief(classes) {
+  const prompt = document.getElementById("lessonBrief").value.trim();
+  if (prompt.length < 8) return notify("请先描述歌曲、班级或课堂需求");
+  const selectedClassId = Number(document.getElementById("classId").value || document.getElementById("manualClassId").value) || null;
+  const button = document.getElementById("extractLessonBrief");
+  button.disabled = true; button.textContent = "正在整理条件…";
+  try {
+    const response = await api.extractLessonBrief({ prompt, class_id: selectedClassId });
+    const parsed = response.parsed || {};
+    const normalized = value => String(value || "").replace(/\\s/g, "").toLowerCase();
+    let chosenClass = parsed.class_name ? classes.find(item => normalized(item.name) === normalized(parsed.class_name)) : null;
+    if (!chosenClass) chosenClass = classes.find(item => item.id === selectedClassId) || classes[0] || null;
+    const profile = classes.find(item => item.id === chosenClass?.id) || response.class_profile || {};
+    const classMismatch = parsed.class_name && !classes.some(item => normalized(item.name) === normalized(parsed.class_name));
+    const profileText = profile ? [profile.grade ? profile.grade + "年级" : "", profile.province, profile.learning_level, "音准：" + profile.pitch_level, "节奏：" + profile.rhythm_level, "合作：" + profile.cooperation, profile.common_problems].filter(Boolean).join(" · ") : "尚未选择班级画像";
+    const currentDuration = Number(document.getElementById("duration").value || document.getElementById("manualDuration").value) || 40;
+    const currentActivity = document.getElementById("activity").value || document.getElementById("manualActivity").value;
+    const songFallback = selectedSong?.name || document.getElementById("songName").value.trim() || "";
+    const regionFallback = profile.province || document.getElementById("region").value;
+    const classOptions = classes.map(item => `<option value="${item.id}" ${item.id===chosenClass?.id?"selected":""}>${esc(item.name)} · ${item.grade}年级 · ${esc(item.province)}</option>`).join("");
+    const parsedDevices = Array.isArray(parsed.equipment_constraints) ? parsed.equipment_constraints.join("、") : String(parsed.equipment_constraints || "");
+    const currentDevicePanel=document.querySelector(`[data-equipment-controls="${document.getElementById("sourceModeTabs").querySelector("[data-mode].active")?.dataset.mode==="manual"?"manual":"smart"}"] [data-equipment-summary]`);
+    const devices=parsedDevices||currentDevicePanel?.value||"";
+    const requirements = String(parsed.teacher_requirements || "");
+    const confirmation = document.getElementById("briefConfirmation");
+    confirmation.classList.remove("hidden");
+    confirmation.innerHTML = `<div class="brief-confirmation-head"><div><span class="eyebrow">备课条件确认</span><h3>检查后生成教案</h3></div><span class="status info">请核对</span></div>
+      ${classMismatch?`<div class="notice">识别到“${esc(parsed.class_name)}”，但当前教师档案中没有同名班级。请在下方选择正确班级，系统不会创建或猜测班级。</div>`:""}
+      <div class="brief-profile-context"><b>读取到的班级特点</b><span>${esc(profileText||"尚未选择班级画像")}</span></div>
+      <div class="form-grid brief-fields">
+        <label>授课班级<select id="briefClassId"><option value="">通用模式（不指定班级）</option>${classOptions}</select></label>
+        <label>歌曲<input id="briefSong" value="${esc(parsed.song_name || songFallback)}" placeholder="请输入歌名"></label>
+        <label>课时（分钟）<input id="briefDuration" type="number" min="20" max="90" value="${Number(parsed.duration_minutes)||currentDuration}"></label>
+        <label>课堂偏好<input id="briefActivity" value="${esc(parsed.activity_preference || profile.preferred_method || currentActivity || "")}"></label>
+        <label>地区 / 文化元素<input id="briefRegion" value="${esc(parsed.region_element || regionFallback || "")}" placeholder="没有明确要求可留空"></label>
+        <label>设备条件与限制<input id="briefDevices" value="${esc(devices)}" placeholder="例如：无投影、无音箱"></label>
+        <label class="full">其他课堂要求<textarea id="briefRequirements" rows="3">${esc(requirements)}</textarea></label>
+        <label>生成模式<select id="briefStrategy"><option value="fast">快速模式</option><option value="deep" selected>深度模式</option></select></label>
+      </div>
+      <p class="muted brief-sync-note">确认时会同步到表单备课设置；后续在表单中修改，也会更新这里的条件。</p>
+      <button class="btn primary" id="confirmBriefGenerate">确认条件并生成</button>`;
+    bindBriefSettings(classes);
+    bindDialogToForms();
+    document.getElementById("confirmBriefGenerate").onclick=async()=>{
+      const classId=Number(document.getElementById("briefClassId").value)||null;
+      const songName=document.getElementById("briefSong").value.trim();
+      if(!songName)return notify("请补充歌曲名称");
+      const songs=await api.songs({q:songName});
+      if(!songs.length)return notify(`资源库中未找到《${songName}》，请先到教学资源库添加歌曲`);
+      selectedSong=songs.find(song=>normalized(song.name)===normalized(songName));
+      if(!selectedSong)return notify(`检索到了相近歌曲（${songs.slice(0,4).map(song=>song.name).join("、")}），请把输入名称改成资源库中的准确歌名后再生成`);
+      const duration=Math.max(20,Math.min(90,Number(document.getElementById("briefDuration").value)||40));
+      const activity=document.getElementById("briefActivity").value.trim()||profile.preferred_method||"互动与分组合作";
+      const region=document.getElementById("briefRegion").value.trim();
+      const device=document.getElementById("briefDevices").value.trim()||"未额外指定设备";
+      const extra=document.getElementById("briefRequirements").value.trim();
+      const strategy=document.getElementById("briefStrategy").value;
+      const teacherRequirements=[extra,region?`地区/文化元素：${region}`:"",`课堂设备条件：${device}`].filter(Boolean).join("\\n");
+      applyBriefToForms({classId,songName,duration,activity,teacherRequirements,strategy,region});
+      await generate(false,{song_id:selectedSong.id,class_id:classId,duration_minutes:duration,activity_preference:activity,teacher_requirements:teacherRequirements,generation_strategy:strategy});
+    };
+  } catch(error) {
+    notify(`备课条件整理失败：${error.message||"请检查模型服务配置"}`,"error");
+  } finally { button.disabled=false;button.textContent="重新整理条件"; }
+}
+
+function applyBriefToForms(settings) {
+  for(const id of ["classId","manualClassId"]) { const el=document.getElementById(id); if(el)el.value=settings.classId?String(settings.classId):""; }
+  for(const id of ["duration","manualDuration"]) { const el=document.getElementById(id); if(el)el.value=String(settings.duration); }
+  for(const id of ["activity","manualActivity"]) { const el=document.getElementById(id); if(el)el.value=settings.activity; }
+  for(const id of ["requirements","manualRequirements"]) { const el=document.getElementById(id); if(el)el.value=settings.teacherRequirements; }
+  document.getElementById("songName").value=settings.songName;
+
+  for(const panel of document.querySelectorAll("[data-equipment-summary]")) panel.value=settings.device||"未额外指定设备";
+  for(const id of ["strategy","manualStrategy"]) { const el=document.getElementById(id); if(el)el.value=settings.strategy; }
+  const briefClass=document.getElementById("briefClassId");if(briefClass)briefClass.value=settings.classId?String(settings.classId):"";
+  const briefDuration=document.getElementById("briefDuration");if(briefDuration)briefDuration.value=String(settings.duration);
+  const briefActivity=document.getElementById("briefActivity");if(briefActivity)briefActivity.value=settings.activity;
+
+  const briefRegion=document.getElementById("briefRegion");if(briefRegion)briefRegion.value=settings.region||"";
+  const briefStrategy=document.getElementById("briefStrategy");if(briefStrategy)briefStrategy.value=settings.strategy;
+}
+
+function bindBriefSettings(classes) {
+  const pairs=[["classId","manualClassId","briefClassId"],["duration","manualDuration","briefDuration"],["activity","manualActivity","briefActivity"],["requirements","manualRequirements","briefRequirements"]];
+  pairs.forEach(group=>group.forEach(id=>{
+    const field=document.getElementById(id);if(!field)return;
+    field.addEventListener("input",()=>syncGroup(group,id));
+    field.addEventListener("change",()=>syncGroup(group,id));
+  }));
+  function syncGroup(group,sourceId){
+    const source=document.getElementById(sourceId);
+    group.forEach(id=>{const target=document.getElementById(id);if(target&&target!==source)target.value=source.value;});
+    const classId=Number(document.getElementById("briefClassId")?.value||document.getElementById("classId").value)||null;
+    const profileName=[...document.getElementById("briefClassId")?.options||[]].find(o=>Number(o.value)===classId)?.textContent||"";
+    const fact=document.querySelector(".brief-profile-context span");
+    if(fact&&sourceId.toLowerCase().includes("class")){
+      const profile=classes.find(item=>item.id===classId);
+      fact.textContent=profile?[profile.grade+"年级",profile.province,profile.learning_level,"音准："+profile.pitch_level,"节奏："+profile.rhythm_level,"合作："+profile.cooperation,profile.common_problems].filter(Boolean).join(" · "):"通用模式（不指定班级）";
+    }
+  }
+  [["strategy","manualStrategy","briefStrategy"],["songName","songName","briefSong"]].forEach(group=>group.forEach(id=>{
+    const field=document.getElementById(id);if(!field)return;
+    field.addEventListener("input",()=>syncGroup(group,id));field.addEventListener("change",()=>syncGroup(group,id));
+  }));
+  const region=document.getElementById("region"), briefRegion=document.getElementById("briefRegion");
+  region?.addEventListener("change",()=>{if(briefRegion)briefRegion.value=region.value;});
+  document.querySelectorAll("[data-equipment-summary]").forEach(field=>field.addEventListener("change",()=>{
+    const devices=document.getElementById("briefDevices");if(devices)devices.value=field.value;
+  }));
+}
+
+function bindDialogToForms(){
+  const dialogIds=["briefClassId","briefSong","briefDuration","briefActivity","briefRegion","briefDevices","briefRequirements","briefStrategy"];
+  const sync=()=>{
+    const raw=document.getElementById("briefRequirements").value.trim();
+    const region=document.getElementById("briefRegion").value.trim();
+    const device=document.getElementById("briefDevices").value.trim()||"未额外指定设备";
+    const requirements=[raw,region?`地区/文化元素：${region}`:"",`课堂设备条件：${device}`].filter(Boolean).join("\\n");
+    applyBriefToForms({
+      classId:Number(document.getElementById("briefClassId").value)||null,
+      songName:document.getElementById("briefSong").value.trim(),
+      duration:Number(document.getElementById("briefDuration").value)||40,
+      activity:document.getElementById("briefActivity").value.trim(),
+      teacherRequirements:requirements,device,
+      strategy:document.getElementById("briefStrategy").value,
+    });
+  };
+  dialogIds.forEach(id=>{const field=document.getElementById(id);field?.addEventListener("input",sync);field?.addEventListener("change",sync);});
 }
 
 function songCard(song, active) {
@@ -228,6 +378,7 @@ function bindEquipmentControls(root) {
     const syncSummary = () => {
       const selected = boxes.filter(box => box.checked).map(box => labels[box.dataset.equipment]);
       summary.value = [...selected, ...customTags()].join("、") || "无电子设备（教师清唱与身体声势）";
+      summary.dispatchEvent(new Event("change", { bubbles: true }));
     };
     boxes.forEach(box => box.addEventListener("change", () => {
       preset.value = "custom";
@@ -244,7 +395,7 @@ function bindEquipmentControls(root) {
   });
 }
 
-async function generate(manual) {
+async function generate(manual, override = null) {
   if (!selectedSong) return notify("请先选择歌曲");
   const classElement = document.getElementById(manual ? "manualClassId" : "classId");
   const durationElement = document.getElementById(manual ? "manualDuration" : "duration");
@@ -252,16 +403,19 @@ async function generate(manual) {
   const requirementsElement = document.getElementById(manual ? "manualRequirements" : "requirements");
   const equipmentElement = document.querySelector(`[data-equipment-controls="${manual ? "manual" : "smart"}"] [data-equipment-summary]`);
   const strategyElement = document.getElementById(manual ? "manualStrategy" : "strategy");
+  const payload = override || {
+    song_id: selectedSong.id,
+    class_id: classElement.value ? Number(classElement.value) : null,
+    duration_minutes: Number(durationElement.value),
+    activity_preference: activityElement.value,
+    teacher_requirements: [requirementsElement.value.trim(), `[课堂设备条件：${equipmentElement.value || "无电子设备（教师清唱与身体声势）"}]`].filter(Boolean).join("\n"),
+    generation_strategy: strategyElement.value,
+  };
+  payload.song_id = selectedSong.id;
   disableActions(true);
   try {
-    const job = await startGeneration({
-      song_id: selectedSong.id,
-      class_id: classElement.value ? Number(classElement.value) : null,
-      duration_minutes: Number(durationElement.value),
-      activity_preference: activityElement.value,
-      teacher_requirements: [requirementsElement.value.trim(), `[课堂设备条件：${equipmentElement.value || "无电子设备（教师清唱与身体声势）"}]`].filter(Boolean).join("\n"),
-      generation_strategy: strategyElement.value,
-    });
+    const job = await startGeneration(payload);
+    activeGenerationJobId = job.id || job.job_id || null;
     currentPlan = job.preview;
     renderPreview(document.getElementById("lessonArea"), true, job);
     notify(strategyElement.value === "fast" ? "正在快速生成完整教案" : "正在生成完整教案（深度模式）");
@@ -275,18 +429,24 @@ function updateFromGenerationEvent(event) {
   restoreJob(event.detail);
 }
 
-function restoreJob(job) {
+function restoreJob(job, restoredFromCenter = false) {
   const area = document.getElementById("lessonArea");
   if (!area || !job) return;
+  const previousResult = restoredFromCenter || (activeGenerationJobId && job.id && job.id !== activeGenerationJobId);
   if (job.status === "completed" && job.result) {
     currentPlan = job.result;
     renderPreview(area, false, job);
-    disableActions(false);
+    if(previousResult){
+      area.insertAdjacentHTML("afterbegin",`<div class="notice previous-plan-notice"><b>上次生成结果</b><span>对应：${esc(currentPlan.class_name||"通用模式")} · ${Number(currentPlan.duration_minutes)||"—"} 分钟。本条不是当前设置下的新结果；请核对班级和课时后再决定是否保存。</span></div>`);
+      disableActions(true);
+      document.getElementById("printPlan").disabled=false;
+    }else disableActions(false);
     return;
   }
   if (job.status === "failed") {
     currentPlan = job.preview || null;
     if (currentPlan) renderPreview(area, false, job);
+    if(previousResult) area.insertAdjacentHTML("afterbegin",`<div class="notice previous-plan-notice">上次生成任务对应：${esc(currentPlan?.class_name||"未指定班级")}，不是当前设置的结果。</div>`);
     area.insertAdjacentHTML("afterbegin", `<div class="notice">教案完善未完成：${esc(job.error_message || "请稍后重试")}。下方仍保留规则生成的可用教案骨架。</div>`);
     disableActions(false);
     return;
@@ -294,7 +454,8 @@ function restoreJob(job) {
   if (job.preview) {
     currentPlan = job.preview;
     renderPreview(area, true, job);
-    disableActions(true);
+    if(previousResult)area.insertAdjacentHTML("afterbegin",`<div class="notice previous-plan-notice">恢复中的任务对应：${esc(currentPlan.class_name||"未指定班级")} · ${Number(currentPlan.duration_minutes)||"—"} 分钟。</div>`);
+    disableActions(previousResult);
   }
 }
 

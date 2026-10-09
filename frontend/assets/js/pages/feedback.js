@@ -24,6 +24,7 @@ export async function renderFeedback(container) {
         <label>关联音频分析（选填）<select id="audioAnalysisId"><option value="">不带入音频分析</option></select><small>显示已关联本教案或尚未关联教案的分析；保存后会自动关联，摘要仍可编辑。</small></label>
         <section class="goal-observation-module" id="goalObservations"><div class="module-head"><div><span class="eyebrow">LEARNING EVIDENCE</span><h3>本课目标观察</h3></div><span class="status info">课后记录</span></div><p class="muted">根据学生实际表现记录进展；未观察到的目标可以留空。</p><div id="goalObservationRows"></div></section>
         <label>整体效果<select id="effect"><option>很好</option><option selected>较好</option><option>一般</option><option>较差</option></select></label>
+        <fieldset class="class-observation-input"><legend>班级整体观察（选填）</legend><p>只记录班级整体表现；未观察到的指标请保持未记录。</p><div class="form-grid"><label>课堂参与<select id="participationObservation"><option value="">暂未记录</option><option value="需要带动">需要带动</option><option value="参与一般">参与一般</option><option value="参与积极">参与积极</option></select></label><label>合作情况<select id="cooperationObservation"><option value="">暂未记录</option><option value="需要教师带动">需要教师带动</option><option value="合作一般">合作一般</option><option value="主动合作">主动合作</option></select></label></div></fieldset>
         <section class="feedback-audio-module"><div class="module-head"><div><span class="eyebrow">AUDIO EVIDENCE</span><h3>音频分析总结</h3></div>${imported ? '<span class="status ok">已带入</span>' : '<span class="status info">可选</span>'}</div><textarea id="audioSummary" placeholder="可从音频分析带入，也可手动填写本节课的音准、节拍或声音表现总结。">${esc(imported ? buildSummary(imported) : "")}</textarea><small>该部分会随课堂反馈一起归档，之后仍可编辑查看。</small></section>
         <label>课堂亮点<textarea id="highlights" placeholder="例如：小组声势合作积极，学生能够主动描述歌曲情绪。"></textarea></label>
         <label>存在问题<textarea id="problems" placeholder="例如：第二乐句进入偏早，长音收尾不够稳定。"></textarea></label>
@@ -89,7 +90,7 @@ export async function renderFeedback(container) {
       lesson_plan_id: lessonId, overall_effect: document.getElementById("effect").value,
       highlights: document.getElementById("highlights").value.trim(), problems: document.getElementById("problems").value.trim(),
       improvement: document.getElementById("improvement").value.trim(), audio_summary: document.getElementById("audioSummary").value.trim(),
-      audio_analysis_id: Number(audioSelect.value) || null, analysis: { ...(imported || {}), goal_observations: goalObservations },
+      audio_analysis_id: Number(audioSelect.value) || null, analysis: { ...(imported || {}), goal_observations: goalObservations, class_observations: { participation: document.getElementById("participationObservation").value || null, cooperation: document.getElementById("cooperationObservation").value || null } },
     });
     localStorage.removeItem("audioAnalysisForFeedback");
     if (imported) { const badge = document.querySelector(".feedback-record-card .status"); if (badge) { badge.className = "status ok"; badge.textContent = "已关联"; } }

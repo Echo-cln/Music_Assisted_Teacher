@@ -950,3 +950,46 @@ td small { color: var(--muted); }
   .manual-stage-editor .form-grid { grid-template-columns: 1fr; }
   .manual-editor-actions { position: static; }
 }
+
+
+/* 班级趋势与对话备课确认区 */
+.class-detail-tabs { margin: 4px 0 18px; }
+.class-trend-view { padding: 4px 0 0; }
+.class-trend-head { display:flex; justify-content:space-between; align-items:end; gap:16px; margin-bottom:14px; }
+.class-trend-head h3 { margin:4px 0; }
+.class-trend-head p { margin:0; max-width:620px; }
+.class-trend-head select { min-width:190px; }
+.trend-summary { margin:12px 0; padding:12px 15px; border-left:3px solid var(--brand); border-radius:0 12px 12px 0; background:#fff4e9; color:#6a4435; font-weight:650; line-height:1.6; }
+.class-trend-chart { min-height:220px; padding:10px 12px; border:1px solid var(--line); border-radius:16px; background:#fffdf9; }
+.class-trend-chart svg { display:block; width:100%; max-height:300px; overflow:visible; }
+.trend-grid { stroke:#eadfd5; stroke-width:1; }
+.trend-axis-label { fill:#88786e; font-size:11px; }
+.trend-point-label { fill:#9e4e37; font-size:11px; font-weight:700; }
+.trend-line { fill:none; stroke:#b75d40; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
+.trend-dot { fill:#fffaf4; stroke:#a95038; stroke-width:3; }
+.trend-record-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin:14px 0 2px; padding:0; list-style:none; }
+.trend-record-list li { display:grid; grid-template-columns:auto 1fr; gap:3px 10px; padding:9px 11px; border:1px solid #eee4da; border-radius:11px; background:white; }
+.trend-record-list li span { text-align:right; color:var(--brand); font-weight:700; }
+.trend-record-list li small { grid-column:1/-1; color:var(--muted); }
+.class-observation-input { margin:4px 0 10px; padding:14px; border:1px solid #ead9cb; border-radius:14px; background:#fffaf5; }
+.class-observation-input legend { padding:0 6px; font-weight:700; color:#574238; }
+.class-observation-input p { margin:0 0 8px; color:var(--muted); font-size:.84rem; }
+.class-observation-input .form-grid { gap:10px; }
+.planner-mode-tabs { margin-bottom:12px; }
+.dialogue-planning { display:grid; gap:12px; }
+.dialogue-planning > label { margin:0; }
+.dialogue-planning textarea { min-height:120px; }
+.brief-confirmation { margin-top:12px; padding:16px; border:1px solid #ead8ca; border-radius:16px; background:#fffaf5; }
+.brief-confirmation-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
+.brief-confirmation-head h3 { margin:4px 0; }
+.brief-profile-context { display:grid; gap:4px; margin:10px 0 14px; padding:11px 13px; border-radius:12px; background:#f7eee5; color:#665448; font-size:.86rem; }
+.brief-profile-context b { color:#49382f; }
+.brief-fields { gap:10px 14px; }
+.brief-fields label { margin:0; }
+.brief-sync-note { margin:10px 0; font-size:.82rem; }
+.previous-plan-notice { display:grid; gap:4px; margin-bottom:12px; }
+@media(max-width:700px) {
+  .class-trend-head { align-items:stretch; flex-direction:column; }
+  .trend-record-list { grid-template-columns:1fr; }
+  .class-trend-chart { padding:7px; }
+}

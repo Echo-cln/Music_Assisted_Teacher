@@ -55,11 +55,48 @@ export async function renderClasses(container) {
     if (document.getElementById("classSort").value === "name") classes.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
     document.getElementById("classSearchCount").textContent = `共 ${classes.length} 个${q ? "匹配班级" : "班级"}`;
     const grid = document.getElementById("classGrid");
-    grid.innerHTML = classes.map(item => `<article class="card"><div class="card-head"><span class="iconbox">${item.grade}</span><span class="pill">${esc(item.province)}</span></div><h3>${esc(item.name)}</h3><p class="muted">${item.student_count} 人 · ${esc(item.learning_level)}</p><div class="profile-grid"><div><small>课堂活跃度</small><b>${esc(item.activity_level)}</b></div><div><small>合作情况</small><b>${esc(item.cooperation)}</b></div><div><small>音准</small><b>${esc(item.pitch_level)}</b></div><div><small>节奏</small><b>${esc(item.rhythm_level)}</b></div></div><div class="profile-difference-tags">${(item.common_problems || "").split(/[、,，;；\n]+/).map(value => value.trim()).filter(Boolean).slice(0, 4).map(value => `<span class="pill soft">${esc(value)}</span>`).join("")}</div><p class="insight">${esc(item.teacher_notes || "尚未填写教学感受")}</p><button class="btn block" data-edit-class="${item.id}">查看 / 编辑</button></article>`).join("") || '<div class="empty">没有找到匹配的班级画像</div>';
+    grid.innerHTML = classes.map(item => `<article class="card"><div class="card-head"><span class="iconbox">${item.grade}</span><span class="pill">${esc(item.province)}</span></div><h3>${esc(item.name)}</h3><p class="muted">${item.student_count} 人 · ${esc(item.learning_level)}</p><div class="profile-grid"><div><small>课堂活跃度</small><b>${esc(item.activity_level)}</b></div><div><small>合作情况</small><b>${esc(item.cooperation)}</b></div><div><small>音准</small><b>${esc(item.pitch_level)}</b></div><div><small>节奏</small><b>${esc(item.rhythm_level)}</b></div></div><div class="profile-difference-tags">${(item.common_problems || "").split(/[、,，;；\\n]+/).map(value => value.trim()).filter(Boolean).slice(0, 4).map(value => `<span class="pill soft">${esc(value)}</span>`).join("")}</div><p class="insight">${esc(item.teacher_notes || "尚未填写教学感受")}</p><div class="actions"><button class="btn" data-class-details="${item.id}">班级详情与趋势</button><button class="btn soft" data-edit-class="${item.id}">编辑画像</button></div></article>`).join("") || '<div class="empty">没有找到匹配的班级画像</div>';
     grid.querySelectorAll("[data-edit-class]").forEach(button => {
       button.onclick = () => openClassForm(classes.find(item => item.id === Number(button.dataset.editClass)), container);
     });
+    grid.querySelectorAll("[data-class-details]").forEach(button => {
+      button.onclick = () => openClassDetails(classes.find(item => item.id === Number(button.dataset.classDetails)));
+    });
   }
+}
+
+
+function openClassDetails(item) {
+  if (!item) return;
+  const root = showModal(`<div class="modal-head"><div><span class="eyebrow">CLASS PROFILE</span><h2>${esc(item.name)} · 班级详情</h2><p>${item.grade} 年级 · ${esc(item.province)} · ${item.student_count} 人</p></div><button class="close" data-close>×</button></div>
+    <div class="tabs class-detail-tabs"><button class="tab active" data-class-detail-tab="profile">班级画像</button><button class="tab" data-class-detail-tab="trends">学情趋势</button></div>
+    <section data-class-detail-panel="profile"><div class="profile-grid"><div><small>整体基础</small><b>${esc(item.learning_level)}</b></div><div><small>课堂活跃度</small><b>${esc(item.activity_level)}</b></div><div><small>合作情况</small><b>${esc(item.cooperation)}</b></div><div><small>音准</small><b>${esc(item.pitch_level)}</b></div><div><small>节奏</small><b>${esc(item.rhythm_level)}</b></div><div><small>乐理</small><b>${esc(item.theory_level)}</b></div></div><h3>需要关注的群体差异</h3><div class="profile-difference-tags">${(item.common_problems || "").split(/[、,，;；\\n]+/).map(value => value.trim()).filter(Boolean).map(value => `<span class="pill soft">${esc(value)}</span>`).join("") || '<span class="muted">尚无记录</span>'}</div><p class="insight">${esc(item.teacher_notes || "尚未填写教学感受")}</p><div class="actions"><button class="btn primary" data-edit-detail>编辑班级画像</button><button class="btn" data-close>关闭</button></div></section>
+    <section data-class-detail-panel="trends" hidden><div class="class-trend-view"><div class="class-trend-head"><div><span class="eyebrow">CLASSROOM EVIDENCE</span><h3>学情趋势</h3><p class="muted">只汇总该班已保存的课堂反馈和关联音频分析，不含学生个人排名。音频分数是主音高轨迹稳定度、起音间隔规律度（0–100），不等同于逐音准确率。</p></div><select data-trend-metric aria-label="选择趋势指标"><option value="pitch_stability">音准轨迹稳定度</option><option value="rhythm_regularness">节奏规律度</option><option value="participation">课堂参与</option><option value="cooperation">合作情况</option></select></div><div data-trend-summary class="trend-summary"></div><div data-trend-chart class="class-trend-chart"><p class="muted">正在读取已保存的课堂记录…</p></div><small data-trend-source class="muted"></small></div></section>`);
+  const buttons=[...root.querySelectorAll("[data-class-detail-tab]")], panels=[...root.querySelectorAll("[data-class-detail-panel]")];
+  let data=null;
+  const render=metric=>{
+    const chart=root.querySelector("[data-trend-chart]"), summary=root.querySelector("[data-trend-summary]"), source=root.querySelector("[data-trend-source]");
+    if(!data)return;
+    const names={pitch_stability:"主音高轨迹稳定度",rhythm_regularness:"起音间隔规律度",participation:"课堂参与",cooperation:"合作情况"};
+    const cat=metric==="participation"||metric==="cooperation";
+    const order=metric==="participation"?{"需要带动":1,"参与一般":2,"参与积极":3}:{"需要教师带动":1,"合作一般":2,"主动合作":3};
+    const bands=metric==="participation"?["需要带动","参与一般","参与积极"]:["需要教师带动","合作一般","主动合作"];
+    const pts=data.points.filter(p=>p[metric]!==null&&p[metric]!==undefined&&p[metric]!=="");
+    if(!pts.length){chart.innerHTML=`<div class="empty">尚无“${names[metric]}”记录。记录课后观察或关联音频分析后，这里会显示真实变化。</div>`;summary.textContent="课堂记录积累中";source.textContent=`数据来源：${data.record_count} 条已归档课堂反馈 · 最近更新：${data.updated_at?.slice(0,10)||"暂无"}`;return;}
+    const W=620,H=250,L=74,R=20,T=22,B=52,pw=W-L-R,ph=H-T-B;
+    const coords=pts.map((p,i)=>{const value=cat?order[p[metric]]:Number(p[metric]);return{x:L+(pts.length===1?pw/2:i*pw/(pts.length-1)),y:T+ph-(value-(cat?1:0))/((cat?3:100)-(cat?1:0))*ph};});
+    const ys=cat?bands.map((v,i)=>({v,y:T+ph-i*ph/2})):[0,50,100].map(v=>({v:`${v}分`,y:T+ph-v/100*ph}));
+    chart.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${names[metric]}趋势">${ys.map(t=>`<line x1="${L}" y1="${t.y}" x2="${W-R}" y2="${t.y}" class="trend-grid"/><text x="${L-8}" y="${t.y+4}" text-anchor="end" class="trend-axis-label">${esc(t.v)}</text>`).join("")}<polyline points="${coords.map(c=>`${c.x},${c.y}`).join(" ")}" class="trend-line"/>${coords.map((c,i)=>`<circle cx="${c.x}" cy="${c.y}" r="5" class="trend-dot"/><text x="${c.x}" y="${c.y-11}" text-anchor="middle" class="trend-point-label">${esc(String(pts[i][metric]))}${cat?"":"分"}</text><text x="${c.x}" y="${H-B+20}" text-anchor="middle" class="trend-axis-label">${esc(pts[i].date.slice(5,10))}</text>`).join("")}</svg><ol class="trend-record-list">${pts.map(p=>`<li><b>${esc(p.date.slice(0,10))}</b><span>${esc(String(p[metric]))}${cat?"":" 分"}</span><small>${esc(p.lesson_title)} · ${esc(p.source)}</small></li>`).join("")}</ol>`;
+    if(pts.length<2)summary.textContent=`课堂记录积累中：当前有 ${pts.length} 次有效记录；累计两次后再显示变化方向。`;
+    else{const first=pts[0][metric],last=pts[pts.length-1][metric],a=cat?order[first]:Number(first),b=cat?order[last]:Number(last),desc=b>a?"有所改善":b<a?"有所下降":"暂时稳定";summary.textContent=`近 ${pts.length} 次有记录的课堂中，${names[metric]}${desc}（${first} → ${last}${cat?"":"分"}）。`;}
+    source.textContent=`数据来源：${[...new Set(pts.map(p=>p.source))].join("、")} · 最近更新：${data.updated_at?.slice(0,10)||"暂无"}`;
+  };
+  buttons.forEach(button=>button.onclick=async()=>{
+    buttons.forEach(b=>b.classList.toggle("active",b===button));panels.forEach(p=>p.hidden=p.dataset.classDetailPanel!==button.dataset.classDetailTab);
+    if(button.dataset.classDetailTab==="trends"&&!data){try{data=await api.classTrends(item.id);render(root.querySelector("[data-trend-metric]").value);}catch(error){root.querySelector("[data-trend-chart]").innerHTML=`<div class="notice">${esc(error.message||"读取学情趋势失败")}</div>`;}}
+  });
+  root.querySelector("[data-trend-metric]").onchange=e=>render(e.target.value);
+  root.querySelector("[data-edit-detail]").onclick=()=>{document.getElementById("modalRoot").innerHTML="";openClassForm(item,document.getElementById("app"));};
 }
 
 function bindClassDifferenceTags(root) {

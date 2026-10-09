@@ -14,6 +14,7 @@ from app.models.entities import AudioAnalysis, ClassroomRecord, ClassProfile, Le
 from app.repositories.song_repository import SongRepository
 from app.schemas.lesson import (
     LessonAdjustRequest,
+    LessonBriefExtractRequest,
     LessonGenerateRequest,
     LessonPlanRead,
     LessonPreviewAdjustRequest,
@@ -24,6 +25,7 @@ from app.schemas.lesson import (
     LessonRunRevisionRequest,
 )
 from app.services.lesson_run_service import apply_lesson_run_event, build_run_stages, interrupt_stale_lesson_run, serialize_lesson_run
+from app.services.ai_provider import extract_lesson_brief
 from app.services.lesson_service import (
     save_preview,
     serialize_plan,
@@ -264,6 +266,40 @@ def _profile_for_teacher(db: Session, teacher_id: int, class_id: int | None):
     if not class_id:
         return None
     return db.scalar(select(ClassProfile).where(ClassProfile.id == class_id, ClassProfile.teacher_id == teacher_id))
+
+
+@router.post("/brief/extract")
+def extract_brief(
+    payload: LessonBriefExtractRequest,
+    db: Session = Depends(get_db),
+    teacher: Teacher = Depends(get_current_teacher),
+):
+    profile = _profile_for_teacher(db, teacher.id, payload.class_id)
+    if payload.class_id and not profile:
+        raise HTTPException(status_code=404, detail="当前选择的班级不存在或无权访问")
+    profile_context = None
+    if profile:
+        # Only group-level learning facts are sent; teacher notes can contain free-form private content.
+        profile_context = {
+            "id": profile.id,
+            "name": profile.name,
+            "grade": profile.grade,
+            "province": profile.province,
+            "preferred_method": profile.preferred_method,
+            "learning_level": profile.learning_level,
+            "activity_level": profile.activity_level,
+            "cooperation": profile.cooperation,
+            "pitch_level": profile.pitch_level,
+            "rhythm_level": profile.rhythm_level,
+            "theory_level": profile.theory_level,
+            "common_problems": profile.common_problems,
+        }
+    try:
+        parsed = extract_lesson_brief(payload.prompt, profile_context)
+    except Exception as exc:
+        logger.exception("lesson_brief_extract_failed teacher_id=%s", teacher.id)
+        raise HTTPException(status_code=502, detail=f"备课条件提取失败：{exc}") from exc
+    return {"parsed": parsed, "class_profile": profile_context}
 
 
 @router.get("", response_model=list[LessonPlanRead])

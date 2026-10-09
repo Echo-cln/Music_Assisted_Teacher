@@ -3,6 +3,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class LessonBriefExtractRequest(BaseModel):
+    prompt: str = Field(min_length=8, max_length=2000)
+    class_id: int | None = None
+
+
 class LessonGenerateRequest(BaseModel):
     song_id: int
     class_id: int | None = None
