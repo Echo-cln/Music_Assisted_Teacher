@@ -13,7 +13,8 @@ from app.api.routes.teaching_assistant import (
     _analysis_detail, _class_scope_suggestions, _is_blank_feedback_form_request,
     _is_feedback_creation_request, _is_observation_offer, _is_lesson_action, _is_lookup,
     _is_all_class_request, _is_contextual_short_reply, _is_refine_search_request,
-    _plain, _present, _requires_class_scope, _retrieve, _terms, _requested_class_change, _today_question_reply, _is_weather_question, _weather_location,
+    _plain, _present, _requires_class_scope, _retrieve, _terms, _requested_class_change,
+    _today_question_reply, _is_weather_question, _weather_location, _weather_followup_location,
 )
 from app.services.ai_provider import _naturalize_dialogue_answer
 
@@ -192,3 +193,25 @@ def test_class_scope_change_requires_confirmation_intent_and_today_question_is_a
     assert _is_weather_question("天气如何")
     assert _weather_location("帮我查一下广州今天的天气") == "广州"
     assert _weather_location("天气如何") is None
+
+
+def test_weather_city_followup_uses_previous_question_and_does_not_capture_unrelated_short_replies():
+    history = [{"role": "assistant", "content": "你想查哪个城市？告诉我地名，我帮你看当前天气和今天的预报。"}]
+    assert _weather_followup_location("广州", history) == "广州"
+    assert _weather_followup_location("我在厦门", history) == "厦门"
+    assert _weather_followup_location("深圳市的天气", history) == "深圳"
+    assert _weather_followup_location("不知道", history) is None
+    assert _weather_followup_location("广州", [{"role": "assistant", "content": "你想找哪一首歌？"}]) is None
+
+
+def test_weather_api_failure_is_plain_and_does_not_mention_model_internals(monkeypatch):
+    from app.api.routes import teaching_assistant
+
+    def fail_request(*args, **kwargs):
+        raise TimeoutError("connection timed out")
+
+    monkeypatch.setattr(teaching_assistant, "urlopen", fail_request)
+    reply, sources = teaching_assistant._live_weather_reply("查广州天气")
+    assert "广州" in reply and "天气数据" in reply
+    assert "模型" not in reply and "猜" not in reply
+    assert not sources
