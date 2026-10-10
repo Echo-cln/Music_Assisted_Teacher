@@ -260,6 +260,11 @@ def _present(row: AssistantConversation, include_messages: bool = False) -> dict
                                     item_suggestion = {"label": label, "message": message}
                                     if isinstance(class_id, int) and class_id > 0:
                                         item_suggestion["class_id"] = class_id
+                                    conversation_id = suggestion.get("conversation_id")
+                                    if isinstance(conversation_id, int) and conversation_id > 0:
+                                        item_suggestion["conversation_id"] = conversation_id
+                                    if suggestion.get("action") == "open_conversation":
+                                        item_suggestion["action"] = "open_conversation"
                                     safe_suggestions.append(item_suggestion)
                         if safe_suggestions:
                             item["suggestions"] = safe_suggestions
@@ -277,7 +282,8 @@ def _present(row: AssistantConversation, include_messages: bool = False) -> dict
                                 "kind": kind, "label": label,
                                 "detail": _plain(source.get("detail"), 260),
                                 "updated_at": _plain(source.get("updated_at"), 40),
-                                "route": source.get("route") if source.get("route") in {"lessons", "feedback", "audio", "resources", "classes", "workbench"} else None,
+                                "route": source.get("route") if source.get("route") in {"lessons", "feedback", "audio", "resources", "classes", "workbench", "teachingAssistant"} else None,
+                                "id": source.get("id") if kind in {"历史对话", "已引用的历史对话"} and isinstance(source.get("id"), int) else None,
                             })
                         if safe_sources:
                             item["sources"] = safe_sources
@@ -347,7 +353,30 @@ def _citation(kind: str, label: str, detail: str, record_id: int, route: str, up
     }
 
 
-def _retrieve(db: Session, teacher_id: int, message: str, context: dict) -> list[dict]:
+def _conversation_excerpt(raw_messages: Any, terms: list[str]) -> str:
+    messages = raw_messages if isinstance(raw_messages, list) else []
+    safe = [item for item in messages if isinstance(item, dict) and item.get("role") in {"user", "assistant"}]
+    if not safe:
+        return ""
+    needle = [term.lower() for term in terms if len(term) >= 2]
+    for index in range(len(safe) - 1, -1, -1):
+        item = safe[index]
+        content = _plain(item.get("content"), 500)
+        if not content:
+            continue
+        if not needle or any(term in content.lower() for term in needle):
+            # Include the adjacent answer when possible so a cited conversation has context.
+            pair = [item]
+            if index + 1 < len(safe) and safe[index + 1].get("role") == "assistant":
+                pair.append(safe[index + 1])
+            return "；".join(
+                f"{'教师' if part.get('role') == 'user' else '助手'}：{_plain(part.get('content'), 220)}"
+                for part in pair
+            )[:520]
+    return ""
+
+
+def _retrieve(db: Session, teacher_id: int, message: str, context: dict, conversation_id: int | None = None) -> list[dict]:
     terms = _terms(message)
     class_id = context.get("class_id")
     owned_profiles = db.scalars(select(ClassProfile).where(ClassProfile.teacher_id == teacher_id)).all()
@@ -381,6 +410,74 @@ def _retrieve(db: Session, teacher_id: int, message: str, context: dict) -> list
         if len(named_songs) == 1:
             context_song_id = named_songs[0].id
     records: list[dict] = []
+
+    # Keep the last cited set attached to the thread so a follow-up like “带着这些资料备课”
+    # can act on the same records instead of running a fresh, unrelated search.
+    refers_to_recent_sources = any(word in message for word in ("刚才", "这些资料", "这条资料", "上面找到", "带着资料", "结合这些"))
+    if refers_to_recent_sources and isinstance(context.get("recent_sources"), list):
+        carried_class_id = context.get("recent_sources_class_id")
+        if class_id and carried_class_id not in (None, int(class_id)):
+            carried_sources = []
+        else:
+            carried_sources = context["recent_sources"]
+        for source in carried_sources[:5]:
+            if not isinstance(source, dict) or not source.get("kind") or not source.get("label"):
+                continue
+            route = source.get("route")
+            if route not in {"lessons", "feedback", "audio", "resources", "classes", "workbench", "teachingAssistant"}:
+                continue
+            records.append({
+                "kind": _plain(source.get("kind"), 40), "label": _plain(source.get("label"), 100),
+                "detail": _plain(source.get("detail"), 520), "id": source.get("id") if isinstance(source.get("id"), int) else 0,
+                "route": route, "updated_at": _plain(source.get("updated_at"), 40),
+            })
+
+    # A manually quoted conversation follows the active thread as explicit context.
+    referenced_id = context.get("referenced_conversation_id")
+    if referenced_id:
+        try:
+            referenced_id = int(referenced_id)
+        except (TypeError, ValueError):
+            referenced_id = None
+        if referenced_id and referenced_id != conversation_id:
+            referenced = db.scalar(select(AssistantConversation).where(
+                AssistantConversation.id == referenced_id,
+                AssistantConversation.teacher_id == teacher_id,
+            ))
+            if referenced:
+                excerpt = _plain(context.get("referenced_conversation_excerpt"), 520) or _conversation_excerpt(
+                    _json(referenced.messages_json, []), terms
+                )
+                records.append(_citation(
+                    "已引用的历史对话", referenced.title, excerpt or "已引用这段对话；请结合标题和后续问题继续讨论。",
+                    referenced.id, "teachingAssistant", referenced.updated_at,
+                ))
+
+    wants_conversation_history = any(phrase in message for phrase in (
+        "之前的对话", "之前对话", "历史对话", "上次对话", "之前聊过", "之前说过", "我们之前聊",
+        "以前的聊天", "聊天记录", "对话记录", "引用之前", "引用对话",
+    ))
+    if wants_conversation_history:
+        previous_rows = db.scalars(select(AssistantConversation).where(
+            AssistantConversation.teacher_id == teacher_id,
+            AssistantConversation.id != (conversation_id or -1),
+        ).order_by(AssistantConversation.updated_at.desc()).limit(40)).all()
+        candidates = []
+        for previous in previous_rows:
+            messages = _json(previous.messages_json, [])
+            joined = (previous.title or "") + " " + " ".join(
+                str(item.get("content") or "") for item in messages if isinstance(item, dict)
+            )
+            matching = sum(1 for term in terms if term.lower() in joined.lower())
+            if matching or not terms:
+                excerpt = _conversation_excerpt(messages, terms)
+                candidates.append((matching, previous, excerpt))
+        candidates.sort(key=lambda item: (item[0], item[1].updated_at or datetime.min), reverse=True)
+        for _, previous, excerpt in candidates[:3]:
+            records.append(_citation(
+                "历史对话", previous.title or "未命名对话",
+                excerpt or "这段对话没有可展示的文字内容。", previous.id, "teachingAssistant", previous.updated_at,
+            ))
 
     # Contextual entry points must retrieve their exact parent record even when the
     # teacher's first message uses pronouns such as “这份” or “这条反馈”.
@@ -668,11 +765,20 @@ def _retrieve(db: Session, teacher_id: int, message: str, context: dict) -> list
     # Prefer records whose titles and evidence actually match this turn, while retaining
     # a bounded, varied set so audio, arrangements, resources, and feedback are not starved.
     terms_lower = [term.lower() for term in terms]
+    recent_source_rows = context.get("recent_sources") if isinstance(context.get("recent_sources"), list) else []
+    recent_source_ids = {
+        (str(item.get("kind") or ""), item.get("id") if isinstance(item.get("id"), int) else 0)
+        for item in recent_source_rows if isinstance(item, dict)
+    }
     def relevance(item):
         text = (item.get("label", "") + " " + item.get("detail", "")).lower()
         return sum(2 if term in item.get("label", "").lower() else 1 for term in terms_lower if term in text)
     if terms_lower:
-        records.sort(key=relevance, reverse=True)
+        records.sort(key=lambda item: (
+            1 if wants_conversation_history and item.get("kind") == "历史对话" else 0,
+            1 if refers_to_recent_sources and (str(item.get("kind") or ""), int(item.get("id") or 0)) in recent_source_ids else 0,
+            relevance(item),
+        ), reverse=True)
     else:
         records.sort(key=lambda item: item.get("updated_at") or "", reverse=True)
     counts: dict[str, int] = {}
@@ -693,7 +799,29 @@ def _retrieve(db: Session, teacher_id: int, message: str, context: dict) -> list
 
 
 def _is_lookup(message: str) -> bool:
-    return any(word in message for word in ("找", "查", "检索", "以前", "之前", "历史", "回看", "有没有", "搜一下", "找出来"))
+    lookup_language = any(word in message for word in ("找", "查", "检索", "以前", "之前", "历史", "回看", "有没有", "搜一下", "找出来"))
+    project_scope = any(word in message for word in (
+        "教案", "课堂反馈", "班级", "歌曲", "教学资源", "资源库", "音频", "录音", "编曲", "乐器", "乐理", "易错", "对话", "聊天", "记录",
+    ))
+    return lookup_language and project_scope
+
+
+def _is_refine_search_request(message: str) -> bool:
+    return any(phrase in message for phrase in (
+        "换个条件再找", "换个条件找", "换一个条件", "换个年级", "按别的条件", "换个方向找",
+    ))
+
+
+def _is_contextual_short_reply(message: str, history: list[dict]) -> bool:
+    text = message.strip()
+    if len(text) > 28 or not history:
+        return False
+    last_assistant = next((item for item in reversed(history) if isinstance(item, dict) and item.get("role") == "assistant"), None)
+    if not last_assistant:
+        return False
+    prompt = str(last_assistant.get("content") or "")
+    asks = ("？" in prompt or "?" in prompt or any(phrase in prompt for phrase in ("你可以选择", "告诉我", "先确认", "哪一种")))
+    return asks and bool(re.fullmatch(r"[\u4e00-\u9fffA-Za-z0-9、，。！？!?\s]{1,28}", text))
 
 
 def _is_song_recommendation(message: str) -> bool:
@@ -760,6 +888,12 @@ def _follow_up_suggestions(message: str, sources: list[dict], actions: list[dict
     """Offer a few relevant next moves without turning every reply into a checklist."""
     if actions:
         return []
+    history_source = next((item for item in sources if item.get("kind") == "历史对话"), None)
+    if history_source:
+        return [
+            {"label": "引用这段对话继续聊", "message": "请结合我引用的这段旧对话，继续回答我刚才的问题", "conversation_id": history_source.get("id")},
+            {"label": "打开原对话", "message": "打开这段历史对话", "conversation_id": history_source.get("id"), "action": "open_conversation"},
+        ]
     if any(word in message for word in ("课堂反馈", "课后反馈", "反馈", "课堂表现")):
         return [
             {"label": "按班级继续查看", "message": "我想按班级继续查看课堂反馈"},
@@ -780,11 +914,11 @@ def _follow_up_suggestions(message: str, sources: list[dict], actions: list[dict
 
 
 def _should_retrieve(message: str, context: dict) -> bool:
-    if any(context.get(key) for key in ("class_id", "lesson_id", "feedback_id", "audio_analysis_id", "teacher_observations")):
+    if any(context.get(key) for key in ("class_id", "lesson_id", "feedback_id", "audio_analysis_id", "teacher_observations", "referenced_conversation_id")):
         return True
     return any(word in message for word in (
         "教案", "课堂反馈", "班级", "歌曲", "资源库", "音频", "录音", "编曲", "乐器", "音色",
-        "以前", "之前", "历史", "上次", "记录", "游戏", "乐理", "易错", "反馈",
+        "以前", "之前", "历史", "上次", "对话", "聊天", "引用", "记录", "游戏", "乐理", "易错", "反馈",
     ))
 
 
@@ -839,10 +973,13 @@ def _is_lesson_action(message: str, context: dict | None = None) -> bool:
 def _lookup_reply(records: list[dict]) -> str:
     if not records:
         return "我暂时没有找到匹配的记录。你可以告诉我班级、歌曲或大概时间，我再帮你缩小范围。"
+    history_records = [item for item in records if item.get("kind") == "历史对话"]
+    if history_records:
+        return f"找到 {len(history_records)} 段可能相关的旧对话。我把标题和相关问答放在下方资料里，你可以展开查看、引用到当前对话，或直接打开原对话。"
     lines = ["我找到了几条相关记录，先把最接近的列给你："]
     for item in records[:4]:
-        detail = _plain(item.get("detail", ""), 110)
-        lines.append(f"• {item['label']}（{item['kind']}）" + (f"：{detail}" if detail else ""))
+        detail = _plain(item.get("detail", ""), 70)
+        lines.append(f"• {item['label']} · {item['kind']}" + (f"：{detail}" if detail else ""))
     return "\n".join(lines)
 
 
@@ -983,7 +1120,7 @@ def send_message(
             )
             suggestions = _class_scope_suggestions(profiles, message)
         elif _is_song_recommendation(message):
-            sources = _retrieve(db, teacher.id, message, context) if _should_retrieve(message, context) else []
+            sources = _retrieve(db, teacher.id, message, context, row.id) if _should_retrieve(message, context) else []
             reply, sources, actions = _recommendation_response(db, teacher.id, message, context)
             if not actions and "哪个班" in reply:
                 suggestions = [{
@@ -991,25 +1128,47 @@ def send_message(
                     "message": f"给{profile.name}推荐几首适合的歌曲",
                     "class_id": int(profile.id),
                 } for profile in profiles[:5] if profile.name]
-        elif _is_lookup(message):
-            sources = _retrieve(db, teacher.id, message, context) if _should_retrieve(message, context) else []
-            reply = _lookup_reply(sources)
-            actions = []
+        elif _is_refine_search_request(message):
+            sources, actions = [], []
+            grades = sorted({f"{profile.grade}年级" for profile in profiles if profile.grade})
+            suggestions = [
+                {"label": f"{grade} · 节奏练习", "message": f"按{grade}找适合节奏练习的教学资源"}
+                for grade in grades[:3]
+            ]
+            suggestions.extend([
+                {"label": "识谱练习", "message": "找适合识谱练习的歌曲或课堂活动"},
+                {"label": "无音箱也能上", "message": "找不需要音箱、可以现场带做的音乐活动"},
+                {"label": "按歌曲筛选", "message": "按歌曲和适用年级筛选教学资源"},
+            ])
+            reply = "好呀，我们换个方向慢慢找。你更想按哪个条件筛？可以点下面的选项，也可以直接告诉我年级、课堂目标、歌曲或设备限制。"
         elif _is_lesson_action(message, context):
-            sources = _retrieve(db, teacher.id, message, context) if _should_retrieve(message, context) else []
+            sources = _retrieve(db, teacher.id, message, context, row.id) if _should_retrieve(message, context) else []
             source_text = _compact_sources(sources)
             reply = (
-                (f"我找到了可参考的资料：{source_text}。" if source_text else "我记下了这次备课方向，目前没有找到可直接引用的历史记录。")
-                + "点下面的按钮后，我们会在教案生成页继续核对班级、歌曲和课时，再由你决定是否生成或调整。"
+                (f"我把这次提到的资料带上了：{source_text}。" if source_text else "我记下了这次备课方向；暂时没有找到能直接引用的旧记录。")
+                + "点下面的按钮进入教案助手，我们会接着核对班级、歌曲和课时；你确认后才会生成。"
             )
-            actions = [{"type": "open_lesson_planner", "label": "带入教案助手"}]
+            actions = [{"type": "open_lesson_planner", "label": "继续准备教案"}]
+        elif _is_contextual_short_reply(message, history):
+            sources = _retrieve(db, teacher.id, message, context, row.id) if _should_retrieve(message, context) else []
+            retrieval_context = {
+                "entry_context": context,
+                "retrieved_records": sources,
+                "response_style": "结合上一轮你提出的问题解释用户的简短回答。若对方只回复数字，要对照你刚才给出的编号选项；没有编号依据时就自然追问，不要自己猜。保持温和、简短、像连续聊天。",
+            }
+            reply = reply_to_lesson_dialogue(message, history[-16:], retrieval_context)
+            actions = []
+        elif _is_lookup(message):
+            sources = _retrieve(db, teacher.id, message, context, row.id) if _should_retrieve(message, context) else []
+            reply = _lookup_reply(sources)
+            actions = []
         else:
-            sources = _retrieve(db, teacher.id, message, context) if _should_retrieve(message, context) else []
+            sources = _retrieve(db, teacher.id, message, context, row.id) if _should_retrieve(message, context) else []
             retrieval_context = {
                 "entry_context": context,
                 "retrieved_records": sources,
                 "response_style": (
-                    "温暖自然，先回应本轮问题；不套固定格式，不重复用户原话。只引用本轮检索到且范围匹配的事实。"
+                    "温暖自然，先回应本轮问题；不套固定格式，不重复用户原话。用户聊到项目内的历史记录时，只引用本轮检索到且范围匹配的事实；普通知识、闲聊或偏离项目主题的问题，可以直接用你的通用知识回答，不要硬拉回固定流程。"
                     "不得根据最近记录猜测用户指的是哪个班，不得把教案计划写成已发生的课堂事实，也不得编造日期、学生表现、反馈或音频结论。"
                     "信息不足或指代不清时，先用一句自然的话询问关键条件；不要自行生成教案或课堂反馈，也不要声称已保存或已修改。"
                 ),
@@ -1019,7 +1178,7 @@ def send_message(
                 [{"role": item.get("role"), "content": (
                     _naturalize_dialogue_answer(str(item.get("content", "")))[:1200]
                     if item.get("role") == "assistant" else str(item.get("content", ""))[:1200]
-                )} for item in history[-10:] if isinstance(item, dict) and item.get("role") in {"user", "assistant"}],
+                )} for item in history[-16:] if isinstance(item, dict) and item.get("role") in {"user", "assistant"}],
                 retrieval_context,
             )
             actions = []
@@ -1038,6 +1197,13 @@ def send_message(
         "sources": sources, "actions": actions, "suggestions": suggestions,
         "created_at": datetime.utcnow().isoformat(timespec="seconds"),
     }
+    if sources:
+        context["recent_sources"] = [{
+            "kind": item.get("kind"), "label": item.get("label"), "detail": item.get("detail"),
+            "id": item.get("id"), "route": item.get("route"), "updated_at": item.get("updated_at"),
+        } for item in sources[:5]]
+        context["recent_sources_class_id"] = int(context["class_id"]) if context.get("class_id") else None
+        row.context_json = json.dumps(context, ensure_ascii=False)
     history.extend([user_item, assistant_item])
     row.messages_json = json.dumps(history[-200:], ensure_ascii=False)
     if row.title == "新对话":

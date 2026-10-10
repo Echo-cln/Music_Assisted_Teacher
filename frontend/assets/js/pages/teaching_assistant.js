@@ -43,12 +43,14 @@ export async function renderTeachingAssistant(container) {
       </aside>
       <section class="teaching-assistant-main">
         <div class="assistant-context-bar">
-          <label>本次讨论的班级
-            <select id="assistantClass"><option value="">不限班级 · 可查全部授权资料</option>${classes.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join("")}</select>
-          </label>
-          <span id="assistantContextBadge"></span>
-          <button class="link" id="clearAssistantContext">清除当前来源</button>
-          <button class="btn soft" id="openLessonPlanner">去教案生成</button>
+          <div class="assistant-context-select"><span>本次讨论</span>
+            <select id="assistantClass" aria-label="选择班级范围"><option value="">不限班级 · 可查全部授权资料</option>${classes.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join("")}</select>
+          </div>
+          <span class="assistant-context-status" id="assistantContextBadge"></span>
+          <div class="assistant-context-actions">
+            <button class="assistant-context-clear" id="clearAssistantContext">清除上下文</button>
+            <button class="btn soft assistant-context-planner" id="openLessonPlanner">继续备课</button>
+          </div>
         </div>
         <div class="assistant-chat-scroll" id="assistantChat" aria-live="polite"></div>
         <form class="assistant-hub-composer" id="assistantHubForm">
@@ -71,6 +73,7 @@ export async function renderTeachingAssistant(container) {
     list.innerHTML = conversations.length ? conversations.map(item => `
       <div class="assistant-session-row ${activeConversation?.id === item.id ? "active" : ""}">
         <button class="assistant-session-open" data-session-id="${item.id}"><b>${esc(item.title)}</b><small>${esc(item.updated_at || "")}</small></button>
+        <button class="assistant-session-reference" aria-label="引用到当前对话" title="引用到当前对话" data-reference-session="${item.id}">↗</button>
         <button class="assistant-session-rename" aria-label="重命名对话" data-rename-session="${item.id}">✎</button>
         <button class="assistant-session-delete" aria-label="删除对话" data-delete-session="${item.id}">×</button>
       </div>`).join("") : '<p class="assistant-empty-history">新对话会保存在这里。</p>';
@@ -90,6 +93,9 @@ export async function renderTeachingAssistant(container) {
       if (activeConversation?.id === updated.id) activeConversation = { ...activeConversation, ...updated };
       renderConversationList();
     });
+    list.querySelectorAll("[data-reference-session]").forEach(button => button.onclick = async () => {
+      await referenceConversation(Number(button.dataset.referenceSession));
+    });
     list.querySelectorAll("[data-delete-session]").forEach(button => button.onclick = async () => {
       if (!confirm("删除这段对话？删除后无法恢复。")) return;
       await api.deleteAssistantConversation(Number(button.dataset.deleteSession));
@@ -100,6 +106,36 @@ export async function renderTeachingAssistant(container) {
       }
       renderConversationList();
     });
+  }
+
+  async function referenceConversation(conversationId) {
+    const source = await api.assistantConversation(conversationId);
+    if (!source?.id) return notify("没有找到这段对话", "error");
+    if (!activeConversation || activeConversation.id === source.id) {
+      const selectedClassId = Number(document.getElementById("assistantClass")?.value) || null;
+      const profile = classes.find(item => Number(item.id) === selectedClassId);
+      activeConversation = await api.createAssistantConversation({ context: {
+        class_id: selectedClassId, class_name: profile?.name || null,
+      } });
+      conversations.unshift(activeConversation);
+    }
+    const excerpt = (source.messages || []).slice(-10).map(item => {
+      const role = item.role === "user" ? "教师" : "助手";
+      const content = String(item.content || "").replace(/\s+/g, " ").slice(0, 220);
+      return content ? `${role}：${content}` : "";
+    }).filter(Boolean).join("\n").slice(-1400);
+    activeConversation = await api.updateAssistantConversation(activeConversation.id, {
+      context: {
+        ...(activeConversation.context || {}),
+        referenced_conversation_id: source.id,
+        referenced_conversation_title: source.title || "历史对话",
+        referenced_conversation_excerpt: excerpt,
+      },
+    });
+    conversations = [activeConversation, ...conversations.filter(item => item.id !== activeConversation.id)];
+    renderConversationList();
+    paintConversation();
+    notify(`已把“${source.title || "历史对话"}”引用到当前对话`);
   }
 
   function showWelcome() {
@@ -126,8 +162,11 @@ export async function renderTeachingAssistant(container) {
   function paintConversation() {
     if (!activeConversation) return showWelcome();
     const context = activeConversation.context || {};
-    document.getElementById("assistantContextBadge").textContent =
-      context.source_label ? `正在参考：${context.source_label}` : (contextLabel(context) ? `班级：${contextLabel(context)}` : "");
+    const contextBadges = [];
+    if (context.referenced_conversation_title) contextBadges.push(`引用对话：${context.referenced_conversation_title}`);
+    if (context.source_label) contextBadges.push(`来源：${context.source_label}`);
+    else if (contextLabel(context)) contextBadges.push(`班级：${contextLabel(context)}`);
+    document.getElementById("assistantContextBadge").textContent = contextBadges.join(" · ");
     const chat = document.getElementById("assistantChat");
     const messages = activeConversation.messages || [];
     if (!messages.length) {
@@ -139,9 +178,9 @@ export async function renderTeachingAssistant(container) {
         <span class="assistant-hub-avatar">${item.role === "user" ? "我" : "助"}</span>
         <div class="assistant-hub-message-body"><div class="assistant-hub-message-content">${esc(item.content).replace(/\n/g, "<br>")}</div>
         ${item.sources?.length ? `<details class="assistant-source-list"><summary>参考了 ${item.sources.length} 条资料</summary><div>${item.sources.map(source => `
-          <div class="assistant-source-card"><span>${esc(source.kind)}</span><b>${esc(source.label)}</b><p>${esc(source.detail)}</p><small>${source.updated_at ? "记录时间：" + esc(source.updated_at) : "来自项目现有资料"}</small></div>`).join("")}</div></details>` : ""}
+          <div class="assistant-source-card"><span>${esc(source.kind)}</span><b>${esc(source.label)}</b><p>${esc(source.detail)}</p><small>${source.updated_at ? "记录时间：" + esc(source.updated_at) : "来自项目现有资料"}</small>${source.id && ["历史对话", "已引用的历史对话"].includes(source.kind) ? `<button type="button" class="assistant-source-open" data-open-cited-conversation="${source.id}">打开这段对话</button>` : ""}</div>`).join("")}</div></details>` : ""}
         ${item.actions?.map(action => `<button class="btn soft assistant-action" data-assistant-action="${esc(action.type)}" data-song-name="${esc(action.song_name || "")}" data-class-id="${action.class_id || ""}" data-lesson-id="${action.lesson_id || ""}">${esc(action.label)}</button>`).join("") || ""}
-        ${item.suggestions?.length ? `<div class="assistant-reply-suggestions" aria-label="接下来可以做什么">${item.suggestions.map(suggestion => `<button type="button" class="assistant-reply-chip" data-suggestion-message="${esc(suggestion.message)}" data-suggestion-class="${suggestion.class_id || ""}">${esc(suggestion.label)}</button>`).join("")}</div>` : ""}
+        ${item.suggestions?.length ? `<div class="assistant-reply-suggestions" aria-label="接下来可以做什么">${item.suggestions.map(suggestion => `<button type="button" class="assistant-reply-chip" data-suggestion-message="${esc(suggestion.message)}" data-suggestion-class="${suggestion.class_id || ""}" data-conversation-id="${suggestion.conversation_id || ""}" data-suggestion-action="${suggestion.action || ""}">${esc(suggestion.label)}</button>`).join("")}</div>` : ""}
         </div>
       </article>`).join("");
     chat.scrollTop = chat.scrollHeight;
@@ -179,7 +218,24 @@ export async function renderTeachingAssistant(container) {
       localStorage.setItem("classroomFeedbackInitialTab", "feedback");
       window.dispatchEvent(new CustomEvent("app:navigate", { detail: "lessons" }));
     });
+    chat.querySelectorAll("[data-open-cited-conversation]").forEach(button => button.onclick = async () => {
+      activeConversation = await api.assistantConversation(Number(button.dataset.openCitedConversation));
+      document.getElementById("assistantClass").value = activeConversation.context?.class_id || "";
+      conversations = [activeConversation, ...conversations.filter(item => item.id !== activeConversation.id)];
+      renderConversationList();
+      paintConversation();
+    });
     chat.querySelectorAll("[data-suggestion-message]").forEach(button => button.onclick = async () => {
+      const referenceId = Number(button.dataset.conversationId) || null;
+      if (button.dataset.suggestionAction === "open_conversation" && referenceId) {
+        activeConversation = await api.assistantConversation(referenceId);
+        document.getElementById("assistantClass").value = activeConversation.context?.class_id || "";
+        conversations = [activeConversation, ...conversations.filter(item => item.id !== activeConversation.id)];
+        renderConversationList();
+        paintConversation();
+        return;
+      }
+      if (referenceId) await referenceConversation(referenceId);
       const classId = Number(button.dataset.suggestionClass) || null;
       if (classId && activeConversation) {
         const profile = classes.find(item => Number(item.id) === classId);
@@ -213,7 +269,14 @@ export async function renderTeachingAssistant(container) {
       const oldContext = activeConversation.context || {};
       const classChanged = Number(oldContext.class_id || 0) !== Number(id || 0);
       const context = classChanged
-        ? { class_id: id, class_name: profile?.name || null }
+        ? {
+          class_id: id, class_name: profile?.name || null,
+          ...(oldContext.referenced_conversation_id ? {
+            referenced_conversation_id: oldContext.referenced_conversation_id,
+            referenced_conversation_title: oldContext.referenced_conversation_title,
+            referenced_conversation_excerpt: oldContext.referenced_conversation_excerpt,
+          } : {}),
+        }
         : { ...oldContext, class_id: id, class_name: profile?.name || null };
       activeConversation = await api.updateAssistantConversation(activeConversation.id, { context });
       paintConversation();

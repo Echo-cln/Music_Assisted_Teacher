@@ -5,25 +5,35 @@ from sqlalchemy.pool import StaticPool
 from types import SimpleNamespace
 
 from app.db.session import Base
-from app.models.entities import ArrangementProject, ClassProfile, ClassroomRecord, Feedback, LessonPlan, Song
+from app.models.entities import ArrangementProject, AssistantConversation, ClassProfile, ClassroomRecord, Feedback, LessonPlan, Song
 from fastapi import HTTPException
 
 from app.api.routes.feedback import _audio_link_mismatch, _validate_audio_link
 from app.api.routes.teaching_assistant import (
     _analysis_detail, _class_scope_suggestions, _is_blank_feedback_form_request,
     _is_feedback_creation_request, _is_observation_offer, _is_lesson_action, _is_lookup,
-    _is_all_class_request, _plain, _present, _requires_class_scope, _retrieve, _terms,
+    _is_all_class_request, _is_contextual_short_reply, _is_refine_search_request,
+    _plain, _present, _requires_class_scope, _retrieve, _terms,
 )
 from app.services.ai_provider import _naturalize_dialogue_answer
 
 
 def test_intent_guards_keep_lookup_separate_from_lesson_actions():
     assert _is_lookup("帮我找一下四年级1班之前的教案")
+    assert not _is_lookup("我找不到合适的答案，你能解释一下吗")
+    assert _is_lookup("结合刚才找到的课堂反馈，和我一起准备一份教案")
+    assert _is_lesson_action("结合刚才找到的课堂反馈，和我一起准备一份教案")
     assert not _is_lesson_action("先解释为什么安排节奏接龙，不要改教案")
     assert _is_lesson_action("根据这条课堂反馈调整教案", {"type": "feedback"})
     assert "茉莉花" in _terms("请找《茉莉花》节奏练习的历史教案")
     assert "古筝" in _terms("四年级1班想找古筝编曲")
     assert "class_name" not in _plain("{'class_name': '三年级1班', 'duration': 40}")
+
+
+def test_refinement_asks_for_criteria_and_short_answers_use_recent_question():
+    assert _is_refine_search_request("换一个年级或课堂目标再帮我找找")
+    assert _is_contextual_short_reply("11", [{"role": "assistant", "content": "你想要哪一种？可以选 1 或 2。"}])
+    assert not _is_contextual_short_reply("11", [{"role": "assistant", "content": "我找到了几条资源。"}])
 
 
 def test_assistant_asks_for_class_instead_of_guessing_feedback_scope():
@@ -131,7 +141,18 @@ def test_retrieval_returns_class_feedback_and_arrangement_for_the_owner_only():
             id=16, teacher_id=7, title="茉莉花古筝编曲", source_kind="manual", tempo=92,
             style="乡土抒情", melody_json="[]", arrangement_json='{"instruments":["古筝"]}',
         )
-        db.add_all([profile, song, plan, record, feedback, project])
+        old_conversation = AssistantConversation(
+            id=30, teacher_id=7, title="节奏接龙课堂复盘", context_json="{}",
+            messages_json=json.dumps([
+                {"role": "user", "content": "之前试过节奏接龙，学生后半段会加快。"},
+                {"role": "assistant", "content": "可以先用固定拍手脉冲，再逐步加入歌词。"},
+            ], ensure_ascii=False),
+        )
+        private_conversation = AssistantConversation(
+            id=31, teacher_id=99, title="节奏接龙私人对话", context_json="{}",
+            messages_json='[{"role":"user","content":"节奏接龙"}]',
+        )
+        db.add_all([profile, song, plan, record, feedback, project, old_conversation, private_conversation])
         db.commit()
 
         found = _retrieve(db, 7, "四年级1班茉莉花节奏反馈和古筝编曲", {"class_id": 11})
@@ -139,6 +160,19 @@ def test_retrieval_returns_class_feedback_and_arrangement_for_the_owner_only():
         assert "课堂反馈" in kinds
         assert "编曲工程" in kinds
         assert any("节奏越唱越快" in item["detail"] for item in found)
+
+        past = _retrieve(db, 7, "帮我找之前的对话：节奏接龙", {"class_id": 11}, conversation_id=50)
+        historical = [item for item in past if item["kind"] == "历史对话"]
+        assert len(historical) == 1
+        assert historical[0]["id"] == 30
+        assert "固定拍手脉冲" in historical[0]["detail"]
+
+        quoted = _retrieve(db, 7, "继续聊这个活动", {
+            "referenced_conversation_id": 30,
+            "referenced_conversation_title": "节奏接龙课堂复盘",
+            "referenced_conversation_excerpt": "教师：之前试过节奏接龙。",
+        }, conversation_id=51)
+        assert any(item["kind"] == "已引用的历史对话" and item["id"] == 30 for item in quoted)
         try:
             _retrieve(db, 99, "四年级1班茉莉花", {"class_id": 11})
         except HTTPException as exc:
