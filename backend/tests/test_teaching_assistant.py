@@ -13,7 +13,7 @@ from app.api.routes.teaching_assistant import (
     _analysis_detail, _class_scope_suggestions, _is_blank_feedback_form_request,
     _is_feedback_creation_request, _is_observation_offer, _is_lesson_action, _is_lookup,
     _is_all_class_request, _is_contextual_short_reply, _is_refine_search_request,
-    _plain, _present, _requires_class_scope, _retrieve, _terms, _requested_class_change, _today_question_reply,
+    _plain, _present, _requires_class_scope, _retrieve, _terms, _requested_class_change, _today_question_reply, _is_weather_question, _weather_location,
 )
 from app.services.ai_provider import _naturalize_dialogue_answer
 
@@ -188,3 +188,7 @@ def test_class_scope_change_requires_confirmation_intent_and_today_question_is_a
     answer = _today_question_reply("今天周几了？")
     assert answer and "星期" in answer and "今天是" in answer
     assert _today_question_reply("这周几节音乐课") is None
+    assert _today_question_reply("现在几点了") and "北京时间" in _today_question_reply("现在几点了")
+    assert _is_weather_question("天气如何")
+    assert _weather_location("帮我查一下广州今天的天气") == "广州"
+    assert _weather_location("天气如何") is None

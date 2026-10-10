@@ -6,6 +6,9 @@ import re
 import ast
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from urllib.error import URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -851,6 +854,93 @@ def _requires_class_scope(message: str, context: dict, profiles: list[ClassProfi
     return any(phrase in message for phrase in class_sensitive) or (len(profiles) > 1 and refers_to_feedback_history)
 
 
+def _weather_location(message: str) -> str | None:
+    text = re.sub(r"\s+", "", message or "")
+    if not any(word in text.lower() for word in ("天气", "weather")):
+        return None
+    if "weather" in text.lower():
+        match = re.search(r"(?:weather\s+(?:in|for)\s+)([A-Za-z .'-]{2,50})", text, re.I)
+        return match.group(1).strip(" .,-") if match else None
+    prefix = text.split("天气", 1)[0]
+    prefix = re.sub(r"^(?:麻烦帮我|我想知道|我想看|请帮我|麻烦|请问|告诉我|帮我|帮忙|请|查询|查一下|查|看看|看一下|想知道|今天|现在|当前|此刻|在)+", "", prefix)
+    prefix = re.sub(r"(?:今天|现在|当前|此刻|的|一下|下|如何|怎么样|怎样)+$", "", prefix)
+    if prefix in {"", "本地", "当地", "这里", "这边", "外面", "教室", "今天", "现在"}:
+        return None
+    return prefix[:50] if len(prefix) >= 2 else None
+
+
+def _is_weather_question(message: str) -> bool:
+    lowered = (message or "").lower()
+    return any(word in lowered for word in ("天气", "weather"))
+
+
+def _live_weather_reply(message: str) -> tuple[str, list[dict]]:
+    location = _weather_location(message)
+    if not location:
+        return "可以查。你想看哪个城市的天气？告诉我城市名，我再查当前天气和今天的预报。", []
+    try:
+        geo_url = "https://geocoding-api.open-meteo.com/v1/search?" + urlencode({
+            "name": location, "count": 5, "language": "zh", "format": "json",
+        })
+        request = Request(geo_url, headers={"User-Agent": "MusicAssistedTeacher/1.0"})
+        with urlopen(request, timeout=4) as response:
+            geo = json.loads(response.read().decode("utf-8"))
+        matches = geo.get("results") or []
+        if not matches:
+            return f"我没找到“{location}”对应的地点。你可以告诉我更完整的城市名，例如“广州”或“厦门”。", []
+        place = next((item for item in matches if item.get("country_code") == "CN"), matches[0])
+        params = {
+            "latitude": place["latitude"], "longitude": place["longitude"],
+            "current": "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,wind_speed_10m",
+            "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+            "forecast_days": 1, "timezone": "auto",
+        }
+        weather_url = "https://api.open-meteo.com/v1/forecast?" + urlencode(params)
+        request = Request(weather_url, headers={"User-Agent": "MusicAssistedTeacher/1.0"})
+        with urlopen(request, timeout=5) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        current = data.get("current") or {}
+        daily = data.get("daily") or {}
+        if current.get("temperature_2m") is None:
+            raise ValueError("weather response has no current temperature")
+        code = int(current.get("weather_code", -1))
+        descriptions = {
+            0: "晴", 1: "大致晴朗", 2: "局部多云", 3: "阴", 45: "有雾", 48: "有雾凇",
+            51: "毛毛雨", 53: "中等毛毛雨", 55: "较强毛毛雨", 56: "冻毛毛雨", 57: "强冻毛毛雨",
+            61: "小雨", 63: "中雨", 65: "大雨", 66: "冻雨", 67: "强冻雨",
+            71: "小雪", 73: "中雪", 75: "大雪", 77: "雪粒", 80: "阵雨", 81: "较强阵雨", 82: "强阵雨",
+            85: "阵雪", 86: "强阵雪", 95: "雷暴", 96: "雷暴并有小冰雹", 99: "强雷暴并有冰雹",
+        }
+        name = " ".join(str(value) for value in (place.get("admin1"), place.get("name")) if value)
+        temp = round(float(current["temperature_2m"]))
+        feels = current.get("apparent_temperature")
+        summary = descriptions.get(code, "天气情况以当地实况为准")
+        updated = str(current.get("time") or "")
+        details = [f"当前：{summary}，{temp}℃"]
+        if feels is not None:
+            details.append(f"体感{round(float(feels))}℃")
+        if current.get("relative_humidity_2m") is not None:
+            details.append(f"湿度{round(float(current['relative_humidity_2m']))}%")
+        if current.get("wind_speed_10m") is not None:
+            details.append(f"风速{round(float(current['wind_speed_10m']))}公里/小时")
+        high = (daily.get("temperature_2m_max") or [None])[0]
+        low = (daily.get("temperature_2m_min") or [None])[0]
+        rain = (daily.get("precipitation_probability_max") or [None])[0]
+        if high is not None and low is not None:
+            details.append(f"今日{round(float(low))}–{round(float(high))}℃")
+        if rain is not None:
+            details.append(f"降水概率{round(float(rain))}%")
+        reply = f"{name}现在{summary}，气温{temp}℃。" + "；".join(details[1:]) + f"。天气模型数据更新时间：{updated}（当地时间），来源 Open-Meteo。"
+        sources = [{
+            "kind": "实时天气", "label": f"{name}天气", "detail": "；".join(details) + "；来源：Open-Meteo 天气预报模型",
+            "updated_at": updated, "route": "Open-Meteo 天气预报",
+        }]
+        return reply, sources
+    except (URLError, TimeoutError, ValueError, KeyError, json.JSONDecodeError) as exc:
+        logger.warning("weather_lookup_failed location=%s error=%s", location, exc)
+        return f"我暂时没能连上天气数据源，没法可靠地告诉你{location}的当前天气。你可以稍后重试；我不会用模型猜一个天气结果。", []
+
+
 def _requested_class_change(message: str, profiles: list[ClassProfile]):
     """Return a class only when the user explicitly phrases a scope switch."""
     text = re.sub(r"\s+", "", message or "")
@@ -870,11 +960,22 @@ def _requested_class_change(message: str, profiles: list[ClassProfile]):
 
 def _today_question_reply(message: str) -> str | None:
     text = re.sub(r"\s+", "", message or "")
-    if not re.search(r"今天.*(?:周几|星期几|星期|几号|日期)|今天是(?:几号|星期几|周几)", text):
+    asks_date = bool(re.search(r"今天.*(?:周几|星期几|星期|几号|日期)|今天是(?:几号|星期几|周几)", text))
+    asks_time = bool(re.search(r"(?:几点(?:了|钟)?|现在时间|当前时间|时间是多少)", text))
+    if not asks_date and not asks_time:
         return None
-    today = datetime.now(ZoneInfo("Asia/Shanghai"))
+    try:
+        now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    except Exception:
+        from datetime import timedelta, timezone
+        now = datetime.now(timezone(timedelta(hours=8)))
     weekdays = ("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")
-    return f"今天是{today.year}年{today.month}月{today.day}日，{weekdays[today.weekday()]}。"
+    parts = []
+    if asks_date:
+        parts.append(f"今天是{now.year}年{now.month}月{now.day}日，{weekdays[now.weekday()]}")
+    if asks_time:
+        parts.append(f"北京时间{now.hour:02d}:{now.minute:02d}")
+    return "，".join(parts) + "。"
 
 
 def _class_scope_suggestions(profiles: list[ClassProfile], message: str) -> list[dict]:
@@ -1108,9 +1209,12 @@ def send_message(
         profiles = db.scalars(select(ClassProfile).where(ClassProfile.teacher_id == teacher.id)).all()
         class_switch = _requested_class_change(message, profiles)
         requested_today = _today_question_reply(message)
-        if requested_today:
+        if requested_today and not _is_weather_question(message):
             sources, actions = [], []
             reply = requested_today
+        elif _is_weather_question(message):
+            reply, sources = _live_weather_reply(message)
+            actions = []
         elif class_switch and int(context.get("class_id") or 0) != int(class_switch.id):
             sources, actions = [], []
             current_name = _plain(context.get("class_name"), 60) or next(

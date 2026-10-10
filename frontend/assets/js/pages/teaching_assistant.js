@@ -46,10 +46,8 @@ export async function renderTeachingAssistant(container) {
           <div class="assistant-context-select">
             <select id="assistantClass" aria-label="选择对话班级范围"><option value="">全部班级</option>${classes.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join("")}</select>
           </div>
-          <span class="assistant-context-status" id="assistantContextBadge"></span>
           <div class="assistant-context-actions">
-            <button class="assistant-context-clear" id="clearAssistantContext">清除上下文</button>
-            <button class="btn soft assistant-context-planner" id="openLessonPlanner">继续备课</button>
+            <button class="btn soft assistant-context-planner" id="openLessonPlanner">去教案生成</button>
           </div>
         </div>
         <div class="assistant-chat-scroll" id="assistantChat" aria-live="polite"></div>
@@ -162,10 +160,6 @@ export async function renderTeachingAssistant(container) {
   function paintConversation() {
     if (!activeConversation) return showWelcome();
     const context = activeConversation.context || {};
-    const contextBadges = [];
-    if (context.referenced_conversation_title) contextBadges.push(`引用对话：${context.referenced_conversation_title}`);
-    if (context.source_label) contextBadges.push(`来源：${context.source_label}`);
-    document.getElementById("assistantContextBadge").textContent = contextBadges.join(" · ");
     const chat = document.getElementById("assistantChat");
     const messages = activeConversation.messages || [];
     if (!messages.length) {
@@ -177,7 +171,7 @@ export async function renderTeachingAssistant(container) {
         <span class="assistant-hub-avatar">${item.role === "user" ? "我" : "助"}</span>
         <div class="assistant-hub-message-body"><div class="assistant-hub-message-content">${esc(item.content).replace(/\n/g, "<br>")}</div>
         ${item.sources?.length ? `<details class="assistant-source-list"><summary>参考了 ${item.sources.length} 条资料</summary><div>${item.sources.map(source => `
-          <div class="assistant-source-card"><span>${esc(source.kind)}</span><b>${esc(source.label)}</b><p>${esc(source.detail)}</p><small>${source.updated_at ? "记录时间：" + esc(source.updated_at) : "来自项目现有资料"}</small>${source.id && ["历史对话", "已引用的历史对话"].includes(source.kind) ? `<button type="button" class="assistant-source-open" data-open-cited-conversation="${source.id}">打开这段对话</button>` : ""}</div>`).join("")}</div></details>` : ""}
+          <div class="assistant-source-card"><span>${esc(source.kind)}</span><b>${esc(source.label)}</b><p>${esc(source.detail)}</p><small>${source.updated_at ? (source.kind === "实时天气" ? "数据更新时间：" : "记录时间：") + esc(source.updated_at) : "来自项目现有资料"}</small>${source.id && ["历史对话", "已引用的历史对话"].includes(source.kind) ? `<button type="button" class="assistant-source-open" data-open-cited-conversation="${source.id}">打开这段对话</button>` : ""}</div>`).join("")}</div></details>` : ""}
         ${item.actions?.map(action => `<button class="btn soft assistant-action" data-assistant-action="${esc(action.type)}" data-song-name="${esc(action.song_name || "")}" data-class-id="${action.class_id || ""}" data-lesson-id="${action.lesson_id || ""}">${esc(action.label)}</button>`).join("") || ""}
         ${item.suggestions?.length ? `<div class="assistant-reply-suggestions" aria-label="接下来可以做什么">${item.suggestions.map(suggestion => `<button type="button" class="assistant-reply-chip" data-suggestion-message="${esc(suggestion.message)}" data-suggestion-class="${suggestion.class_id || ""}" data-conversation-id="${suggestion.conversation_id || ""}" data-suggestion-action="${suggestion.action || ""}">${esc(suggestion.label)}</button>`).join("")}</div>` : ""}
         </div>
@@ -308,12 +302,6 @@ export async function renderTeachingAssistant(container) {
         }
         : { ...oldContext, class_id: id, class_name: profile?.name || null };
       activeConversation = await api.updateAssistantConversation(activeConversation.id, { context });
-      paintConversation();
-    };
-    document.getElementById("clearAssistantContext").onclick = async () => {
-      if (!activeConversation) return notify("先新建一段对话");
-      activeConversation = await api.updateAssistantConversation(activeConversation.id, { context: {} });
-      document.getElementById("assistantClass").value = "";
       paintConversation();
     };
     document.getElementById("openLessonPlanner").onclick = () => {
