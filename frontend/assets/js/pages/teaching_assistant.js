@@ -73,7 +73,7 @@ export async function renderTeachingAssistant(container) {
     list.innerHTML = conversations.length ? conversations.map(item => `
       <div class="assistant-session-row ${activeConversation?.id === item.id ? "active" : ""}">
         <button class="assistant-session-open" data-session-id="${item.id}"><b>${esc(item.title)}</b><small>${esc(item.updated_at || "")}</small></button>
-        <button class="assistant-session-reference" aria-label="引用到当前对话" title="引用到当前对话" data-reference-session="${item.id}">↗</button>
+        <button class="assistant-session-reference" aria-label="引用到当前对话" title="引用到当前对话" data-reference-session="${item.id}">引用</button>
         <button class="assistant-session-rename" aria-label="重命名对话" data-rename-session="${item.id}">✎</button>
         <button class="assistant-session-delete" aria-label="删除对话" data-delete-session="${item.id}">×</button>
       </div>`).join("") : '<p class="assistant-empty-history">新对话会保存在这里。</p>';
