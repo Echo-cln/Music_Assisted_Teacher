@@ -209,6 +209,9 @@ export async function renderTeachingAssistant(container) {
     });
     chat.querySelectorAll('[data-assistant-action="open_feedback_archive"]').forEach(button => button.onclick = () => {
       localStorage.setItem("classroomFeedbackInitialTab", "feedback");
+      const classId = Number(button.dataset.classId) || null;
+      if (classId) localStorage.setItem("classroomFeedbackInitialFilter", JSON.stringify({ class_id: classId }));
+      else localStorage.removeItem("classroomFeedbackInitialFilter");
       window.dispatchEvent(new CustomEvent("app:navigate", { detail: "lessons" }));
     });
     chat.querySelectorAll("[data-open-cited-conversation]").forEach(button => button.onclick = async () => {
@@ -229,6 +232,7 @@ export async function renderTeachingAssistant(container) {
         const nextContext = {
           class_id: classId,
           class_name: profile.name,
+          ...(oldContext.pending_scope_query ? { pending_scope_query: oldContext.pending_scope_query } : {}),
           ...(oldContext.referenced_conversation_id ? {
             referenced_conversation_id: oldContext.referenced_conversation_id,
             referenced_conversation_title: oldContext.referenced_conversation_title,

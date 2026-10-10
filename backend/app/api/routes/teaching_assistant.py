@@ -1091,6 +1091,12 @@ def _is_blank_feedback_form_request(message: str) -> bool:
     return any(word in message for word in ("空白反馈表", "空白课堂反馈", "打开反馈表", "打开课堂反馈页", "填写课堂反馈表"))
 
 
+def _is_feedback_archive_request(message: str) -> bool:
+    has_feedback = any(word in message for word in ("课堂反馈", "课后反馈", "反馈记录", "课堂表现"))
+    asks_to_review = any(word in message for word in ("查看", "回顾", "最近", "历史", "已有", "打开", "浏览"))
+    return has_feedback and asks_to_review and not _is_feedback_creation_request(message)
+
+
 def _follow_up_suggestions(message: str, sources: list[dict], actions: list[dict]) -> list[dict]:
     """Offer a few relevant next moves without turning every reply into a checklist."""
     if actions:
@@ -1292,14 +1298,35 @@ def send_message(
     teacher: Teacher = Depends(get_current_teacher),
 ):
     row = _owned_conversation(db, conversation_id, teacher.id, lock_for_update=True)
-    message = payload.message.strip()
-    if not message:
+    submitted_message = payload.message.strip()
+    if not submitted_message:
         raise HTTPException(status_code=422, detail="请先写下想讨论的内容")
+    message = submitted_message
     context = _json(row.context_json, {})
     history = _json(row.messages_json, [])
     suggestions: list[dict] = []
     try:
         profiles = db.scalars(select(ClassProfile).where(ClassProfile.teacher_id == teacher.id)).all()
+        # A class choice is a continuation of the question that was paused for scope
+        # confirmation. Keep the confirmation in chat history, but answer the saved query.
+        continued_query = None
+        continue_prefix = re.match(r"^继续(?:按当前班级)?查找：\s*(.+)$", message, re.S)
+        if continue_prefix:
+            continued_query = continue_prefix.group(1).strip()
+            context.pop("pending_scope_query", None)
+        else:
+            explicit_confirmation = bool(re.search(r"(?:我)?确认(?:切换|改用|按).{0,16}班|按这个班级继续", message))
+            requested_profile = _requested_class_change(message, profiles) if explicit_confirmation else None
+            if requested_profile:
+                context["class_id"] = int(requested_profile.id)
+                context["class_name"] = requested_profile.name
+                context.pop("recent_sources", None)
+                context.pop("recent_sources_class_id", None)
+                pending_query = context.pop("pending_scope_query", None)
+                if isinstance(pending_query, str) and pending_query.strip():
+                    continued_query = pending_query.strip()
+        if continued_query:
+            message = continued_query
         class_switch = _requested_class_change(message, profiles)
         requested_today = _today_question_reply(message)
         weather_followup_location = _weather_followup_location(message, history)
@@ -1338,15 +1365,48 @@ def send_message(
                 "lesson_id": context.get("lesson_id") if isinstance(context.get("lesson_id"), int) else None,
             }]
             reply = "好，我带你打开课堂反馈页。那里可以先选择已保存教案，再记录本节课实际观察到的情况；没有提供的课堂表现我不会替你补写。"
+        elif _is_feedback_archive_request(message):
+            sources = []
+            compact_message = re.sub(r"\s+", "", message or "")
+            mentioned_profile = next(
+                (profile for profile in profiles
+                 if profile.name and re.sub(r"\s+", "", str(profile.name)) in compact_message),
+                None,
+            )
+            feedback_class_id = None if _is_all_class_request(message) else (
+                int(mentioned_profile.id) if mentioned_profile else (
+                    context.get("class_id") if isinstance(context.get("class_id"), int) else None
+                )
+            )
+            actions = [{
+                "type": "open_feedback_archive", "label": "查看课堂反馈",
+                "class_id": feedback_class_id,
+            }]
+            scope_label = mentioned_profile.name if mentioned_profile else (
+                _plain(context.get("class_name"), 50) if feedback_class_id else "全部班级"
+            )
+            reply = f"好，我把{scope_label}的课堂反馈记录入口放在这里。点开后会按这个班级筛选。"
         elif _is_feedback_creation_request(message):
             sources, actions = [], []
-            if context.get("class_id") or context.get("lesson_id"):
+            compact_message = re.sub(r"\s+", "", message or "")
+            mentioned_profile = next(
+                (profile for profile in profiles
+                 if profile.name and re.sub(r"\s+", "", str(profile.name)) in compact_message),
+                None,
+            )
+            feedback_class_id = int(mentioned_profile.id) if mentioned_profile else (
+                context.get("class_id") if isinstance(context.get("class_id"), int) else None
+            )
+            if feedback_class_id or context.get("lesson_id"):
                 actions.append({
                     "type": "open_feedback_form", "label": "打开课堂反馈页",
-                    "class_id": context.get("class_id") if isinstance(context.get("class_id"), int) else None,
+                    "class_id": feedback_class_id,
                     "lesson_id": context.get("lesson_id") if isinstance(context.get("lesson_id"), int) else None,
                 })
-            actions.append({"type": "open_feedback_archive", "label": "查看已有反馈"})
+            actions.append({
+                "type": "open_feedback_archive", "label": "查看已有反馈",
+                "class_id": feedback_class_id,
+            })
             reply = (
                 "可以，我们先把要做的事分清楚：你是想打开一份空白反馈表，查看已有课堂反馈，"
                 "还是把你记录的课堂观察整理成反馈？如果是整理内容，请把实际观察告诉我；我不会根据旧教案或别的班级记录编造课堂表现。"
@@ -1372,6 +1432,7 @@ def send_message(
             current_name = current_profile.name if current_profile else "当前班级"
             conflict = scope_conflicts[0]
             original_query = message
+            context["pending_scope_query"] = original_query
             keep_query = re.sub(r"\s+", "", original_query)
             for profile in scope_conflicts:
                 normalized_name = re.sub(r"\s+", "", profile.name or "")
@@ -1472,8 +1533,8 @@ def send_message(
         raise HTTPException(status_code=502, detail="这条消息暂时没有处理好，原有对话和资料都已保留；可以稍后重试。") from exc
 
     if (
-        "确认切换到" in message
-        or message.startswith(("继续查找：", "继续按当前班级查找："))
+        "确认切换到" in submitted_message
+        or submitted_message.startswith(("继续查找：", "继续按当前班级查找："))
     ) and context.get("class_id"):
         for prior in history:
             if isinstance(prior, dict) and prior.get("role") == "assistant" and isinstance(prior.get("suggestions"), list):
@@ -1484,7 +1545,7 @@ def send_message(
     if not suggestions:
         suggestions = _follow_up_suggestions(message, sources, actions)
 
-    user_item = {"role": "user", "content": message, "created_at": datetime.utcnow().isoformat(timespec="seconds")}
+    user_item = {"role": "user", "content": submitted_message, "created_at": datetime.utcnow().isoformat(timespec="seconds")}
     assistant_item = {
         "role": "assistant", "content": reply,
         "sources": sources, "actions": actions, "suggestions": suggestions,
@@ -1496,7 +1557,7 @@ def send_message(
             "id": item.get("id"), "route": item.get("route"), "updated_at": item.get("updated_at"),
         } for item in sources[:5]]
         context["recent_sources_class_id"] = int(context["class_id"]) if context.get("class_id") else None
-        row.context_json = json.dumps(context, ensure_ascii=False)
+    row.context_json = json.dumps(context, ensure_ascii=False)
     history.extend([user_item, assistant_item])
     row.messages_json = json.dumps(history[-200:], ensure_ascii=False)
     if row.title == "新对话":

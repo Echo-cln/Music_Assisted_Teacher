@@ -12,10 +12,14 @@ export async function renderLessons(container) {
   container.querySelectorAll("[data-archive]").forEach(button => button.onclick = () => openArchive(button.dataset.archive));
   let startupDeepLink = null;
   let initialArchiveTab = "";
+  let initialFeedbackFilter = null;
   try { startupDeepLink = JSON.parse(localStorage.getItem("audioArchiveDeepLink") || "null"); }
   catch (_) { localStorage.removeItem("audioArchiveDeepLink"); }
   try { initialArchiveTab = localStorage.getItem("classroomFeedbackInitialTab") || ""; }
   finally { localStorage.removeItem("classroomFeedbackInitialTab"); }
+  try { initialFeedbackFilter = JSON.parse(localStorage.getItem("classroomFeedbackInitialFilter") || "null"); }
+  catch (_) { localStorage.removeItem("classroomFeedbackInitialFilter"); }
+  finally { localStorage.removeItem("classroomFeedbackInitialFilter"); }
   await openArchive(startupDeepLink?.id ? "audio" : initialArchiveTab === "feedback" ? "feedback" : "lessons");
 
   async function openArchive(kind) {
@@ -131,6 +135,16 @@ async function renderArchive(container, kind) {
   const rows = await api.feedbackRecords();
   const classProfiles = await api.classes();
   container.innerHTML = `<section class="list-search archive-toolbar"><label class="search-field"><span>⌕</span><input id="feedbackSearch" type="search" placeholder="搜索教案、歌曲、反馈内容或日期"></label><div class="list-filters"><select id="feedbackClassFilter" aria-label="按班级筛选课堂反馈"><option value="">全部班级</option>${classProfiles.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join("")}<option value="unassigned">未关联班级</option></select><select id="feedbackSort" aria-label="反馈时间顺序"><option value="newest">最新反馈</option><option value="oldest">最早反馈</option><option value="lesson">教案名称</option></select></div></section><small class="archive-count" id="feedbackCount"></small><section class="archive-list" id="feedbackRows"></section>`;
+  const initialClassFilter = document.getElementById("feedbackClassFilter");
+  if (initialFeedbackFilter?.class_id) {
+    const classId = String(initialFeedbackFilter.class_id);
+    if ([...initialClassFilter.options].some(option => option.value === classId)) {
+      initialClassFilter.value = classId;
+    } else {
+      notify("找不到对应班级，已显示全部课堂反馈。", "error");
+    }
+  }
+  initialFeedbackFilter = null;
   const paintFeedback = () => {
     const query = document.getElementById("feedbackSearch").value.trim().toLocaleLowerCase();
     const selectedClass = document.getElementById("feedbackClassFilter").value;
