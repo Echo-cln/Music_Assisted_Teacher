@@ -8,7 +8,7 @@ const app = document.getElementById("app");
 // 页面按需载入：一个实验性功能页即使有语法/浏览器兼容问题，也不能让登录页、
 // 首页和其余功能在模块图阶段一起白屏。
 const routeLoaders = {
-  home: () => import("./pages/home.js").then(m => m.renderHome),
+  home: () => import("./pages/home.js?v=20261010-home-class-layout-1").then(m => m.renderHome),
   teachingAssistant: () => import("./pages/teaching_assistant.js?v=20261010-class-feedback-resume-4").then(m => m.renderTeachingAssistant),
   assistant: () => import("./pages/assistant.js?v=20261009-dialogue-reply-limit-4").then(m => m.renderAssistant),
   classes: () => import("./pages/classes.js?v=20261009-dbtrend-persist").then(m => m.renderClasses),

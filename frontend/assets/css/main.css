@@ -1105,3 +1105,32 @@ td small { color: var(--muted); }
 
 .trend-chart-card .trend-dot-demo { fill:#efc7a6; stroke:#a24d35; stroke-width:2.5; }
 .trend-chart-card footer small { color:#8a604e; }
+
+
+/* 首页班级画像：限制教学方式标签宽度，避免长标签挤窄班级名称与人数。 */
+.home-class-list-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) minmax(110px, 34%);
+  align-items: center;
+  gap: 12px;
+}
+.home-class-list-row > div { min-width: 0; }
+.home-class-list-row b,
+.home-class-list-row small { overflow-wrap: anywhere; }
+.home-class-list-row > .pill {
+  min-width: 0;
+  max-width: 100%;
+  justify-self: end;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.4;
+}
+@media (max-width: 720px) {
+  .home-class-list-row { grid-template-columns: 40px minmax(0, 1fr); }
+  .home-class-list-row > .pill {
+    grid-column: 2;
+    justify-self: start;
+    max-width: 100%;
+  }
+}
