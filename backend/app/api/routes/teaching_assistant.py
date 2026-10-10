@@ -56,11 +56,16 @@ class MessageCreate(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
 
 
-def _owned_conversation(db: Session, conversation_id: int, teacher_id: int) -> AssistantConversation:
-    row = db.scalar(select(AssistantConversation).where(
+def _owned_conversation(
+    db: Session, conversation_id: int, teacher_id: int, *, lock_for_update: bool = False,
+) -> AssistantConversation:
+    statement = select(AssistantConversation).where(
         AssistantConversation.id == conversation_id,
         AssistantConversation.teacher_id == teacher_id,
-    ))
+    )
+    if lock_for_update:
+        statement = statement.with_for_update()
+    row = db.scalar(statement)
     if not row:
         raise HTTPException(status_code=404, detail="这段对话不存在或已删除")
     return row
@@ -173,6 +178,9 @@ def _instrument_names(raw: Any) -> str:
 
 def _feedback_detail(feedback: Feedback, record: ClassroomRecord, audio_link_valid: bool = True, audio_song_name: str | None = None) -> str:
     parts = [f"日期：{str(record.taught_at or feedback.created_at)[:19]}"]
+    analysis = _mapping(feedback.analysis_json)
+    if analysis.get("demo_trend_sample"):
+        parts.append("数据说明：这是班级画像演示样例，不是实际课堂测量或真实学生表现")
     fields = [("课堂亮点", feedback.highlights), ("存在问题", feedback.problems), ("下次改进", feedback.improvement)]
     if audio_link_valid:
         fields.append(("音频分析摘要", feedback.audio_summary))
@@ -258,7 +266,7 @@ def _present(row: AssistantConversation, include_messages: bool = False) -> dict
                                     safe_suggestions.append({"label": label, "message": label})
                             elif isinstance(suggestion, dict):
                                 label = _plain(suggestion.get("label"), 70)
-                                message = _plain(suggestion.get("message"), 180)
+                                message = _plain(suggestion.get("message"), 700)
                                 class_id = suggestion.get("class_id")
                                 if label and message:
                                     item_suggestion = {"label": label, "message": message}
@@ -268,7 +276,7 @@ def _present(row: AssistantConversation, include_messages: bool = False) -> dict
                                     if isinstance(conversation_id, int) and conversation_id > 0:
                                         item_suggestion["conversation_id"] = conversation_id
                                     action = suggestion.get("action")
-                                    if action in {"open_conversation", "confirm_class_change", "cancel_class_change"}:
+                                    if action in {"open_conversation", "confirm_class_change", "cancel_class_change", "keep_class_scope"}:
                                         item_suggestion["action"] = action
                                     safe_suggestions.append(item_suggestion)
                         if safe_suggestions:
@@ -383,7 +391,7 @@ def _conversation_excerpt(raw_messages: Any, terms: list[str]) -> str:
 
 def _retrieve(db: Session, teacher_id: int, message: str, context: dict, conversation_id: int | None = None) -> list[dict]:
     terms = _terms(message)
-    class_id = context.get("class_id")
+    class_id = None if _is_all_class_request(message) else context.get("class_id")
     owned_profiles = db.scalars(select(ClassProfile).where(ClassProfile.teacher_id == teacher_id)).all()
     if class_id:
         try:
@@ -395,16 +403,22 @@ def _retrieve(db: Session, teacher_id: int, message: str, context: dict, convers
             raise HTTPException(status_code=404, detail="当前班级不存在或无权访问")
     else:
         # If the teacher names one of their classes, scope this turn to that class.
-        named_profiles = [item for item in owned_profiles if item.name and item.name in message]
+        compact_message = re.sub(r"\s+", "", message)
+        named_profiles = [
+            item for item in owned_profiles
+            if item.name and re.sub(r"\s+", "", str(item.name)) in compact_message
+        ]
         if len(named_profiles) == 1:
             class_id = named_profiles[0].id
     context_song_id = None
+    context_song_name = None
     if context.get("song_id"):
         context_song = db.scalar(select(Song).where(
             Song.id == int(context["song_id"]),
             or_(Song.owner_teacher_id.is_(None), Song.owner_teacher_id == teacher_id),
         ))
         context_song_id = context_song.id if context_song else None
+        context_song_name = context_song.name if context_song else None
     # A named song or an entry from a lesson/feedback page scopes audio evidence
     # to that song; otherwise broad Chinese substring matches can mix recordings.
     if not context_song_id:
@@ -414,6 +428,23 @@ def _retrieve(db: Session, teacher_id: int, message: str, context: dict, convers
         named_songs = [song for song in visible_songs if song.name and song.name in message]
         if len(named_songs) == 1:
             context_song_id = named_songs[0].id
+            context_song_name = named_songs[0].name
+
+    quoted_songs = [re.sub(r"\s+", "", name) for name in re.findall(r"《([^》]{1,60})》", message)]
+    if quoted_songs:
+        visible_song_names = {
+            re.sub(r"\s+", "", str(song.name or ""))
+            for song in (visible_songs if "visible_songs" in locals() else [])
+        }
+        if context_song_name:
+            visible_song_names.add(re.sub(r"\s+", "", str(context_song_name)))
+        if any(title not in visible_song_names for title in quoted_songs):
+            # A clearly named song that is absent from this teacher's library is not
+            # permission to return an unrelated record that matches generic keywords.
+            return []
+        if context_song_name and any(title != re.sub(r"\s+", "", str(context_song_name)) for title in quoted_songs):
+            return []
+
     records: list[dict] = []
 
     # Keep the last cited set attached to the thread so a follow-up like “带着这些资料备课”
@@ -841,7 +872,8 @@ def _requires_class_scope(message: str, context: dict, profiles: list[ClassProfi
     """Class evidence is never inferred from whichever record happens to be newest."""
     if any(context.get(key) for key in ("class_id", "lesson_id", "feedback_id")) or _is_all_class_request(message):
         return False
-    if any(item.name and item.name in message for item in profiles):
+    compact_message = re.sub(r"\s+", "", message)
+    if any(item.name and re.sub(r"\s+", "", str(item.name)) in compact_message for item in profiles):
         return False
     class_sensitive = (
         "这个班", "这班", "本班", "该班", "这个班级", "这个班最近", "班级最近",
@@ -962,6 +994,31 @@ def _live_weather_reply(message: str, location_override: str | None = None) -> t
         return f"我这会儿没拿到{location}的天气数据，不想随口给你一个不准的结果。过一会儿可以再问我，我查到后会把更新时间也告诉你。", []
 
 
+def _class_scope_conflicts(message: str, context: dict, profiles: list[ClassProfile]) -> list[ClassProfile]:
+    """Find explicit references to a different class without silently changing the thread scope."""
+    try:
+        current_id = int(context.get("class_id") or 0)
+    except (TypeError, ValueError):
+        current_id = 0
+    if not current_id or _is_all_class_request(message):
+        return []
+    normalized_message = re.sub(r"\s+", "", message or "")
+    project_query = any(word in message for word in (
+        "教案", "课堂反馈", "课后反馈", "班级画像", "歌曲", "资源", "录音", "音频",
+        "编曲", "乐器", "课堂记录", "以前", "历史", "上次",
+    ))
+    if not project_query:
+        return []
+    conflicts = []
+    for profile in profiles:
+        if int(profile.id) == current_id or not profile.name:
+            continue
+        name = re.sub(r"\s+", "", str(profile.name))
+        if name and name in normalized_message:
+            conflicts.append(profile)
+    return conflicts
+
+
 def _requested_class_change(message: str, profiles: list[ClassProfile]):
     """Return a class only when the user explicitly phrases a scope switch."""
     text = re.sub(r"\s+", "", message or "")
@@ -1077,7 +1134,11 @@ def _recommendation_response(db: Session, teacher_id: int, message: str, context
     class_id = context.get("class_id")
     profile = next((item for item in profiles if class_id and item.id == int(class_id)), None)
     if profile is None:
-        named = [item for item in profiles if item.name and item.name in message]
+        compact_message = re.sub(r"\s+", "", message)
+        named = [
+            item for item in profiles
+            if item.name and re.sub(r"\s+", "", str(item.name)) in compact_message
+        ]
         profile = named[0] if len(named) == 1 else None
     if profile is None:
         return "可以。我先确认一下是给哪个班挑歌？你可以选择班级，或者直接告诉我年级和班名。", [], []
@@ -1120,9 +1181,20 @@ def _is_lesson_action(message: str, context: dict | None = None) -> bool:
     return action or contextual_edit
 
 
-def _lookup_reply(records: list[dict]) -> str:
+def _is_conversation_delete_request(message: str) -> bool:
+    refers_to_conversation = any(word in message for word in ("对话", "聊天记录", "聊天"))
+    requests_delete = any(word in message for word in ("删除", "删掉", "清除", "移除"))
+    return refers_to_conversation and requests_delete
+
+
+def _lookup_reply(records: list[dict], message: str = "") -> str:
     if not records:
         return "我暂时没有找到匹配的记录。你可以告诉我班级、歌曲或大概时间，我再帮你缩小范围。"
+    ambiguous_previous = any(phrase in message for phrase in ("上次那份", "之前那份", "以前那份", "那份教案", "上次的教案"))
+    lesson_candidates = [item for item in records if item.get("kind") in {"历史教案", "当前教案", "教案历史版本"}]
+    distinct_lessons = {item.get("id") or item.get("label") for item in lesson_candidates}
+    if ambiguous_previous and len(distinct_lessons) > 1:
+        return "我找到几份可能符合的教案，暂时不能确定你说的是哪一份。你可以看下面的来源卡片，再告诉我歌曲名、班级或大概时间，我就能接着帮你。"
     history_records = [item for item in records if item.get("kind") == "历史对话"]
     if history_records:
         return f"找到 {len(history_records)} 段可能相关的旧对话。我把标题和相关问答放在下方资料里，你可以展开查看、引用到当前对话，或直接打开原对话。"
@@ -1219,7 +1291,7 @@ def send_message(
     db: Session = Depends(get_db),
     teacher: Teacher = Depends(get_current_teacher),
 ):
-    row = _owned_conversation(db, conversation_id, teacher.id)
+    row = _owned_conversation(db, conversation_id, teacher.id, lock_for_update=True)
     message = payload.message.strip()
     if not message:
         raise HTTPException(status_code=422, detail="请先写下想讨论的内容")
@@ -1251,6 +1323,13 @@ def send_message(
         elif class_switch:
             sources, actions = [], []
             reply = f"这段对话已经在“{class_switch.name}”范围内了。我会继续按这个班级查找和讨论。"
+        elif _is_conversation_delete_request(message):
+            sources, actions = [], []
+            title = _plain(row.title, 40) or "当前对话"
+            reply = (
+                f"你是想删除“{title}”这段，还是左侧的另一段？我不会根据这句话批量清除对话。"
+                "请在左侧对应对话旁点“×”，确认弹窗后只会删除选中的那一段。"
+            )
         elif _is_blank_feedback_form_request(message):
             sources = []
             actions = [{
@@ -1284,6 +1363,36 @@ def send_message(
                 "也请告诉我对应的班级或教案。收到后我会先把你的原始观察整理成待核对内容，再由你决定是否带到课堂反馈页保存。"
             )
             suggestions = []
+        elif (scope_conflicts := _class_scope_conflicts(message, context, profiles)):
+            sources, actions = [], []
+            current_profile = next(
+                (item for item in profiles if int(item.id) == int(context.get("class_id") or 0)),
+                None,
+            )
+            current_name = current_profile.name if current_profile else "当前班级"
+            conflict = scope_conflicts[0]
+            original_query = message
+            keep_query = re.sub(r"\s+", "", original_query)
+            for profile in scope_conflicts:
+                normalized_name = re.sub(r"\s+", "", profile.name or "")
+                keep_query = keep_query.replace(normalized_name, "这个班")
+            reply = (
+                f"我注意到这段对话当前选的是“{current_name}”，这句话里提到了“{conflict.name}”。"
+                "为了不把两个班的记录混在一起，你希望按哪个班继续查？我先暂停检索。"
+            )
+            suggestions = [
+                {
+                    "label": f"改用{conflict.name}",
+                    "message": f"继续查找：{original_query}",
+                    "class_id": int(conflict.id),
+                    "action": "confirm_class_change",
+                },
+                {
+                    "label": f"仍按{current_name}",
+                    "message": f"继续按当前班级查找：{keep_query}",
+                    "action": "keep_class_scope",
+                },
+            ]
         elif _requires_class_scope(message, context, profiles):
             sources, actions = [], []
             available = "、".join(item.name for item in profiles if item.name) or "目前没有可选班级"
@@ -1333,7 +1442,7 @@ def send_message(
             actions = []
         elif _is_lookup(message):
             sources = _retrieve(db, teacher.id, message, context, row.id) if _should_retrieve(message, context) else []
-            reply = _lookup_reply(sources)
+            reply = _lookup_reply(sources, message)
             actions = []
         else:
             sources = _retrieve(db, teacher.id, message, context, row.id) if _should_retrieve(message, context) else []
@@ -1362,7 +1471,10 @@ def send_message(
         logger.exception("teaching_assistant_message_failed teacher_id=%s conversation_id=%s", teacher.id, row.id)
         raise HTTPException(status_code=502, detail="这条消息暂时没有处理好，原有对话和资料都已保留；可以稍后重试。") from exc
 
-    if "确认切换到" in message and context.get("class_id"):
+    if (
+        "确认切换到" in message
+        or message.startswith(("继续查找：", "继续按当前班级查找："))
+    ) and context.get("class_id"):
         for prior in history:
             if isinstance(prior, dict) and prior.get("role") == "assistant" and isinstance(prior.get("suggestions"), list):
                 prior["suggestions"] = [

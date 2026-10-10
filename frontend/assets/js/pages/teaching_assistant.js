@@ -240,7 +240,17 @@ export async function renderTeachingAssistant(container) {
         conversations = [activeConversation, ...conversations.filter(item => item.id !== activeConversation.id)];
         renderConversationList();
         const input = document.getElementById("assistantHubInput");
-        input.value = `我确认切换到${profile.name}，请按这个班级继续刚才的话题。`;
+        const suggestedFollowup = button.dataset.suggestionMessage || "";
+        input.value = suggestedFollowup && !suggestedFollowup.startsWith("确认切换到")
+          ? suggestedFollowup
+          : `我确认切换到${profile.name}，请按这个班级继续刚才的话题。`;
+        document.getElementById("assistantHubForm").requestSubmit();
+        return;
+      }
+      if (button.dataset.suggestionAction === "keep_class_scope") {
+        button.disabled = true;
+        const input = document.getElementById("assistantHubInput");
+        input.value = button.dataset.suggestionMessage || "继续按当前班级查找。";
         document.getElementById("assistantHubForm").requestSubmit();
         return;
       }

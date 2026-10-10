@@ -15,6 +15,7 @@ from app.api.routes.teaching_assistant import (
     _is_all_class_request, _is_contextual_short_reply, _is_refine_search_request,
     _plain, _present, _requires_class_scope, _retrieve, _terms, _requested_class_change,
     _today_question_reply, _is_weather_question, _weather_location, _weather_followup_location,
+    _class_scope_conflicts, _lookup_reply, _feedback_detail, _is_conversation_delete_request,
 )
 from app.services.ai_provider import _naturalize_dialogue_answer
 
@@ -25,6 +26,7 @@ def test_intent_guards_keep_lookup_separate_from_lesson_actions():
     assert _is_lookup("结合刚才找到的课堂反馈，和我一起准备一份教案")
     assert _is_lesson_action("结合刚才找到的课堂反馈，和我一起准备一份教案")
     assert not _is_lesson_action("先解释为什么安排节奏接龙，不要改教案")
+    assert not _is_lesson_action("先分析这份教案有什么问题，暂时不要修改")
     assert _is_lesson_action("根据这条课堂反馈调整教案", {"type": "feedback"})
     assert "茉莉花" in _terms("请找《茉莉花》节奏练习的历史教案")
     assert "古筝" in _terms("四年级1班想找古筝编曲")
@@ -167,6 +169,8 @@ def test_retrieval_returns_class_feedback_and_arrangement_for_the_owner_only():
         assert len(historical) == 1
         assert historical[0]["id"] == 30
         assert "固定拍手脉冲" in historical[0]["detail"]
+        missing_song = _retrieve(db, 7, "帮我找《不存在的歌曲》的历史教案", {"class_id": 11})
+        assert not any(item.get("kind") == "历史教案" for item in missing_song)
 
         quoted = _retrieve(db, 7, "继续聊这个活动", {
             "referenced_conversation_id": 30,
@@ -215,3 +219,86 @@ def test_weather_api_failure_is_plain_and_does_not_mention_model_internals(monke
     assert "广州" in reply and "天气数据" in reply
     assert "模型" not in reply and "猜" not in reply
     assert not sources
+
+
+
+def test_agent_confirms_class_conflict_before_searching_and_offers_both_scopes():
+    profiles = [
+        SimpleNamespace(id=11, name="三年级 1 班"),
+        SimpleNamespace(id=12, name="五年级 1 班"),
+    ]
+    conflicts = _class_scope_conflicts(
+        "帮我找五年级1班之前的教案",
+        {"class_id": 11},
+        profiles,
+    )
+    assert [item.id for item in conflicts] == [12]
+    assert not _class_scope_conflicts(
+        "给我讲个冷笑话",
+        {"class_id": 11},
+        profiles,
+    )
+    assert not _class_scope_conflicts(
+        "帮我找五年级1班之前的教案",
+        {"class_id": 12},
+        profiles,
+    )
+    assert not _requires_class_scope(
+        "看看五年级1班最近的课堂反馈",
+        {},
+        profiles,
+    )
+
+
+def test_ambiguous_previous_lesson_lookup_asks_instead_of_picking_one():
+    records = [
+        {"kind": "历史教案", "label": "茉莉花节奏练习", "id": 1, "detail": "班级：三年级1班"},
+        {"kind": "历史教案", "label": "茉莉花歌唱活动", "id": 2, "detail": "班级：五年级1班"},
+    ]
+    reply = _lookup_reply(records, "帮我找上次那份教案")
+    assert "暂时不能确定" in reply
+    assert "歌曲名、班级或大概时间" in reply
+
+
+def test_feedback_retrieval_marks_demo_observations_as_demo_data():
+    feedback = SimpleNamespace(
+        analysis_json=json.dumps({"demo_trend_sample": True, "goal_observations": ["保持恒拍"]}, ensure_ascii=False),
+        highlights="能完成节奏模仿",
+        problems="弱起容易抢拍",
+        improvement="先慢速口读",
+        audio_summary="",
+        audio_analysis_id=None,
+        created_at=None,
+    )
+    record = SimpleNamespace(taught_at=None)
+    detail = _feedback_detail(feedback, record)
+    assert "演示样例" in detail
+    assert "真实课堂测量" in detail
+    assert "保持恒拍" in detail
+
+
+def test_unreferenced_new_thread_does_not_reuse_prior_thread_context():
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        old = AssistantConversation(
+            id=201, teacher_id=7, title="旧对话",
+            context_json=json.dumps({"class_id": 11, "song_name": "茉莉花"}, ensure_ascii=False),
+            messages_json=json.dumps([{"role": "user", "content": "五年级1班茉莉花课堂反馈"}], ensure_ascii=False),
+        )
+        db.add(old)
+        db.commit()
+        # Retrieval is only given the current thread's context and does not load another
+        # conversation unless the user explicitly asks to search/refer to conversation history.
+        found = _retrieve(db, 7, "现在想聊节奏练习", {}, conversation_id=202)
+        assert not any(item.get("id") == old.id and item.get("kind") == "已引用的历史对话" for item in found)
+
+
+
+def test_delete_conversation_intent_never_matches_lesson_or_feedback_deletion():
+    assert _is_conversation_delete_request("删除这段对话")
+    assert _is_conversation_delete_request("清除聊天记录")
+    assert not _is_conversation_delete_request("删除这份教案")
+    assert not _is_conversation_delete_request("删除课堂反馈")
