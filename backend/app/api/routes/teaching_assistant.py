@@ -5,6 +5,7 @@ import logging
 import re
 import ast
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -263,8 +264,9 @@ def _present(row: AssistantConversation, include_messages: bool = False) -> dict
                                     conversation_id = suggestion.get("conversation_id")
                                     if isinstance(conversation_id, int) and conversation_id > 0:
                                         item_suggestion["conversation_id"] = conversation_id
-                                    if suggestion.get("action") == "open_conversation":
-                                        item_suggestion["action"] = "open_conversation"
+                                    action = suggestion.get("action")
+                                    if action in {"open_conversation", "confirm_class_change", "cancel_class_change"}:
+                                        item_suggestion["action"] = action
                                     safe_suggestions.append(item_suggestion)
                         if safe_suggestions:
                             item["suggestions"] = safe_suggestions
@@ -849,6 +851,32 @@ def _requires_class_scope(message: str, context: dict, profiles: list[ClassProfi
     return any(phrase in message for phrase in class_sensitive) or (len(profiles) > 1 and refers_to_feedback_history)
 
 
+def _requested_class_change(message: str, profiles: list[ClassProfile]):
+    """Return a class only when the user explicitly phrases a scope switch."""
+    text = re.sub(r"\s+", "", message or "")
+    for profile in profiles:
+        name = re.sub(r"\s+", "", str(profile.name or ""))
+        if not name or name not in text:
+            continue
+        patterns = (
+            rf"(?:切换|換|换|改|调整|調整)(?:到|成|为|用)?{re.escape(name)}",
+            rf"(?:班级|班級)(?:改为|改成|调整为|調整為|设为|設定為|换成|切换到){re.escape(name)}",
+            rf"(?:这次|本次|接下来|以后|之后)(?:先)?(?:用|按|切换到|改成){re.escape(name)}",
+        )
+        if any(re.search(pattern, text) for pattern in patterns):
+            return profile
+    return None
+
+
+def _today_question_reply(message: str) -> str | None:
+    text = re.sub(r"\s+", "", message or "")
+    if not re.search(r"今天.*(?:周几|星期几|星期|几号|日期)|今天是(?:几号|星期几|周几)", text):
+        return None
+    today = datetime.now(ZoneInfo("Asia/Shanghai"))
+    weekdays = ("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")
+    return f"今天是{today.year}年{today.month}月{today.day}日，{weekdays[today.weekday()]}。"
+
+
 def _class_scope_suggestions(profiles: list[ClassProfile], message: str) -> list[dict]:
     def scoped_query(name: str) -> str:
         query = message
@@ -1078,7 +1106,26 @@ def send_message(
     suggestions: list[dict] = []
     try:
         profiles = db.scalars(select(ClassProfile).where(ClassProfile.teacher_id == teacher.id)).all()
-        if _is_blank_feedback_form_request(message):
+        class_switch = _requested_class_change(message, profiles)
+        requested_today = _today_question_reply(message)
+        if requested_today:
+            sources, actions = [], []
+            reply = requested_today
+        elif class_switch and int(context.get("class_id") or 0) != int(class_switch.id):
+            sources, actions = [], []
+            current_name = _plain(context.get("class_name"), 60) or next(
+                (profile.name for profile in profiles if int(profile.id) == int(context.get("class_id") or 0)),
+                "尚未指定班级",
+            )
+            reply = f"我听明白了，你想把这段对话从“{current_name}”切换到“{class_switch.name}”。我先不直接改，确认后再更新班级范围，可以吗？"
+            suggestions = [
+                {"label": f"确认切换到{class_switch.name}", "message": f"确认切换到{class_switch.name}", "class_id": int(class_switch.id), "action": "confirm_class_change"},
+                {"label": "保持当前班级", "message": "保持当前班级", "action": "cancel_class_change"},
+            ]
+        elif class_switch:
+            sources, actions = [], []
+            reply = f"这段对话已经在“{class_switch.name}”范围内了。我会继续按这个班级查找和讨论。"
+        elif _is_blank_feedback_form_request(message):
             sources = []
             actions = [{
                 "type": "open_feedback_form", "label": "打开课堂反馈页",
@@ -1188,6 +1235,13 @@ def send_message(
         logger.exception("teaching_assistant_message_failed teacher_id=%s conversation_id=%s", teacher.id, row.id)
         raise HTTPException(status_code=502, detail="这条消息暂时没有处理好，原有对话和资料都已保留；可以稍后重试。") from exc
 
+    if "确认切换到" in message and context.get("class_id"):
+        for prior in history:
+            if isinstance(prior, dict) and prior.get("role") == "assistant" and isinstance(prior.get("suggestions"), list):
+                prior["suggestions"] = [
+                    item for item in prior["suggestions"]
+                    if not isinstance(item, dict) or item.get("action") not in {"confirm_class_change", "cancel_class_change"}
+                ]
     if not suggestions:
         suggestions = _follow_up_suggestions(message, sources, actions)
 

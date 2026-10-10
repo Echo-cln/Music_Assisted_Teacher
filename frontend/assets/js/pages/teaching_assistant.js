@@ -43,8 +43,8 @@ export async function renderTeachingAssistant(container) {
       </aside>
       <section class="teaching-assistant-main">
         <div class="assistant-context-bar">
-          <div class="assistant-context-select"><span>本次讨论</span>
-            <select id="assistantClass" aria-label="选择班级范围"><option value="">不限班级 · 可查全部授权资料</option>${classes.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join("")}</select>
+          <div class="assistant-context-select">
+            <select id="assistantClass" aria-label="选择对话班级范围"><option value="">全部班级</option>${classes.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join("")}</select>
           </div>
           <span class="assistant-context-status" id="assistantContextBadge"></span>
           <div class="assistant-context-actions">
@@ -165,7 +165,6 @@ export async function renderTeachingAssistant(container) {
     const contextBadges = [];
     if (context.referenced_conversation_title) contextBadges.push(`引用对话：${context.referenced_conversation_title}`);
     if (context.source_label) contextBadges.push(`来源：${context.source_label}`);
-    else if (contextLabel(context)) contextBadges.push(`班级：${contextLabel(context)}`);
     document.getElementById("assistantContextBadge").textContent = contextBadges.join(" · ");
     const chat = document.getElementById("assistantChat");
     const messages = activeConversation.messages || [];
@@ -227,6 +226,36 @@ export async function renderTeachingAssistant(container) {
     });
     chat.querySelectorAll("[data-suggestion-message]").forEach(button => button.onclick = async () => {
       const referenceId = Number(button.dataset.conversationId) || null;
+      if (button.dataset.suggestionAction === "confirm_class_change") {
+        const classId = Number(button.dataset.suggestionClass) || null;
+        const profile = classes.find(item => Number(item.id) === classId);
+        if (!classId || !profile) return notify("没有找到要切换的班级，请从左侧下拉框选择。", "error");
+        if (!activeConversation) return notify("请先新建一段对话。", "error");
+        const oldContext = activeConversation.context || {};
+        const nextContext = {
+          class_id: classId,
+          class_name: profile.name,
+          ...(oldContext.referenced_conversation_id ? {
+            referenced_conversation_id: oldContext.referenced_conversation_id,
+            referenced_conversation_title: oldContext.referenced_conversation_title,
+            referenced_conversation_excerpt: oldContext.referenced_conversation_excerpt,
+          } : {}),
+        };
+        activeConversation = await api.updateAssistantConversation(activeConversation.id, { context: nextContext });
+        document.getElementById("assistantClass").value = String(classId);
+        conversations = [activeConversation, ...conversations.filter(item => item.id !== activeConversation.id)];
+        renderConversationList();
+        const input = document.getElementById("assistantHubInput");
+        input.value = `我确认切换到${profile.name}，请按这个班级继续刚才的话题。`;
+        document.getElementById("assistantHubForm").requestSubmit();
+        return;
+      }
+      if (button.dataset.suggestionAction === "cancel_class_change") {
+        button.disabled = true;
+        button.textContent = "已保持当前班级";
+        notify("好的，班级范围没有改变。", "success");
+        return;
+      }
       if (button.dataset.suggestionAction === "open_conversation" && referenceId) {
         activeConversation = await api.assistantConversation(referenceId);
         document.getElementById("assistantClass").value = activeConversation.context?.class_id || "";

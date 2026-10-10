@@ -13,7 +13,7 @@ from app.api.routes.teaching_assistant import (
     _analysis_detail, _class_scope_suggestions, _is_blank_feedback_form_request,
     _is_feedback_creation_request, _is_observation_offer, _is_lesson_action, _is_lookup,
     _is_all_class_request, _is_contextual_short_reply, _is_refine_search_request,
-    _plain, _present, _requires_class_scope, _retrieve, _terms,
+    _plain, _present, _requires_class_scope, _retrieve, _terms, _requested_class_change, _today_question_reply,
 )
 from app.services.ai_provider import _naturalize_dialogue_answer
 
@@ -179,3 +179,12 @@ def test_retrieval_returns_class_feedback_and_arrangement_for_the_owner_only():
             assert exc.status_code == 404
         else:
             raise AssertionError("another teacher must not retrieve this class")
+
+
+def test_class_scope_change_requires_confirmation_intent_and_today_question_is_answered_locally():
+    profiles = [SimpleNamespace(id=11, name="三年级1班"), SimpleNamespace(id=12, name="四年级1班")]
+    assert _requested_class_change("把班级切换到四年级1班", profiles).id == 12
+    assert _requested_class_change("我想给四年级1班找一首歌", profiles) is None
+    answer = _today_question_reply("今天周几了？")
+    assert answer and "星期" in answer and "今天是" in answer
+    assert _today_question_reply("这周几节音乐课") is None
